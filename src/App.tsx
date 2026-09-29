@@ -48,7 +48,7 @@ export function App() {
   if (!ready) return <main className="boot-screen">{t('app.loading')}</main>;
   const resolvedRoute = resolveAppRoute(route.pathname, route.hash);
   if (resolvedRoute.type === 'tag') return <VisitorPage repository={repository} token={decodeURIComponent(resolvedRoute.token)} />;
-  const baseUrl = `${window.location.origin}${import.meta.env.BASE_URL}`;
+  const baseUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
   if (resolvedRoute.type === 'admin') return <AdminPage repository={repository} baseUrl={baseUrl} />;
   return <main className="visitor-shell welcome-shell">
     <div className="visitor-topline"><span className="brand-mark"><AudioLines size={17} /></span><span>{t('app.title')}</span><span className="topline-rule" /><LanguageSwitch /></div>
