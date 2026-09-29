@@ -2,6 +2,8 @@
 
 一个用于体验 NFC 展签录音与运营流程的中日双语网页原型。
 
+系统需求、架构、跨端 API、安全、路线图和 Agent 协作规则见 [`docs/README.md`](docs/README.md)。当前网站仍是浏览器本地存储原型；正式云端录音按 [`docs/PHASE_1_CLOUD_RECORDING.md`](docs/PHASE_1_CLOUD_RECORDING.md) 作为第一阶段建设。
+
 网站界面支持简体中文和日语，可在页面右上角切换。手机预览：<https://voice.heisei.space/>。访客示例页：<https://voice.heisei.space/#/t/demo-001>。运营后台：<https://voice.heisei.space/#/admin>。
 
 ## 启动
