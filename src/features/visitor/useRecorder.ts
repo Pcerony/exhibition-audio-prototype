@@ -65,8 +65,15 @@ export function useRecorder() {
         setDuration(Math.floor((Date.now() - startedAtRef.current) / 1000));
       }, 250);
     } catch (cause) {
-      const denied = cause instanceof DOMException && cause.name === 'NotAllowedError';
-      setError(denied ? t('visitor.micDenied') : t('visitor.micError'));
+      const errorName = cause && typeof cause === 'object' && 'name' in cause ? String(cause.name) : '';
+      const messageKey = errorName === 'NotAllowedError' || errorName === 'SecurityError'
+        ? 'visitor.micDenied'
+        : errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError'
+          ? 'visitor.micNoDevice'
+          : errorName === 'NotReadableError' || errorName === 'TrackStartError' || errorName === 'AbortError'
+            ? 'visitor.micBusy'
+            : 'visitor.micError';
+      setError(t(messageKey));
       setState('error');
     }
   }, [discard, t]);
