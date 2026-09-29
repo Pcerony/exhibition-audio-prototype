@@ -112,6 +112,7 @@ export function VisitorPage({ repository, token }: Props) {
             <button className="primary-action" onClick={recorder.start}><Mic size={18} /> {t('visitor.start')}</button>
           )}
         </div>
+        <p className="mic-permission-help">{t('visitor.micPermissionHelp')}</p>
         {recorder.state === 'ready' && <div className="submit-panel">
           <label htmlFor="nickname">{t('visitor.nickname')} <span>{t('visitor.optional')}</span></label>
           <input id="nickname" value={nickname} onChange={(event) => setNickname(event.target.value)} maxLength={24} placeholder={t('visitor.nicknamePlaceholder')} />

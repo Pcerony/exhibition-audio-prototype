@@ -43,6 +43,6 @@ VITE_APP_ENV=local
 
 ## 真机验收设备
 
-- iPhone Safari：NFC URL 打开、麦克风首次授权/拒绝恢复、录音格式、上传/试听、切后台/锁屏、回访播放。
+- iPhone Safari 与 Chrome：NFC URL 打开、系统和站点麦克风授权/拒绝恢复、录音格式、上传/试听、切后台/锁屏、回访播放。
 - Android Chrome：网页访客播放/录音；原生写卡另测 Android NFC reader mode 和 NDEF read-back。
 - 至少两台彼此独立的设备/浏览器验证云端数据共享；同一浏览器的 IndexedDB 不构成云端测试。

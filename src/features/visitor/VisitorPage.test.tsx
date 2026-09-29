@@ -22,6 +22,7 @@ describe('visitor page', () => {
     expect(await screen.findByRole('button', { name: /开始录音/ })).toBeInTheDocument();
     expect(screen.getByText(/扫描这枚展签的人都可以收听/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '你和福冈市，有怎样的回忆？' })).toBeInTheDocument();
+    expect(screen.getByText(/iPhone Chrome 没有出现授权弹窗/)).toBeInTheDocument();
   });
 
   it('shows the bound recording instead of recording controls', async () => {
@@ -61,6 +62,6 @@ describe('visitor page', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /开始录音/ }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/请在 Safari 中打开/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/iPhone「设置 > Chrome > 麦克风」/);
   });
 });
