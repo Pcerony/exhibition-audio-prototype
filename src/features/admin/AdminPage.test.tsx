@@ -13,13 +13,13 @@ describe('operator page', () => {
   });
 
   it('creates a tag with an openable visitor URL', async () => {
-    render(<I18nProvider><AdminPage repository={repository} baseUrl="https://museum.example" /></I18nProvider>);
+    render(<I18nProvider><AdminPage repository={repository} baseUrl="https://museum.example/exhibition-audio-prototype/" /></I18nProvider>);
 
     fireEvent.change(screen.getByLabelText('展签编号'), { target: { value: '展签 01' } });
     fireEvent.click(screen.getByRole('button', { name: '新增展签' }));
 
     expect(await screen.findByText('展签 01')).toBeInTheDocument();
-    expect(screen.getByText(/https:\/\/museum\.example#\/t\//)).toBeInTheDocument();
+    expect(screen.getByText(/https:\/\/museum\.example\/exhibition-audio-prototype\/#\/t\//)).toBeInTheDocument();
   });
 
   it('does not create a duplicate display label', async () => {

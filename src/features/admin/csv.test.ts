@@ -17,13 +17,14 @@ describe('tag CSV', () => {
 
   it('exports each tag with a usable visitor URL', () => {
     const tag = createTag('internal-1', '展签 01', 'token-1', '秋季展');
-    expect(serializeTags([tag], 'https://museum.example')).toContain('https://museum.example#/t/token-1');
+    expect(serializeTags([tag], 'https://museum.example')).toContain('https://museum.example/#/t/token-1');
   });
 
   it('exports Japanese headers and reads them back', () => {
     const tag = createTag('internal-1', '展示 01', 'token-2', '秋季展');
-    const csv = serializeTags([tag], 'https://museum.example', 'ja-JP');
+    const csv = serializeTags([tag], 'https://museum.example/exhibition-audio-prototype/', 'ja-JP');
     expect(csv).toContain('展示タグ番号,バッチ,URL');
+    expect(csv).toContain('https://museum.example/exhibition-audio-prototype/#/t/token-2');
     expect(parseTagCsv(csv)).toEqual([{ label: '展示 01', batch: '秋季展' }]);
   });
 });

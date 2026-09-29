@@ -56,9 +56,10 @@ function escapeCell(value: string) {
 
 export function serializeTags(tags: Tag[], baseUrl: string, locale: Locale = 'zh-CN') {
   const messages = locale === 'ja-JP' ? jaJP : zhCN;
+  const siteBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
   const rows = [[messages['csv.label'], messages['csv.batch'], messages['csv.url'], messages['csv.status'], messages['csv.nickname']]];
   for (const tag of tags) {
-    rows.push([tag.label, tag.batch, `${baseUrl.replace(/\/$/, '')}#/t/${tag.token}`, tag.recording ? messages['csv.statusBound'] : messages['csv.statusUnbound'], tag.recording?.nickname ?? '']);
+    rows.push([tag.label, tag.batch, `${siteBase}#/t/${tag.token}`, tag.recording ? messages['csv.statusBound'] : messages['csv.statusUnbound'], tag.recording?.nickname ?? '']);
   }
   return rows.map((row) => row.map(escapeCell).join(',')).join('\r\n');
 }

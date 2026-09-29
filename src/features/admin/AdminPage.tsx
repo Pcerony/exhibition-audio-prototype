@@ -11,6 +11,7 @@ type Props = { repository: TagRepository; baseUrl: string };
 
 export function AdminPage({ repository, baseUrl }: Props) {
   const { locale, t } = useI18n();
+  const siteBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
   const [tags, setTags] = useState<Tag[]>([]);
   const [label, setLabel] = useState('');
   const [batch, setBatch] = useState('');
@@ -113,7 +114,7 @@ export function AdminPage({ repository, baseUrl }: Props) {
             <tbody>{visibleTags.map((tag) => <tr key={tag.id}>
               <td><div className="tag-label-cell"><span className="tag-glyph"><TagIcon size={15} /></span><span><strong>{tag.label}</strong><small>{tag.batch || t('admin.noBatch')}</small></span></div></td>
               <td>{tag.recording ? <div className="recording-status"><span className="status-dot bound" /><span><strong>{t('admin.bound')}</strong><small>{tag.recording.nickname || t('admin.noNickname')} · {formatDate(tag.recording.createdAt, locale)}</small></span></div> : <span className="recording-status"><span className="status-dot" />{t('admin.unbound')}</span>}</td>
-              <td><div className="tag-url"><a href={`${baseUrl.replace(/\/$/, '')}#/t/${tag.token}`} target="_blank" rel="noreferrer">{baseUrl.replace(/\/$/, '')}#/t/{tag.token}<ExternalLink size={12} /></a><small>{t('admin.writeUrl')}</small></div></td>
+              <td><div className="tag-url"><a href={`${siteBase}#/t/${tag.token}`} target="_blank" rel="noreferrer">{siteBase}#/t/{tag.token}<ExternalLink size={12} /></a><small>{t('admin.writeUrl')}</small></div></td>
               <td><div className="row-actions">{tag.recording && <><AudioPreview repository={repository} recordingId={tag.recording.id} label={t('admin.previewAudio')} loading={t('admin.audioLoading')} /><button className="row-icon-button" onClick={() => void reset(tag)} title={t('admin.reset')} aria-label={t('admin.reset')}><RotateCcw size={15} /></button></>}</div></td>
             </tr>)}</tbody>
           </table>
