@@ -2,7 +2,7 @@
 
 一个用于体验 NFC 展签录音与运营流程的中日双语网页原型。
 
-网站界面支持简体中文和日语，可在页面右上角切换。手机预览发布于 GitHub Pages：<https://pcerony.github.io/exhibition-audio-prototype/>。访客示例页：<https://pcerony.github.io/exhibition-audio-prototype/#/t/demo-001>。运营后台：<https://pcerony.github.io/exhibition-audio-prototype/#/admin>。
+网站界面支持简体中文和日语，可在页面右上角切换。手机预览：<https://voice.heisei.space/>。访客示例页：<https://voice.heisei.space/#/t/demo-001>。运营后台：<https://voice.heisei.space/#/admin>。
 
 ## 启动
 
