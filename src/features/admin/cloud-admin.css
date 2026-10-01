@@ -1,0 +1,18 @@
+.cloud-admin button:disabled { opacity: .5; cursor: not-allowed; }
+.cloud-cancel { margin: 8px 0 16px; }
+.cloud-admin > .admin-message { margin: 16px 24px; }
+.cloud-login { max-width: 420px; margin: 48px auto; padding: 24px; }
+.cloud-login h1 { font-size: 24px; }
+.cloud-login form, .cloud-login label { display: grid; gap: 12px; }
+.cloud-login label { gap: 6px; margin-bottom: 12px; }
+.cloud-admin input, .cloud-admin select { border: 1px solid #cbd0d5; border-radius: 4px; padding: 10px; background: white; color: #222; min-width: 0; }
+.cloud-admin td small { display: block; margin-top: 5px; color: #656b71; }
+.cloud-admin .tag-url a { overflow-wrap: anywhere; word-break: break-all; }
+.cloud-admin .tag-table { min-width: 760px; }
+.cloud-admin .tag-table-wrap { overflow-x: auto; }
+.cloud-admin audio { width: 210px; height: 36px; margin-top: 8px; }
+.cloud-pagination { display: flex; justify-content: flex-end; align-items: center; gap: 18px; padding: 18px 0; }
+.cloud-pagination button, .cloud-details button { border: 1px solid #cbd0d5; padding: 8px 12px; background: white; border-radius: 4px; }
+.cloud-details { border-top: 1px solid #dce0e3; padding: 18px 0; overflow-wrap: anywhere; }
+.cloud-details h2 { font-size: 18px; }.cloud-details button { margin-right: 8px; }.cloud-details li { padding: 7px 0; }
+@media (max-width: 640px) { .cloud-admin .admin-title-row { flex-wrap: wrap; gap: 12px; }.cloud-admin .admin-title-row h1 { font-size: 24px; }.cloud-admin .admin-toolbar { flex-wrap: wrap; }.cloud-admin .add-tag-form { flex-wrap: wrap; width: 100%; }.cloud-admin .add-tag-form input { flex: 1 1 130px; }.cloud-pagination { justify-content: center; gap: 12px; }.cloud-login { margin: 20px auto; } }

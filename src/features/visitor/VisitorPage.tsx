@@ -15,10 +15,14 @@ export function VisitorPage({ repository, token }: Props) {
   const [loadedToken, setLoadedToken] = useState('');
   const [nickname, setNickname] = useState('');
   const [audioUrl, setAudioUrl] = useState('');
+  const [playbackFailed, setPlaybackFailed] = useState(false);
+  const [playbackRevision, setPlaybackRevision] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
   const audioObjectUrl = useRef('');
+  const activeToken = useRef(token);
+  activeToken.current = token;
   const recorder = useRecorder();
 
   useEffect(() => {
@@ -28,6 +32,9 @@ export function VisitorPage({ repository, token }: Props) {
     setLoadFailed(false);
     setMessage('');
     setAudioUrl('');
+    setNickname('');
+    setSubmitting(false);
+    recorder.discard();
     repository.getTag(token).then((value) => {
       if (active) {
         setTag(value);
@@ -41,10 +48,12 @@ export function VisitorPage({ repository, token }: Props) {
       }
     });
     return () => { active = false; };
-  }, [repository, token]);
+  }, [repository, token, recorder.discard]);
 
   useEffect(() => {
     let active = true;
+    setPlaybackFailed(false);
+    setAudioUrl('');
     if (!tag?.recording) {
       setAudioUrl('');
       return;
@@ -53,14 +62,14 @@ export function VisitorPage({ repository, token }: Props) {
       if (active && url) {
         audioObjectUrl.current = url.startsWith('blob:') ? url : '';
         setAudioUrl(url);
-      }
-    }).catch(() => { if (active) setMessage(t('visitor.submitFailure')); });
+      } else if (active) setPlaybackFailed(true);
+    }).catch(() => { if (active) setPlaybackFailed(true); });
     return () => {
       active = false;
       if (audioObjectUrl.current) URL.revokeObjectURL(audioObjectUrl.current);
       audioObjectUrl.current = '';
     };
-  }, [repository, token, tag?.recording?.id, t]);
+  }, [repository, token, tag?.recording?.id, playbackRevision]);
 
   async function submitRecording() {
     if (!recorder.blob || submitting) return;
@@ -70,6 +79,7 @@ export function VisitorPage({ repository, token }: Props) {
       const result = await repository.claim(token, {
         id: crypto.randomUUID(), blob: recorder.blob, nickname, duration: recorder.duration,
       });
+      if (activeToken.current !== token) return;
       if (result.status === 'claimed' || result.status === 'already-bound') {
         setTag(result.tag);
         recorder.discard();
@@ -78,9 +88,9 @@ export function VisitorPage({ repository, token }: Props) {
         setMessage(t('visitor.unavailable'));
       }
     } catch {
-      setMessage(t('visitor.submitFailure'));
+      if (activeToken.current === token) setMessage(t('visitor.submitFailure'));
     } finally {
-      setSubmitting(false);
+      if (activeToken.current === token) setSubmitting(false);
     }
   }
 
@@ -98,7 +108,8 @@ export function VisitorPage({ repository, token }: Props) {
           <p className="visitor-intro">{t('visitor.recordedIntro')}</p>
           <div className="soundprint" aria-hidden="true">{Array.from({ length: 45 }, (_, index) => <i key={index} style={{ '--bar': `${18 + ((index * 37 + 13) % 76)}%` } as React.CSSProperties} />)}</div>
           <div className="player-wrap">
-            {audioUrl ? <audio controls aria-label={t('visitor.player')} src={audioUrl} /> : <p className="quiet-state">{t('visitor.loadingAudio')}</p>}
+            {playbackFailed ? <button className="secondary-action" onClick={() => setPlaybackRevision((value) => value + 1)}><RotateCcw size={16} />{t('visitor.retryPlayback')}</button>
+              : audioUrl ? <audio controls aria-label={t('visitor.player')} src={audioUrl} onError={() => setPlaybackFailed(true)} /> : <p className="quiet-state">{t('visitor.loadingAudio')}</p>}
             <span>{formatDuration(tag.recording.duration)}</span>
           </div>
           <p className="listening-note"><Check size={15} /> {t('visitor.listenNote')}</p>
@@ -126,15 +137,15 @@ export function VisitorPage({ repository, token }: Props) {
           {recorder.state === 'recording' ? (
             <button className="primary-action stop-action" onClick={recorder.stop}><span className="stop-square" /> {t('visitor.stop')}</button>
           ) : recorder.state === 'ready' ? (
-            <button className="secondary-action" onClick={recorder.discard}><RotateCcw size={16} /> {t('visitor.retake')}</button>
+            <button className="secondary-action" onClick={recorder.discard} disabled={submitting}><RotateCcw size={16} /> {t('visitor.retake')}</button>
           ) : (
-            <button className="primary-action" onClick={recorder.start}><Mic size={18} /> {t('visitor.start')}</button>
+            <button className="primary-action" onClick={recorder.start} disabled={recorder.starting || submitting}><Mic size={18} /> {t('visitor.start')}</button>
           )}
         </div>
         <p className="mic-permission-help">{t('visitor.micPermissionHelp')}</p>
         {recorder.state === 'ready' && <div className="submit-panel">
           <label htmlFor="nickname">{t('visitor.nickname')} <span>{t('visitor.optional')}</span></label>
-          <input id="nickname" value={nickname} onChange={(event) => setNickname(event.target.value)} maxLength={24} placeholder={t('visitor.nicknamePlaceholder')} />
+          <input id="nickname" value={nickname} disabled={submitting} onChange={(event) => setNickname(event.target.value)} maxLength={24} placeholder={t('visitor.nicknamePlaceholder')} />
           <button className="primary-action submit-action" onClick={submitRecording} disabled={submitting}>
             <Send size={16} /> {submitting ? t('visitor.submitting') : t('visitor.submit')}
           </button>

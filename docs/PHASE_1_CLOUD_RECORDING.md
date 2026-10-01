@@ -3,9 +3,9 @@
 ## 当前落地状态（2026-10-01）
 
 - 东京 Supabase 项目的核心 schema 和私有 `recordings` bucket 已部署；公开查询、上传初始化、原子绑定和签名播放 Edge Functions 已部署。
-- 已对公开查询和上传初始化做云端 smoke test，并删除临时测试展签；尚未进行真实音频上传、并发 claim、播放和 iPhone 真机验收。
-- 录音端现在会在 60 秒自动停止；上传签名有效期与数据库会话时长已对齐，终止性 claim 失败会尝试清理候选对象。对“上传后关闭页面、从未 finalize”的对象仍缺少定期回收任务。
-- 参观者前端已实现 Supabase adapter；GitHub Pages 工作流读取仓库 Actions Variables。管理后台的云端认证/批量建签仍未完成。
+- 已完成云端合成音频上传、并发 claim、独立 HTTP 客户端签名播放和重置/限频/清理测试；测试数据已删除。尚未完成 iPhone 和两台实体手机验收。
+- 录音 60 秒自动停止，切后台取消等待中的麦克风请求；提交期间不能重录。签名完成后延长会话有效期，失败对象持久排队且等待上传凭证到期；Vault-backed 每15分钟回收任务已配置。
+- 参观者 cloud adapter、认证运营后台及 Android 调试写卡端已实现；Pages 工作流读取公开 Actions Variables。具体证据见 [验证记录](VERIFICATION.md)。
 - 正式收集参观者声音前，仍需确定录音保留/删除期限，并最终确认 MIME、字节上限和限频策略。
 
 ## 目标

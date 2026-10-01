@@ -393,6 +393,14 @@ verify_jwt = false
 [functions.public-playback-url]
 verify_jwt = false
 
+[functions.admin-api]
+# Auth access tokens are verified with getUser inside the function.
+verify_jwt = false
+
+[functions.maintenance]
+# This endpoint requires x-maintenance-secret, not a browser JWT.
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

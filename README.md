@@ -1,26 +1,27 @@
-# 展览声音档案原型
+# 福冈市声音记忆展览系统
 
-一个用于体验 NFC 展签录音与运营流程的中日双语网页原型。
+参观者触碰 NFC 展签，免安装打开网页，录制一段福冈回忆；之后触碰同一展签只播放该声音。日语默认，可切换中文。芯片只保存唯一网址，录音与绑定关系存于 Supabase 云端。
 
-系统需求、架构、跨端 API、安全、路线图和 Agent 协作规则见 [`docs/README.md`](docs/README.md)。当前网站仍是浏览器本地存储原型；正式云端录音按 [`docs/PHASE_1_CLOUD_RECORDING.md`](docs/PHASE_1_CLOUD_RECORDING.md) 作为第一阶段建设。
+- 参观者入口：<https://voice.heisei.space/>
+- 认证运营后台：<https://voice.heisei.space/#/admin>
+- [Android 写卡工程](apps/tag-writer-android/README.md)
+- [系统文档](docs/README.md)、[首次运营](docs/OPERATOR_SETUP.md)、[验证记录](docs/VERIFICATION.md)
 
-网站界面支持简体中文和日语，可在页面右上角切换。手机预览：<https://voice.heisei.space/>。访客示例页：<https://voice.heisei.space/#/t/demo-001>。运营后台：<https://voice.heisei.space/#/admin>。
-
-## 启动
+## 开发
 
 ```sh
-npm install
+npm ci
 npm run dev
+npm test -- --run
+npm run test:backend
+npm run build
+GITHUB_PAGES=true npm run build
 ```
 
-浏览器打开 Vite 输出的本地地址。首页是 NFC 轻触说明；运营后台位于 `/#/admin`；示例访客页面为 `/#/t/demo-001`。录音需要在 `localhost` 或 HTTPS 页面中使用，并允许浏览器访问麦克风。
+公开配置参照 `.env.example` 和开发文档。生产缺少云端配置时拒绝运行，不会静默使用浏览器本地存储。原有 localStorage/IndexedDB adapter 只供开发和测试。
 
-## 原型边界
+## 交付边界
 
-- 展签状态保存在当前浏览器的 localStorage，录音文件保存在当前浏览器的 IndexedDB。
-- 其他设备或浏览器看不到这些数据；清除浏览器数据会删除原型录音。
-- NFC 芯片尚未实际写入网址；运营后台生成的网址可用于后续芯片写入试验。手机系统读取芯片中的网址并打开对应展签，网页本身不会在后台持续扫描 NFC。
-- GitHub Pages 提供 HTTPS。可在 iPhone Safari 或 Chrome 中点击“开始录音”测试权限。若 Chrome 没有弹窗，先检查 iPhone「设置 > Chrome > 麦克风」是否开启，再检查 Chrome 地址栏左侧的网站权限；系统级权限关闭时，网页可能不会收到弹窗。
-- 仓库和网站内容是公开的。不要录入敏感或私人音频。
-- 当前没有 Supabase、云端上传、正式运营者登录或跨设备同步。多人并发与权限仍需在云端版本实现并验证。
-- 展签 CSV 使用两列：`展签编号,批次`。批次可以留空。
+云端上传、原子绑定、私有音频签名播放、运营认证、批量建签、重置/禁用、审计和失败对象定时回收已实现。Android 调试端支持 NDEF URI 写入、物理读回核验与失败上报恢复。
+
+自动测试不替代实体 NFC、iPhone 权限和现场验收。正式收集前必须创建真实运营账号、确定保存期限。不要提交音频、密码或服务器密钥。

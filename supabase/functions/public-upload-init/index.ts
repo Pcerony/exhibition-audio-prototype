@@ -18,37 +18,21 @@ Deno.serve(async (request) => {
   }
 
   const client = adminClient();
-  const { data: tag, error: tagError } = await client.from('tags')
-    .select('id,status').eq('public_token', token).maybeSingle();
-  if (tagError) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);
-  if (!tag) return json({ code: 'TAG_NOT_FOUND' }, 404);
-  if (tag.status === 'disabled') return json({ code: 'TAG_UNAVAILABLE' }, 410);
-  if (tag.status === 'bound') return json({ code: 'ALREADY_BOUND' }, 409);
-  const { count, error: limitError } = await client.from('upload_sessions')
-    .select('id', { count: 'exact', head: true })
-    .eq('tag_id', tag.id)
-    .gte('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString());
-  if (limitError) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);
-  if ((count ?? 0) >= 8) return json({ code: 'RATE_LIMITED' }, 429);
-
   const uploadId = crypto.randomUUID();
-  const objectPath = `${tag.id}/${uploadId}`;
   const claimToken = randomToken();
-  const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000 + 60 * 1000).toISOString();
-  const { error: insertError } = await client.from('upload_sessions').insert({
-    id: uploadId,
-    tag_id: tag.id,
-    object_path: objectPath,
-    claim_token_hash: await sha256(claimToken),
-    mime_type: mimeType,
-    size_bytes: sizeBytes,
-    expires_at: expiresAt,
+  const { data: session, error: insertError } = await client.rpc('initialize_upload', {
+    p_token: token, p_id: uploadId, p_hash: await sha256(claimToken), p_mime: mimeType, p_size: sizeBytes,
   });
-  if (insertError) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);
-
+  if (insertError || !session) {
+    const code = ['TAG_NOT_FOUND', 'TAG_UNAVAILABLE', 'ALREADY_BOUND', 'RATE_LIMITED'].find((value) => insertError?.message.includes(value));
+    return json({ code: code ?? 'SERVICE_UNAVAILABLE' }, code === 'TAG_NOT_FOUND' ? 404 : code === 'TAG_UNAVAILABLE' ? 410 : code === 'ALREADY_BOUND' ? 409 : code === 'RATE_LIMITED' ? 429 : 503);
+  }
+  const objectPath = session.objectPath;
   const { data: signed, error: signedError } = await client.storage.from('recordings').createSignedUploadUrl(objectPath);
-  if (signedError || !signed) {
-    await client.from('upload_sessions').delete().eq('id', uploadId);
+  const { data: expiresAt, error: deadlineError } = await client.rpc('upload_signing_completed', { p_upload_id: uploadId });
+  if (signedError || !signed || deadlineError || !expiresAt) {
+    // Signing can fail ambiguously; retain its deadline for safe eventual cleanup.
+    await client.rpc('invalidate_upload', { p_upload_id: uploadId, p_claim_token: claimToken });
     return json({ code: 'UPLOAD_UNAVAILABLE' }, 503);
   }
   return json({ uploadId, path: signed.path, storageToken: signed.token, claimToken, expiresAt }, 201);

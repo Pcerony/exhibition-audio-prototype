@@ -16,17 +16,17 @@ Deno.serve(async (request) => {
 
   const client = adminClient();
   const { data: upload, error: lookupError } = await client.from('upload_sessions')
-    .select('object_path,mime_type,size_bytes,expires_at,claimed_at,claim_token_hash')
+    .select('object_path,mime_type,size_bytes,expires_at,claimed_at,claim_token_hash,invalidated_at')
     .eq('id', uploadId).maybeSingle();
   if (lookupError) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);
   if (!upload || upload.claim_token_hash !== await sha256(claimToken)) return json({ code: 'UPLOAD_TOKEN_INVALID' }, 401);
-  if (upload.claimed_at) return json({ code: 'UPLOAD_SESSION_INVALID' }, 410);
+  if (upload.claimed_at || upload.invalidated_at) return json({ code: 'UPLOAD_SESSION_INVALID' }, 410);
   if (Date.parse(upload.expires_at) <= Date.now()) {
-    await removeUnclaimedObject(client, uploadId, upload.object_path);
+    await client.rpc('invalidate_upload', { p_upload_id: uploadId, p_claim_token: claimToken });
     return json({ code: 'UPLOAD_SESSION_INVALID' }, 410);
   }
   if (!Number.isInteger(durationSeconds) || nickname.length > 24 || durationSeconds < 1 || durationSeconds > 60) {
-    await removeUnclaimedObject(client, uploadId, upload.object_path);
+    await client.rpc('invalidate_upload', { p_upload_id: uploadId, p_claim_token: claimToken });
     return json({ code: 'RECORDING_INVALID' }, 400);
   }
 
@@ -41,32 +41,24 @@ Deno.serve(async (request) => {
     p_duration_seconds: durationSeconds,
     p_actual_size_bytes: actualSize,
     p_actual_mime_type: actualMime,
-  }).maybeSingle();
+  }).maybeSingle<{ claim_status: string; recording_id: string; recording_created_at: string }>();
   if (claimError) {
     const code = claimError.message.includes('UPLOAD_SESSION_INVALID') ? 'UPLOAD_SESSION_INVALID'
       : claimError.message.includes('TOKEN_INVALID') ? 'UPLOAD_TOKEN_INVALID'
       : claimError.message.includes('TAG_UNAVAILABLE') ? 'TAG_UNAVAILABLE'
-      : 'RECORDING_INVALID';
+      : claimError.message.includes('RECORDING_INVALID') ? 'RECORDING_INVALID'
+      : 'SERVICE_UNAVAILABLE';
     if (code === 'UPLOAD_SESSION_INVALID' || code === 'TAG_UNAVAILABLE' || code === 'RECORDING_INVALID') {
-      await removeUnclaimedObject(client, uploadId, upload.object_path);
+      await client.rpc('invalidate_upload', { p_upload_id: uploadId, p_claim_token: claimToken });
     }
-    const status = code === 'UPLOAD_TOKEN_INVALID' ? 401
+    const status = code === 'SERVICE_UNAVAILABLE' ? 503 : code === 'UPLOAD_TOKEN_INVALID' ? 401
       : code === 'UPLOAD_SESSION_INVALID' || code === 'TAG_UNAVAILABLE' ? 410
       : 400;
     return json({ code }, status);
   }
   if (claim?.claim_status === 'already-bound') {
-    await client.storage.from('recordings').remove([upload.object_path]);
     return json({ code: 'ALREADY_BOUND', status: 'already-bound' }, 409);
   }
   if (claim?.claim_status !== 'claimed') return json({ code: 'CLAIM_FAILED' }, 500);
   return json({ status: 'claimed', recordingId: claim.recording_id, createdAt: claim.recording_created_at });
 });
-
-async function removeUnclaimedObject(client: ReturnType<typeof adminClient>, uploadId: string, objectPath: string) {
-  const { data: session, error } = await client.from('upload_sessions')
-    .select('claimed_at').eq('id', uploadId).maybeSingle();
-  if (!error && session && !session.claimed_at) {
-    await client.storage.from('recordings').remove([objectPath]);
-  }
-}

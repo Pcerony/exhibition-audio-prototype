@@ -4,10 +4,10 @@
 
 ## 当前事实
 
-- 当前根目录 React/Vite 应用是本地存储原型，不是云端可用版本。录音在同一浏览器 IndexedDB，标签元数据在 localStorage。
+- 生产 React/Vite 应用使用云端录音和认证后台；本地 IndexedDB/localStorage adapter 仅供开发/测试。
 - 已有正式预览域名 `https://voice.heisei.space/`，由 GitHub Pages 托管前端。
 - 已确认芯片可以写入网址，但芯片型号、容量和手机兼容性尚未实测。
-- 正式数据源尚未创建。云端录音是第一交付阶段；在真实 Supabase 项目和密钥配置前，不得宣称跨设备上传已完成。
+- 东京 Supabase 已配置，独立 HTTP 客户端合成音频绑定/播放已验证；不等于两台手机/实体 NFC 验收。真实账号、保留策略和现场验收仍需负责人，见 `docs/VERIFICATION.md`。
 
 ## 不可各自发明的系统规则
 

@@ -46,6 +46,14 @@ describe('visitor page', () => {
     expect(await screen.findByText('没有找到这枚展签')).toBeInTheDocument();
   });
 
+  it('allows a listener to refresh a failed or expired playback link', async () => {
+    await repository.claim('visitor-token', { id: 'playback-fixture', blob: new Blob(['audio']), nickname: '', duration: 1 });
+    vi.spyOn(repository, 'getVisitorPlaybackUrl').mockRejectedValueOnce(new Error('NETWORK_ERROR')).mockResolvedValueOnce('https://example.invalid/signed-audio');
+    render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    fireEvent.click(await screen.findByRole('button', { name: '重新加载录音' }));
+    expect(await screen.findByLabelText('播放录音')).toHaveAttribute('src', 'https://example.invalid/signed-audio');
+  });
+
   it('does not show the previous tag while a new NFC token is loading', async () => {
     await repository.claim('visitor-token', {
       id: 'audio-2',
@@ -72,6 +80,47 @@ describe('visitor page', () => {
     fireEvent.click(screen.getByRole('button', { name: '日本語' }));
     expect(await screen.findByRole('heading', { name: '福岡市との思い出を聞かせてください。' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '録音を開始' })).toBeInTheDocument();
+  });
+
+  it('discards the previous recording when opening another NFC tag', async () => {
+    await repository.createTag({ id: 'next-tag', token: 'new-recording-token', label: 'New tag' });
+    vi.stubGlobal('MediaRecorder', class {
+      state = 'inactive'; mimeType = 'audio/webm';
+      ondataavailable?: (event: { data: Blob }) => void;
+      onstop?: () => void;
+      start() { this.state = 'recording'; }
+      stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['fixture']) }); this.onstop?.(); }
+    });
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
+      getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+    } });
+    const view = render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    fireEvent.click(await screen.findByRole('button', { name: /开始录音/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /完成录音/ }));
+    expect(await screen.findByRole('button', { name: /重录/ })).toBeInTheDocument();
+    view.rerender(<I18nProvider><VisitorPage repository={repository} token="new-recording-token" /></I18nProvider>);
+    expect(await screen.findByRole('button', { name: /开始录音/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /重录/ })).not.toBeInTheDocument();
+  });
+
+  it('locks the take and nickname while uploading', async () => {
+    vi.stubGlobal('MediaRecorder', class {
+      state = 'inactive'; mimeType = 'audio/webm';
+      ondataavailable?: (event: { data: Blob }) => void;
+      onstop?: () => void;
+      start() { this.state = 'recording'; }
+      stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['fixture']) }); this.onstop?.(); }
+    });
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
+      getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+    } });
+    vi.spyOn(repository, 'claim').mockReturnValue(new Promise(() => {}));
+    render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    fireEvent.click(await screen.findByRole('button', { name: /开始录音/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /完成录音/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /把声音留在这里/ }));
+    expect(screen.getByRole('button', { name: /重录/ })).toBeDisabled();
+    expect(screen.getByRole('textbox')).toBeDisabled();
   });
 
   it('explains how to recover when the browser blocks microphone permission', async () => {

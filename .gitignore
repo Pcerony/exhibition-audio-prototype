@@ -6,3 +6,5 @@ dist/
 .env.*
 !.env.example
 supabase/.temp/
+*.onedrive-placeholder
+*.dataless-backup

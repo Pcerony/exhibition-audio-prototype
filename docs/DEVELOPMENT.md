@@ -1,48 +1,37 @@
 # 开发与环境
 
-## 当前仓库状态
+生产 React/Vite 应用使用 cloud repository 访问 Supabase；本地 adapter 仅供开发/测试。域名为 `https://voice.heisei.space/`，东京项目已部署 migrations 和六个 Edge Functions。正式访客数据尚未开始收集。
 
-根目录是现有 React/Vite 双语原型：`src/features/visitor/` 参观者页面，`src/features/admin/` 运营页面，`src/storage/repository.ts` 为本地 localStorage + IndexedDB 适配器。应用部署在 GitHub Pages，自定义域名为 `https://voice.heisei.space/`。当前数据只对同一浏览器可见。
-
-正式 Supabase 项目、schema、Storage bucket、Edge Functions、管理员账号和 Android 工程尚未配置。任何 Agent 必须先读 [`PROJECT.md`](PROJECT.md)、[`ARCHITECTURE.md`](ARCHITECTURE.md)、[`API_CONTRACT.md`](API_CONTRACT.md) 和 [`SECURITY_PRIVACY.md`](SECURITY_PRIVACY.md)。
-
-## 本地前端
+## 前端
 
 ```sh
 npm ci
 npm run dev
 npm test -- --run
+npm run test:backend
 npm run build
 GITHUB_PAGES=true npm run build
 ```
 
-Vite 当前使用根目录单包。做云端 adapter 时保留 repository 边界；不要在 Supabase 不可用时静默降级到本地数据。开发模式可由显式 `APP_STORAGE_MODE=local` 使用本地 adapter；集成环境必须显示当前模式，production 必须要求配置 Supabase。
+公开变量见 `.env.example`：`VITE_SUPABASE_URL`、`VITE_SUPABASE_PUBLISHABLE_KEY`。配置存在时使用云端；开发缺配置使用本地 adapter，生产缺配置失败关闭。不得用 VITE 变量暴露服务端密钥。
 
-## 环境变量
+## 后端
 
-前端允许的变量仅为公开值：
+见 [Supabase 说明](../supabase/README.md)。不修改已经应用的 migration。管理 API 验证 Auth 用户和 operator_profiles；登录成功不等于运营授权。
 
-```dotenv
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-VITE_APP_ENV=local
+```sh
+npx supabase db push --linked --dry-run
+npx supabase db query --linked --file supabase/tests/operator_management.sql
 ```
 
-服务端 Edge Functions secrets 通过 Supabase CLI/项目 secret manager 设置，例如 `SUPABASE_SERVICE_ROLE_KEY`、token pepper、rate-limit 配置；不得放进 `.env` 前端变量、提交记录或聊天。添加 `.env.example` 时只放空值/明显 placeholder。Android 签名 keystore 和 OAuth redirect settings 通过安全渠道管理。
+第二条运行回滚测试，只使用虚构数据。所有生产操作需项目负责人授权并检查 linked project。
 
-## Supabase 工作约定
+嵌入式数据库测试：`npx deno@2.9.6 test --node-modules-dir=auto --allow-read --allow-env --allow-sys --allow-ffi --no-lock supabase/tests/local_database_test.ts`；之后 `npm ci` 恢复前端依赖布局。PGlite 的 Auth/Storage/密码学替代并非完整 Supabase 栈。
 
-- 本地开发使用 Supabase CLI + Docker（若可用）或独立 dev project；不在 production 项目试 schema。
-- 所有 schema 变化放在 `supabase/migrations/` 并可从空数据库重放。RLS 和对象策略随 schema 一起测试。
-- 部署前检查目标项目 ref、当前分支和 migration diff。production 数据操作要备份并经用户/项目负责人授权。
-- 管理登录、参观者匿名 API、Android provisioning API 必须按 [`API_CONTRACT.md`](API_CONTRACT.md) 与安全文档验证。
+`scripts/verify-cloud.mjs` 为 opt-in 远程合成数据集成测试，创建后清理虚构账号/展签/音频。`scripts/configure-maintenance.mjs` 将秘密通过管道设置为 Edge secret/Vault，不打印秘密。
 
-## GitHub Pages
+## Android 与部署
 
-前端仍使用 `.github/workflows/deploy-pages.yml` 部署；workflow 测试、相对资源路径兼容自定义域名和项目 Pages 路径。新增 Supabase secrets 时只添加需要的公开 URL/anon key 到静态构建；service role 永远不能作为 Vite build arg。API CORS/redirect URL 仅允许 `https://voice.heisei.space`、localhost 和明确测试域名。
+Android 使用 JDK17、SDK36 和固定校验和 Gradle wrapper，见 [工程说明](../apps/tag-writer-android/README.md)。只注入公开 URL/key；调试 APK 不是正式签名发布版。
 
-## 真机验收设备
-
-- iPhone Safari 与 Chrome：NFC URL 打开、系统和站点麦克风授权/拒绝恢复、录音格式、上传/试听、切后台/锁屏、回访播放。
-- Android Chrome：网页访客播放/录音；原生写卡另测 Android NFC reader mode 和 NDEF read-back。
-- 至少两台彼此独立的设备/浏览器验证云端数据共享；同一浏览器的 IndexedDB 不构成云端测试。
+Pages workflow 在 main 更新时测试/构建，配置来自 Actions Variables。云端部署独立，先兼容契约再上线前端。实体 iPhone、Android NFC、两台手机互通和保留策略验收参照 [首次运营](OPERATOR_SETUP.md)。

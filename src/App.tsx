@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { ArrowUpRight, AudioLines, Nfc } from 'lucide-react';
 import { AdminPage } from './features/admin/AdminPage';
+import { CloudAdminPage } from './features/admin/CloudAdminPage';
 import { VisitorPage } from './features/visitor/VisitorPage';
 import { createBrowserRepository, type TagRepository } from './storage/repository';
 import { createSupabaseVisitorRepository, hasSupabaseConfig } from './storage/supabaseVisitorRepository';
+import { createConfiguredCloudAdminRepository } from './storage/cloudAdminRepository';
 import { LanguageSwitch } from './i18n/LanguageSwitch';
 import { useI18n } from './i18n/I18nProvider';
 import './styles.css';
@@ -11,6 +13,7 @@ import './styles.css';
 const repository = createBrowserRepository();
 const cloudConfigured = hasSupabaseConfig();
 const visitorRepository = cloudConfigured ? createSupabaseVisitorRepository() : repository;
+const adminRepository = cloudConfigured ? createConfiguredCloudAdminRepository() : null;
 const DEMO_TOKEN = 'demo-001';
 let seedPromise: Promise<void> | null = null;
 
@@ -56,7 +59,8 @@ export function App() {
   }
   const baseUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
   if (resolvedRoute.type === 'admin') {
-    if (cloudConfigured || import.meta.env.PROD) return <main className="visitor-shell"><p className="visitor-intro">{t('app.adminLater')}</p></main>;
+    if (adminRepository) return <CloudAdminPage repository={adminRepository} baseUrl="https://voice.heisei.space/" />;
+    if (import.meta.env.PROD) return <main className="visitor-shell"><p className="visitor-intro">{t('app.cloudMissing')}</p></main>;
     return <AdminPage repository={repository} baseUrl={baseUrl} />;
   }
   return <main className="visitor-shell welcome-shell">
