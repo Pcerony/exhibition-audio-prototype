@@ -14,7 +14,7 @@
 
 ### 查询标签
 
-`GET /public/tags/{token}`
+`GET /functions/v1/public-tag?token={token}`
 
 返回：
 
@@ -30,21 +30,21 @@
 
 ### 建立上传会话
 
-`POST /public/tags/{token}/uploads`
+`POST /functions/v1/public-upload-init`
 
-请求：`{ "mimeType": "audio/mp4", "sizeBytes": 123456 }`。服务端校验标签当前未绑定、允许的 MIME 与字节上限，创建随机对象路径和短期上传会话，返回 `{ "uploadId": "...", "uploadUrl": "...", "uploadToken": "...", "expiresAt": "..." }`。签名上传只允许创建指定对象，不允许 upsert/覆盖。
+请求：`{ "token": "...", "mimeType": "audio/mp4", "sizeBytes": 123456 }`。服务端校验标签当前未绑定、允许的 MIME 与字节上限，创建随机对象路径和上传会话，返回 `{ "uploadId": "...", "path": "...", "storageToken": "...", "claimToken": "...", "expiresAt": "..." }`。Supabase signed upload token 有效 2 小时；会话比它多保留 1 分钟，以免有效上传凭证在数据库会话前失效。Storage 签名上传只允许创建指定对象，不允许 upsert/覆盖；claim token 与 Storage token 相互独立。
 
 ### 上传后原子绑定
 
-`POST /public/uploads/{uploadId}/claim`
+`POST /functions/v1/public-upload-claim`
 
-Authorization 带该上传会话的单次 upload token。请求：`{ "nickname": "可选昵称", "durationSeconds": 42 }`。服务端校验会话未过期、对象存在、真实尺寸/MIME、时长与标签状态，然后在单个原子数据库操作中绑定录音。
+`x-upload-token` 带该上传会话的单次 claim token。请求：`{ "uploadId": "...", "nickname": "可选昵称", "durationSeconds": 42 }`。服务端校验会话未过期、对象存在、真实尺寸/MIME、时长与标签状态，然后在单个原子数据库操作中绑定录音。
 
-返回 `{ "status": "claimed", "recording": { ... } }` 或 `{ "status": "already-bound", "recording": { ... } }`。后者绝不覆盖，服务端异步/可靠地清理未获胜候选对象。其他状态错误不能让客户端误报成功。
+成功返回 `{ "status": "claimed", "recordingId": "...", "createdAt": "..." }`。若并发中另一请求先绑定，返回 HTTP 409 `{ "code": "ALREADY_BOUND", "status": "already-bound" }`，并清理未获胜候选对象。终止性的录音校验失败、标签停用或过期会话也会尝试删除未绑定候选对象；系统仍需增加定期回收“上传后未 finalize”的对象任务。其他状态错误不能让客户端误报成功。
 
 ### 播放链接
 
-`POST /public/tags/{token}/playback-url` 返回 `{ "url": "...", "expiresAt": "..." }`。仅对 `bound` 标签签发短期链接；音频对象始终保存在 private bucket。短期链接不是永久分享地址。
+`POST /functions/v1/public-playback-url` 请求 `{ "token": "..." }`，返回 `{ "url": "...", "expiresInSeconds": 120 }`。仅对 `bound` 标签签发短期链接；音频对象始终保存在 private bucket。短期链接不是永久分享地址。
 
 ## 运营管理 API
 

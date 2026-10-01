@@ -11,18 +11,25 @@ function TestCopy() {
 describe('language preference', () => {
   beforeEach(() => localStorage.clear());
 
-  it('starts in Chinese and persists Japanese when selected', () => {
+  it('starts in Japanese and persists Chinese when selected', () => {
     render(<I18nProvider><TestCopy /></I18nProvider>);
-    expect(screen.getByText('声音档案')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '日本語' }));
-
     expect(screen.getByText('音声アーカイブ')).toBeInTheDocument();
-    expect(localStorage.getItem('exhibition-audio-language')).toBe('ja-JP');
+
+    fireEvent.click(screen.getByRole('button', { name: '中文' }));
+
+    expect(screen.getByText('声音档案')).toBeInTheDocument();
+    expect(localStorage.getItem('exhibition-audio-language-v2')).toBe('zh-CN');
   });
 
   it('restores the saved Japanese preference', () => {
-    localStorage.setItem('exhibition-audio-language', 'ja-JP');
+    localStorage.setItem('exhibition-audio-language-v2', 'ja-JP');
+    render(<I18nProvider><TestCopy /></I18nProvider>);
+
+    expect(screen.getByText('音声アーカイブ')).toBeInTheDocument();
+  });
+
+  it('defaults existing installations with an older Chinese preference to Japanese', () => {
+    localStorage.setItem('exhibition-audio-language', 'zh-CN');
     render(<I18nProvider><TestCopy /></I18nProvider>);
 
     expect(screen.getByText('音声アーカイブ')).toBeInTheDocument();

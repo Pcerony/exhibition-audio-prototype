@@ -9,6 +9,7 @@ describe('operator page', () => {
 
   beforeEach(() => {
     repository = createMemoryRepository();
+    localStorage.setItem('exhibition-audio-language-v2', 'zh-CN');
     vi.stubGlobal('confirm', vi.fn(() => true));
   });
 

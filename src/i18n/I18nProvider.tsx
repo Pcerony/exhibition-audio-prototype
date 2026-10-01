@@ -4,11 +4,12 @@ import { jaJP, zhCN, type MessageKey } from './messages';
 export type Locale = 'zh-CN' | 'ja-JP';
 type Translate = (key: MessageKey, values?: Record<string, string | number>) => string;
 type I18nContextValue = { locale: Locale; setLocale: (locale: Locale) => void; t: Translate };
-const LANGUAGE_KEY = 'exhibition-audio-language';
+const LANGUAGE_KEY = 'exhibition-audio-language-v2';
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 function storedLocale(): Locale {
-  return localStorage.getItem(LANGUAGE_KEY) === 'ja-JP' ? 'ja-JP' : 'zh-CN';
+  const saved = localStorage.getItem(LANGUAGE_KEY);
+  return saved === 'zh-CN' || saved === 'ja-JP' ? saved : 'ja-JP';
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {

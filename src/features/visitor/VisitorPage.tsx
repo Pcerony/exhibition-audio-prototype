@@ -1,27 +1,45 @@
 import { useEffect, useRef, useState } from 'react';
 import { AudioLines, Check, Mic, RotateCcw, Send, Tag as TagIcon } from 'lucide-react';
 import type { Tag } from '../../domain/tags';
-import type { TagRepository } from '../../storage/repository';
+import type { VisitorRepository } from '../../storage/repository';
 import { useRecorder } from './useRecorder';
 import { LanguageSwitch } from '../../i18n/LanguageSwitch';
 import { useI18n } from '../../i18n/I18nProvider';
 import './visitor.css';
 
-type Props = { repository: TagRepository; token: string };
+type Props = { repository: VisitorRepository; token: string };
 
 export function VisitorPage({ repository, token }: Props) {
   const { t } = useI18n();
   const [tag, setTag] = useState<Tag | null | undefined>(undefined);
+  const [loadedToken, setLoadedToken] = useState('');
   const [nickname, setNickname] = useState('');
   const [audioUrl, setAudioUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const audioObjectUrl = useRef('');
   const recorder = useRecorder();
 
   useEffect(() => {
     let active = true;
-    repository.getTag(token).then((value) => { if (active) setTag(value); });
+    setTag(undefined);
+    setLoadedToken('');
+    setLoadFailed(false);
+    setMessage('');
+    setAudioUrl('');
+    repository.getTag(token).then((value) => {
+      if (active) {
+        setTag(value);
+        setLoadedToken(token);
+      }
+    }).catch(() => {
+      if (active) {
+        setLoadFailed(true);
+        setTag(null);
+        setLoadedToken(token);
+      }
+    });
     return () => { active = false; };
   }, [repository, token]);
 
@@ -31,18 +49,18 @@ export function VisitorPage({ repository, token }: Props) {
       setAudioUrl('');
       return;
     }
-    repository.getAudio(tag.recording.id).then((blob) => {
-      if (active && blob) {
-        audioObjectUrl.current = URL.createObjectURL(blob);
-        setAudioUrl(audioObjectUrl.current);
+    repository.getVisitorPlaybackUrl(token).then((url) => {
+      if (active && url) {
+        audioObjectUrl.current = url.startsWith('blob:') ? url : '';
+        setAudioUrl(url);
       }
-    });
+    }).catch(() => { if (active) setMessage(t('visitor.submitFailure')); });
     return () => {
       active = false;
       if (audioObjectUrl.current) URL.revokeObjectURL(audioObjectUrl.current);
       audioObjectUrl.current = '';
     };
-  }, [repository, tag?.recording?.id]);
+  }, [repository, token, tag?.recording?.id, t]);
 
   async function submitRecording() {
     if (!recorder.blob || submitting) return;
@@ -66,8 +84,9 @@ export function VisitorPage({ repository, token }: Props) {
     }
   }
 
-  if (tag === undefined) return <main className="visitor-shell"><p className="quiet-state">{t('app.loading')}</p></main>;
-  if (!tag) return <main className="visitor-shell"><div className="visitor-topline"><span className="brand-mark"><AudioLines size={17} /></span><span>{t('app.title')}</span><span className="topline-rule" /><LanguageSwitch /></div><p className="eyebrow">EXHIBITION AUDIO</p><h1>{t('visitor.notFoundTitle')}</h1><p className="visitor-intro">{t('visitor.notFoundBody')}</p></main>;
+  if (loadedToken !== token || tag === undefined) return <main className="visitor-shell"><p className="quiet-state">{t('app.loading')}</p></main>;
+  if (!tag) return <main className="visitor-shell"><div className="visitor-topline"><span className="brand-mark"><AudioLines size={17} /></span><span>{t('app.title')}</span><span className="topline-rule" /><LanguageSwitch /></div><p className="eyebrow">EXHIBITION AUDIO</p><h1>{loadFailed ? t('visitor.unavailable') : t('visitor.notFoundTitle')}</h1><p className="visitor-intro">{loadFailed ? t('visitor.submitFailure') : t('visitor.notFoundBody')}</p></main>;
+  if (tag.status === 'disabled') return <main className="visitor-shell"><div className="visitor-topline"><span className="brand-mark"><AudioLines size={17} /></span><span>{t('app.title')}</span><span className="topline-rule" /><LanguageSwitch /></div><p className="eyebrow">EXHIBITION AUDIO</p><h1>{t('visitor.unavailable')}</h1></main>;
 
   if (tag.recording) {
     return (

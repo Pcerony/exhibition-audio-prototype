@@ -1,5 +1,13 @@
 # 阶段一：云端录音闭环
 
+## 当前落地状态（2026-10-01）
+
+- 东京 Supabase 项目的核心 schema 和私有 `recordings` bucket 已部署；公开查询、上传初始化、原子绑定和签名播放 Edge Functions 已部署。
+- 已对公开查询和上传初始化做云端 smoke test，并删除临时测试展签；尚未进行真实音频上传、并发 claim、播放和 iPhone 真机验收。
+- 录音端现在会在 60 秒自动停止；上传签名有效期与数据库会话时长已对齐，终止性 claim 失败会尝试清理候选对象。对“上传后关闭页面、从未 finalize”的对象仍缺少定期回收任务。
+- 参观者前端已实现 Supabase adapter；GitHub Pages 工作流读取仓库 Actions Variables。管理后台的云端认证/批量建签仍未完成。
+- 正式收集参观者声音前，仍需确定录音保留/删除期限，并最终确认 MIME、字节上限和限频策略。
+
 ## 目标
 
 用 Supabase 替代生产流程中的 localStorage/IndexedDB：未绑定标签可录音并上传，一枚标签只原子绑定一段音频，其他设备可经标签网址收听。运营管理至少有身份认证，不能把现有公开原型后台直接连接到生产数据库。
@@ -7,7 +15,7 @@
 ## 依赖和开始条件
 
 - 本阶段使用 `docs/PROJECT.md`、`ARCHITECTURE.md`、`API_CONTRACT.md`、`SECURITY_PRIVACY.md` 为验收依据。
-- 生产 Supabase 项目必须由项目负责人创建/授权；区域、音频保留期限、最大上传字节数和允许 MIME 需先确定。开发可先使用 Supabase CLI 本地栈或隔离 dev 项目。
+- Supabase 项目由项目负责人创建。东京区域已确认；音频保留期限、最大上传字节数和允许 MIME 仍须在真实访客录制前定稿。开发可先使用 Supabase CLI 本地栈或隔离 dev 项目。
 - 不把现有本地数据自动当正式录音迁移；先用明确的虚构测试标签和音频验证。
 
 ## 实施顺序

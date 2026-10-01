@@ -8,7 +8,7 @@ const repository = createMemoryRepository();
 
 beforeEach(async () => {
   vi.restoreAllMocks();
-  localStorage.setItem('exhibition-audio-language', 'zh-CN');
+  localStorage.setItem('exhibition-audio-language-v2', 'zh-CN');
   for (const tag of await repository.listTags()) await repository.resetTag(tag.token);
   if (!(await repository.getTag('visitor-token'))) {
     await repository.createTag({ id: 'tag-1', token: 'visitor-token', label: '展签 01' });
@@ -44,6 +44,26 @@ describe('visitor page', () => {
     render(<I18nProvider><VisitorPage repository={repository} token="missing-token" /></I18nProvider>);
 
     expect(await screen.findByText('没有找到这枚展签')).toBeInTheDocument();
+  });
+
+  it('does not show the previous tag while a new NFC token is loading', async () => {
+    await repository.claim('visitor-token', {
+      id: 'audio-2',
+      blob: new Blob(['audio'], { type: 'audio/webm' }),
+      nickname: '旧标签',
+      duration: 12,
+    });
+    const previousTag = await repository.getTag('visitor-token');
+    vi.spyOn(repository, 'getTag').mockImplementation((token) => token === 'visitor-token'
+      ? Promise.resolve(previousTag)
+      : new Promise(() => {}));
+    const view = render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+
+    expect(await screen.findByRole('heading', { name: '旧标签留下的福冈回忆' })).toBeInTheDocument();
+    view.rerender(<I18nProvider><VisitorPage repository={repository} token="next-token" /></I18nProvider>);
+
+    expect(screen.queryByRole('heading', { name: '旧标签留下的福冈回忆' })).not.toBeInTheDocument();
+    expect(screen.getByText(/正在打开声音档案/)).toBeInTheDocument();
   });
 
   it('translates recording controls on the visitor page', async () => {

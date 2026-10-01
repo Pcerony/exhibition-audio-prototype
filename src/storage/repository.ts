@@ -2,7 +2,7 @@ import { claimTag, createTag, resetTag, type RecordingInfo, type Tag } from '../
 import { indexedDbAudioStore, type AudioStore } from './indexedDb';
 
 type NewTag = { id: string; token: string; label: string; batch?: string };
-type NewRecording = { id: string; blob: Blob; nickname: string; duration: number };
+export type NewRecording = { id: string; blob: Blob; nickname: string; duration: number };
 export type ClaimResult = { status: 'claimed' | 'already-bound' | 'not-found'; tag: Tag | null };
 
 export interface TagRepository {
@@ -11,8 +11,11 @@ export interface TagRepository {
   createTag(input: NewTag): Promise<Tag>;
   claim(token: string, recording: NewRecording): Promise<ClaimResult>;
   getAudio(recordingId: string): Promise<Blob | null>;
+  getVisitorPlaybackUrl(token: string): Promise<string | null>;
   resetTag(token: string): Promise<void>;
 }
+
+export type VisitorRepository = Pick<TagRepository, 'getTag' | 'claim' | 'getVisitorPlaybackUrl'>;
 
 interface MetadataStore {
   read(): Tag[];
@@ -88,6 +91,12 @@ function buildRepository(metadata: MetadataStore, audio: AudioStore): TagReposit
     },
     async getAudio(recordingId) {
       return audio.get(recordingId);
+    },
+    async getVisitorPlaybackUrl(token) {
+      const tag = metadata.read().find((item) => item.token === token);
+      if (!tag?.recording) return null;
+      const blob = await audio.get(tag.recording.id);
+      return blob ? URL.createObjectURL(blob) : null;
     },
     async resetTag(token) {
       const tags = metadata.read();

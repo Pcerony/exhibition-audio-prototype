@@ -12,18 +12,19 @@ export type Tag = {
   label: string;
   batch: string;
   createdAt: string;
+  status?: 'unbound' | 'bound' | 'disabled';
   recording: RecordingInfo | null;
 };
 
 export function createTag(id: string, label: string, token = id, batch = ''): Tag {
-  return { id, token, label, batch, createdAt: new Date().toISOString(), recording: null };
+  return { id, token, label, batch, createdAt: new Date().toISOString(), status: 'unbound', recording: null };
 }
 
 export function claimTag(tag: Tag, recording: RecordingInfo): Tag {
   if (tag.recording) throw new Error('TAG_ALREADY_BOUND');
-  return { ...tag, recording };
+  return { ...tag, status: 'bound', recording };
 }
 
 export function resetTag(tag: Tag): Tag {
-  return { ...tag, recording: null };
+  return { ...tag, status: 'unbound', recording: null };
 }

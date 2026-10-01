@@ -3,11 +3,14 @@ import { ArrowUpRight, AudioLines, Nfc } from 'lucide-react';
 import { AdminPage } from './features/admin/AdminPage';
 import { VisitorPage } from './features/visitor/VisitorPage';
 import { createBrowserRepository, type TagRepository } from './storage/repository';
+import { createSupabaseVisitorRepository, hasSupabaseConfig } from './storage/supabaseVisitorRepository';
 import { LanguageSwitch } from './i18n/LanguageSwitch';
 import { useI18n } from './i18n/I18nProvider';
 import './styles.css';
 
 const repository = createBrowserRepository();
+const cloudConfigured = hasSupabaseConfig();
+const visitorRepository = cloudConfigured ? createSupabaseVisitorRepository() : repository;
 const DEMO_TOKEN = 'demo-001';
 let seedPromise: Promise<void> | null = null;
 
@@ -31,7 +34,7 @@ export function App() {
     const updatePath = () => setRoute({ pathname: window.location.pathname, hash: window.location.hash });
     window.addEventListener('popstate', updatePath);
     window.addEventListener('hashchange', updatePath);
-    seedDemoTag().then(() => {
+    (cloudConfigured || import.meta.env.PROD ? Promise.resolve() : seedDemoTag()).then(() => {
       setReady(true);
     });
     return () => {
@@ -47,9 +50,15 @@ export function App() {
 
   if (!ready) return <main className="boot-screen">{t('app.loading')}</main>;
   const resolvedRoute = resolveAppRoute(route.pathname, route.hash);
-  if (resolvedRoute.type === 'tag') return <VisitorPage repository={repository} token={decodeURIComponent(resolvedRoute.token)} />;
+  if (resolvedRoute.type === 'tag') {
+    if (import.meta.env.PROD && !cloudConfigured) return <main className="visitor-shell"><p className="visitor-intro">{t('app.cloudMissing')}</p></main>;
+    return <VisitorPage repository={visitorRepository} token={decodeURIComponent(resolvedRoute.token)} />;
+  }
   const baseUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
-  if (resolvedRoute.type === 'admin') return <AdminPage repository={repository} baseUrl={baseUrl} />;
+  if (resolvedRoute.type === 'admin') {
+    if (cloudConfigured || import.meta.env.PROD) return <main className="visitor-shell"><p className="visitor-intro">{t('app.adminLater')}</p></main>;
+    return <AdminPage repository={repository} baseUrl={baseUrl} />;
+  }
   return <main className="visitor-shell welcome-shell">
     <div className="visitor-topline"><span className="brand-mark"><AudioLines size={17} /></span><span>{t('app.title')}</span><span className="topline-rule" /><LanguageSwitch /></div>
     <section className="welcome-content">
@@ -57,9 +66,9 @@ export function App() {
       <h1>{t('welcome.title')}</h1>
       <p className="visitor-intro">{t('welcome.body')}</p>
       <div className="nfc-instruction"><Nfc size={30} strokeWidth={1.6} /><p>{t('welcome.instruction')}</p></div>
-      <a className="welcome-demo-link" href={`${baseUrl}#/t/${DEMO_TOKEN}`}>{t('welcome.demo')} <ArrowUpRight size={16} /></a>
+      {!cloudConfigured && !import.meta.env.PROD && <a className="welcome-demo-link" href={`${baseUrl}#/t/${DEMO_TOKEN}`}>{t('welcome.demo')} <ArrowUpRight size={16} /></a>}
     </section>
-    <footer className="visitor-footer"><a href={`${baseUrl}#/admin`}>{t('welcome.admin')}</a></footer>
+    {!cloudConfigured && !import.meta.env.PROD && <footer className="visitor-footer"><a href={`${baseUrl}#/admin`}>{t('welcome.admin')}</a></footer>}
   </main>;
 }
 

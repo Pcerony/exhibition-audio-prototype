@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/I18nProvider';
 
 type RecorderState = 'idle' | 'recording' | 'ready' | 'error';
+const MAX_RECORDING_SECONDS = 60;
 
 export function useRecorder() {
   const { t } = useI18n();
@@ -62,7 +63,13 @@ export function useRecorder() {
       recorder.start();
       setState('recording');
       timerRef.current = window.setInterval(() => {
-        setDuration(Math.floor((Date.now() - startedAtRef.current) / 1000));
+        const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
+        if (elapsed >= MAX_RECORDING_SECONDS) {
+          setDuration(MAX_RECORDING_SECONDS);
+          stop();
+          return;
+        }
+        setDuration(elapsed);
       }, 250);
     } catch (cause) {
       const errorName = cause && typeof cause === 'object' && 'name' in cause ? String(cause.name) : '';
@@ -76,7 +83,7 @@ export function useRecorder() {
       setError(t(messageKey));
       setState('error');
     }
-  }, [discard, t]);
+  }, [discard, stop, t]);
 
   useEffect(() => () => {
     window.clearInterval(timerRef.current);
