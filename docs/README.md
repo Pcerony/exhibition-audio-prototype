@@ -4,6 +4,8 @@
 
 ## 核心文档
 
+- [Google 地图接入准备](GOOGLE_MAPS_SETUP.md)：选点流程、独立项目配置与待负责人确认的结算操作。
+
 - [当前进度与交接](STATUS.md)：阶段结论、事实、待办与本地工作目录。
 - [体验优化阶段](EXPERIENCE_PHASE.md)：下一阶段三端目标、范围与待确认事项。
 - [管理体验正式设计](superpowers/specs/2026-10-15-operator-experience-design.md)：已确认的分类、编号、网页管理和安卓独立写卡模式。
