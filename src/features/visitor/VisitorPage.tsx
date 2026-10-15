@@ -130,7 +130,8 @@ export function VisitorPage({ repository, token }: Props) {
   return (
     <main className="visitor-shell">
       <div className="visitor-topline"><span className="brand-mark"><AudioLines size={17} /></span><span>{t('app.title')}</span><span className="topline-rule" /><LanguageSwitch /></div>
-      {!locationDone ? <LocationPicker onDone={(value) => { setLocation(value); setLocationDone(true); }} /> : <>
+      <div hidden={locationDone}><LocationPicker key={token} onDone={(value) => { setLocation(value); setLocationDone(true); }} /></div>
+      <div hidden={!locationDone}>
       <section className="recording-view">
         <p className="eyebrow">{t('visitor.newEyebrow', { label: tag.label })}</p>
         <h1>{t('visitor.promptTitle')}</h1>
@@ -162,7 +163,7 @@ export function VisitorPage({ repository, token }: Props) {
         <p className="privacy-note">{t('visitor.publicNotice')}</p>
         {message && <p className="visitor-message" role="status">{message}</p>}
       </section>
-      </>}
+      </div>
       <footer className="visitor-footer"><TagIcon size={14} /> {t('visitor.footer')}</footer>
     </main>
   );

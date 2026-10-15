@@ -16,6 +16,14 @@ beforeEach(async () => {
 });
 
 describe('visitor page', () => {
+  it('lets a visitor return to the location step without losing the recording flow', async () => {
+    render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
+    fireEvent.click(screen.getByRole('button', { name: '修改地点' }));
+    expect(screen.getByRole('heading', { name: '这段回忆，发生在哪里？' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '跳过，直接录音' }));
+    expect(screen.getByRole('button', { name: '开始录音' })).toBeVisible();
+  });
   it('offers recording and explains public playback for an unbound tag', async () => {
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
 
