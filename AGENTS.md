@@ -6,8 +6,9 @@
 
 - 生产 React/Vite 应用使用云端录音和认证后台；本地 IndexedDB/localStorage adapter 仅供开发/测试。
 - 已有正式预览域名 `https://voice.heisei.space/`，由 GitHub Pages 托管前端。
-- 已确认芯片可以写入网址，但芯片型号、容量和手机兼容性尚未实测。
-- 东京 Supabase 已配置，独立 HTTP 客户端合成音频绑定/播放已验证；不等于两台手机/实体 NFC 验收。真实账号、保留策略和现场验收仍需负责人，见 `docs/VERIFICATION.md`。
+- 用户已创建运营账号并成功登录，反馈录音及所有工具正常，基础功能阶段获阶段性确认。芯片型号/容量、手机版本和逐项实体测试记录尚未补齐，不推断所有设备组合均通过。
+- 东京 Supabase 已配置，云端合成音频绑定/播放已验证；保留策略、备份恢复和详细现场验收记录仍需负责人，见 `docs/VERIFICATION.md`。
+- 当前进入三端体验优化准备，见 `docs/STATUS.md` 和 `docs/EXPERIENCE_PHASE.md`；实际开发目录为 `/Users/heisei/Developer/exhibition-audio-prototype`，不使用旧 OneDrive 副本。
 
 ## 不可各自发明的系统规则
 
@@ -22,7 +23,7 @@
 ## 并行开发规则
 
 - 先稳定 [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) 中跨端接口，再并行开发调用方。接口变更需同步更新契约、后端和契约测试。
-- 默认按目录分工：`supabase/` 后端；`src/features/visitor/` 参观者 UI；`src/features/admin/` 运营 UI；未来 `apps/tag-writer-android/` 原生写卡端；`docs/` 系统文档。
+- 默认按目录分工：`supabase/` 后端；`src/features/visitor/` 参观者 UI；`src/features/admin/` 运营 UI；`apps/tag-writer-android/` 原生写卡端；`docs/` 系统文档。
 - `src/App.tsx`、`src/domain/`、`src/storage/repository.ts`、依赖清单、部署工作流和公共 API 契约属于共享边界。不要让多个 Agent 同时改同一边界文件；先由集成负责人拆分接口或指定单一所有者。
 - 一项任务一个分支或 worktree；合并前集成负责人检查差异、运行完整测试和构建。Agent 报告不能替代本地验证。
 - 不提交真实用户音频、生产密钥、`.env`、个人身份信息或未授权的数据库 dump。文档和测试只用虚构数据。
