@@ -2,11 +2,13 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import { json, preflight, readJson } from '../_shared/http.ts';
 import { runMaintenance } from '../_shared/maintenance.ts';
 
-const actions = new Set(['session', 'list', 'createBatch', 'reset', 'setEnabled', 'playback', 'jobs', 'provision', 'audit', 'maintenance']);
+const actions = new Set(['session', 'list', 'createBatch', 'reset', 'setEnabled', 'playback', 'jobs', 'provision', 'audit', 'maintenance', 'categories', 'createCategory', 'renameCategory', 'createCards', 'bulkPreview', 'bulkApply', 'leaseJob', 'nextJob', 'releaseJob']);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const errors: Record<string, number> = {
   REQUEST_INVALID: 400, OPERATOR_REQUIRED: 403, TAG_NOT_FOUND: 404,
   JOB_NOT_FOUND: 404, RECORDING_NOT_FOUND: 404, REQUEST_KEY_CONFLICT: 409, JOB_CONFLICT: 409, TAG_LABEL_EXISTS: 409,
+  CATEGORY_NOT_FOUND: 404, CATEGORY_NAME_EXISTS: 409, VERSION_CONFLICT: 409, GROUP_CONFLICT: 409,
+  LEASE_CONFLICT: 409, LEASE_EXPIRED: 409, CLIENT_UPGRADE_REQUIRED: 426, JOB_INELIGIBLE: 409,
 };
 
 export function createHandler(getClient: () => SupabaseClient) {
@@ -27,7 +29,7 @@ export function createHandler(getClient: () => SupabaseClient) {
       if (!profile || !['operator', 'admin'].includes(profile.role)) return json({ code: 'OPERATOR_REQUIRED' }, 403);
       const body = await readJson(request);
       if (!body || typeof body !== 'object' || Array.isArray(body) || !actions.has(body.action)) return json({ code: 'REQUEST_INVALID' }, 400);
-      for (const field of ['tagId', 'recordingId', 'jobId', 'requestKey']) {
+      for (const field of ['tagId', 'recordingId', 'jobId', 'requestKey', 'categoryId', 'targetCategoryId']) {
         if (field in body && (typeof body[field] !== 'string' || !uuid.test(body[field]))) return json({ code: 'REQUEST_INVALID' }, 400);
       }
       if (body.action === 'maintenance') return json(await runMaintenance(client));

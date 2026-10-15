@@ -20,6 +20,8 @@ const privileged = client(serviceKey);
 const batch = `AUTOTEST-${randomUUID()}`;
 const users = []; const paths = new Set(); const requestKey = randomUUID();
 let operatorJwt;
+let categoryId;
+let fixtureTagIds = [];
 function check(error, message) { if (error) throw new Error(message); }
 async function endpoint(name, body, extra = {}) {
   const response = await fetch(`${url}/functions/v1/${name}`, {
@@ -69,7 +71,7 @@ try {
   assert.equal((await admin('list', {}, outsiderJwt)).status, 403, 'Non-operator admin accepted');
   operatorJwt = await makeUser(true);
   assert.equal((await admin('session')).body.role, 'operator', 'Operator membership failed');
-  for (const table of ['tags', 'recordings', 'upload_sessions', 'operator_profiles', 'audit_log', 'provisioning_jobs', 'storage_cleanup_queue', 'batch_requests']) {
+  for (const table of ['tags', 'recordings', 'upload_sessions', 'operator_profiles', 'audit_log', 'provisioning_jobs', 'storage_cleanup_queue', 'batch_requests', 'categories', 'label_history', 'management_requests']) {
     const result = await client(publicKey).from(table).select('*').limit(1);
     assert.ok(result.error || !result.data?.length, `Anonymous table exposed: ${table}`);
     const outsider = client(publicKey);
@@ -81,23 +83,30 @@ try {
   }
   console.log('PASS: anonymous/non-operator authorization and table isolation');
 
-  const rows = ['Race', 'Reset', 'Invalid', 'Rate'].map((label) => ({ label: `${batch}-${label}`, batch }));
-  const created = await admin('createBatch', { rows, requestKey });
+  const category = await admin('createCategory', { name: batch, requestKey: randomUUID() });
+  assert.equal(category.status, 200, 'Fixture category creation failed');
+  categoryId = category.body.category.id;
+  const created = await admin('createCards', { categoryId, count: 4, requestKey });
   assert.equal(created.status, 200, 'Batch creation failed');
   const tags = created.body.tags;
+  fixtureTagIds = tags.map((tag) => tag.id);
   assert.equal(tags.length, 4, 'Incorrect batch size');
   assert.equal(new Set(tags.map((tag) => tag.token)).size, 4, 'Public tokens duplicated');
   assert.ok(tags.every((tag) => /^[a-f0-9]{48}$/.test(tag.token)), 'Public tokens not opaque');
-  const replay = await admin('createBatch', { rows, requestKey });
+  const replay = await admin('createCards', { categoryId, count: 4, requestKey });
   assert.ok(replay.body.tags.every((tag, i) => tag.id === tags[i].id), 'Batch retry created duplicate tags');
-  const conflict = await admin('createBatch', { rows: [rows[0]], requestKey });
+  const conflict = await admin('createCards', { categoryId, count: 1, requestKey });
   assert.equal(conflict.status, 409, 'Idempotency conflict accepted');
-  const jobs = await admin('jobs', { batch, offset: 0, limit: 2 });
+  const jobs = await admin('jobs', { categoryId, offset: 0, limit: 2, protocolVersion: 2 });
   assert.equal(jobs.body.total, 4, 'Jobs pagination total incorrect');
   assert.equal(jobs.body.jobs.length, 2, 'Jobs pagination failed');
   const job = tags[0].provisioning;
-  assert.equal((await admin('provision', { jobId: job.id, version: job.version, visitorUrl: `${job.visitorUrl}-wrong`, status: 'verified' })).status, 409, 'Wrong readback accepted');
-  assert.equal((await admin('provision', { jobId: job.id, version: job.version, visitorUrl: job.visitorUrl, status: 'verified' })).status, 200, 'Fixture provision report failed');
+  const lease = await admin('leaseJob', { jobId: job.id, deviceId: 'synthetic-integration', protocolVersion: 2 });
+  assert.equal(lease.status, 200, 'Lease failed');
+  const report = { jobId: job.id, version: job.version, visitorUrl: job.visitorUrl, status: 'verified', protocolVersion: 2, leaseToken: lease.body.leaseToken };
+  assert.equal((await admin('provision', { ...report, visitorUrl: `${job.visitorUrl}-wrong` })).status, 409, 'Wrong readback accepted');
+  assert.equal((await admin('provision', report)).status, 200, 'Fixture provision report failed');
+  assert.equal((await admin('provision', { jobId: job.id, version: job.version, visitorUrl: job.visitorUrl, status: 'verified' })).status, 426, 'Old writer was not blocked');
   console.log('PASS: atomic/idempotent cloud provisioning and exact URL checks (synthetic jobs only)');
 
   const grants = await Promise.all([init(tags[0]), init(tags[0])]);
@@ -144,13 +153,19 @@ try {
   console.log('PASS: atomic rate limiting and failed/expired upload cleanup');
 } finally {
   let failed = false;
-  const { data: fixtures, error } = await privileged.from('tags').select('id').eq('batch', batch);
+  const { data: fixtures, error } = categoryId ? await privileged.from('tags').select('id').eq('category_id', categoryId) : { data: [], error: null };
   if (error) failed = true;
   if (paths.size && (await privileged.storage.from('recordings').remove([...paths])).error) failed = true;
   if ((await privileged.from('storage_cleanup_queue').delete().in('object_path', [...paths])).error) failed = true;
-  if (fixtures?.length && (await privileged.from('tags').delete().in('id', fixtures.map((tag) => tag.id))).error) failed = true;
+  fixtureTagIds = [...new Set([...fixtureTagIds, ...(fixtures ?? []).map((tag) => tag.id)])];
+  if (fixtureTagIds.length) {
+    if ((await privileged.from('label_history').delete().in('tag_id', fixtureTagIds)).error) failed = true;
+    if ((await privileged.from('tags').delete().in('id', fixtureTagIds)).error) failed = true;
+  }
+  if (categoryId && (await privileged.from('categories').delete().eq('id', categoryId)).error) failed = true;
   for (const id of users) {
     if ((await privileged.from('batch_requests').delete().eq('operator_id', id)).error) failed = true;
+    if ((await privileged.from('management_requests').delete().eq('operator_id', id)).error) failed = true;
     if ((await privileged.from('audit_log').delete().eq('operator_id', id)).error) failed = true;
     if ((await privileged.auth.admin.deleteUser(id)).error) failed = true;
   }

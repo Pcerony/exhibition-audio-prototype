@@ -1,5 +1,21 @@
 # 跨端 API 契约
 
+## 分类管理 V2（本轮实现契约）
+
+以下扩展与旧接口分开发布：后端、网页和Android同时完成回归前不得将本节视为生产已部署。完整字段及操作参见 [冻结实施计划](superpowers/plans/2026-10-15-operator-experience.md)。访客URL与音频授权规则不变。
+
+- `categories` 返回 `{categories:[{id,name,code,nextNumber}]}`；`createCategory` 请求 `{name,requestKey}` 返回 `{category}`；`renameCategory` 请求 `{categoryId,name}`。
+- `createCards` 请求 `{categoryId,count,requestKey}` 返回 `{tags}`。服务器分配号，1–500；重试不重复创建。
+- `list` 增加 `categoryId,sort`（recorded_desc/recorded_asc/number）。tag增加categoryId/version，batch兼容分类名，recording.createdAt是用户提交时间。稳定排序、空录音最后。
+- `bulkPreview` 请求 `{tagIds,operation,targetCategoryId?}` 返回 `{groups:[{kind,cards:[{id,version,label}],recordingCount}]}`。kind为empty/recorded，operation为move/delete/reset。
+- `bulkApply` 请求 `{operation,cards,kind,targetCategoryId?,requestKey}`。服务器重验版本和分组；每组独立原子提交，重放幂等。删除与重置均失效旧上传，删除软标记并使URL失效。移动改编号而不改ID/token/URL/录音，旧编号永久预留。
+- `jobs` 增加categoryId与protocolVersion=2，job增加categoryId和recordingStatus。`leaseJob` 请求 `{jobId,deviceId,protocolVersion:2}`；`nextJob` 请求 `{categoryId,deviceId,protocolVersion:2}`；成功返回 `{job,leaseToken,expiresAt}`，无符合条件任务返回 `{job:null}`。expiresAt为UTC ISO时间。
+- `releaseJob` 请求 `{jobId,leaseToken}`；V2 `provision` 附protocolVersion和leaseToken，校验服务器租约、版本、URL与当前有效性。旧写卡协议升级保护不能仅靠客户端。
+
+所有新请求仍由运营JWT及allowlist授权。设备ID是随机安装标识，不是NFC UID。租约token不得进入日志/CSV。账号退出或切后台停止NFC；物理读回不能由网络响应代替。
+
+V2补充：job还有tagVersion、leased、leaseExpiresAt、writtenAt（核验成功的写卡时间，可空）。租约10分钟，同设备模糊响应重试返回当前租约；列表绝不返回leaseToken。同租约verified只接受原请求重放，不接受failed改写；显式单张重写取得新手动租约后可记录本次失败。稳定错误为CATEGORY_NOT_FOUND、CATEGORY_NAME_EXISTS、VERSION_CONFLICT、GROUP_CONFLICT、LEASE_CONFLICT、LEASE_EXPIRED、JOB_INELIGIBLE及HTTP426 CLIENT_UPGRADE_REQUIRED。
+
 实际端点为 Supabase `/functions/v1/<name>`。UTF-8 JSON、UTC ISO 时间。错误以稳定 `code` 本地化，不显示内部异常。访客 token 是服务端随机不透明身份，不能用 NFC UID 或序号代替。
 
 ## 访客 API

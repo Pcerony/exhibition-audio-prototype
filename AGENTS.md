@@ -8,7 +8,7 @@
 - 已有正式预览域名 `https://voice.heisei.space/`，由 GitHub Pages 托管前端。
 - 用户已创建运营账号并成功登录，反馈录音及所有工具正常，基础功能阶段获阶段性确认。芯片型号/容量、手机版本和逐项实体测试记录尚未补齐，不推断所有设备组合均通过。
 - 东京 Supabase 已配置，云端合成音频绑定/播放已验证；保留策略、备份恢复和详细现场验收记录仍需负责人，见 `docs/VERIFICATION.md`。
-- 当前进入三端体验优化准备，见 `docs/STATUS.md` 和 `docs/EXPERIENCE_PHASE.md`；实际开发目录为 `/Users/heisei/Developer/exhibition-audio-prototype`，不使用旧 OneDrive 副本。
+- 网页后台/Android管理体验V2已本地实现并测试，尚未部署生产；新旧写卡协议不兼容，必须按 `docs/OPERATOR_V2_RELEASE.md` 成套升级。见 `docs/STATUS.md`；开发目录为 `/Users/heisei/Developer/exhibition-audio-prototype`，不使用旧OneDrive副本。
 
 ## 不可各自发明的系统规则
 

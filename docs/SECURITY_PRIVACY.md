@@ -12,7 +12,9 @@
 - `service_role`、数据库密码、加密密钥仅保存在 Supabase/GitHub Actions secrets 或受控 server 环境；不得进入 Vite `VITE_*` 环境变量、浏览器 bundle、Android APK、CSV 或日志。
 - 所有 exposed Postgres 表启用 RLS；除明确需要的调用路径外撤销 anon/authenticated 直接写入权限。Storage 默认 private，并用最小权限策略。
 - 访客 token 作为公开查找 handle，不是运营凭据；持 token 最多查询该标签和申请这条音频的上传/播放。不能列表、覆盖、重置、改昵称或读其他标签。
-- Android app 与 admin 共享运营者认证，但 writer API 仅允许 provisioning job 操作；不可把 service-role key 打包进 APK。
+- Android app 与 admin 共享运营者认证；本轮扩展经认证的卡片查询、试听、移动/重置/删除，不开放匿名管理。写卡另有任务租约和协议版本保护；不可把service-role key打包进APK。
+- Android记住登录只保存Keystore加密会话，不保存明文密码。会话续期后仍须确认运营角色；退出/撤销后停止NFC，清除本机会话，不将不同账号的待同步报告混用。
+- 批量删除/重置/移动按预检版本执行，录音状态发生变化须重新确认，不能把刚绑定录音的卡按空卡删除。逻辑删除不等于立即物理清除私有对象，回收仍受上传签名有效期约束。
 - 重置/停用/启用/重写标签要经过确认并写入 operator ID、动作、目标和时间审计，不写录音内容或秘密 token 到审计日志。
 
 ## 音频对象

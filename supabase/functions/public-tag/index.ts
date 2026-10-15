@@ -12,7 +12,7 @@ Deno.serve(async (request) => {
   const client = adminClient();
   const { data: tag, error } = await client.from('tags')
     .select('id,label,batch,status,created_at,recordings(id,nickname,duration_seconds,created_at)')
-    .eq('public_token', token).maybeSingle();
+    .eq('public_token', token).is('deleted_at', null).maybeSingle();
   if (error) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);
   if (!tag) return json({ code: 'TAG_NOT_FOUND' }, 404);
 

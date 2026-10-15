@@ -21,5 +21,21 @@ Deno.test('Postgres migrations and rollback behavioral contract', async () => {
     await db.exec(await Deno.readTextFile('supabase/migrations/202610010001_operator_management.sql'));
     await db.exec(await Deno.readTextFile('supabase/migrations/202610010002_stable_job_order.sql'));
     await db.exec(await Deno.readTextFile('supabase/tests/operator_management.sql'));
+    await db.exec(`
+      insert into public.tags(id,label,batch,public_token) values
+      ('20000000-0000-4000-8000-000000000001','KEEP-001',' Legacy ','111111111111111111111111111111111111111111111111'),
+      ('20000000-0000-4000-8000-000000000002','KEEP-002','legacy','222222222222222222222222222222222222222222222222');
+      insert into public.provisioning_jobs(tag_id,visitor_url) select id,'https://voice.heisei.space/#/t/'||public_token from public.tags;
+      select public.initialize_upload('111111111111111111111111111111111111111111111111',
+        '30000000-0000-4000-8000-000000000001',encode(extensions.digest(convert_to('test','UTF8'),'sha256'),'hex'),'audio/wav',10);
+      select public.claim_recording('30000000-0000-4000-8000-000000000001','test','fictional',1,10,'audio/wav');
+    `);
+    await db.exec(await Deno.readTextFile('supabase/migrations/202610150001_categories_and_leases.sql'));
+    await db.exec(`do $$ begin
+      if (select count(distinct category_id) from public.tags)<>1 then raise exception 'casefold mapping failed';end if;
+      if not exists(select 1 from public.tags where label='KEEP-001' and public_token='111111111111111111111111111111111111111111111111' and status='bound')
+        or not exists(select 1 from public.recordings where nickname='fictional') then raise exception 'legacy identity lost';end if;
+    end $$;`);
+    await db.exec(await Deno.readTextFile('supabase/tests/operator_v2.sql'));
   } finally { await db.close(); }
 });

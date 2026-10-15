@@ -17,6 +17,15 @@ GITHUB_PAGES=true npm run build
 
 ## 后端
 
+V2独立PostgreSQL并发回归可用临时依赖执行，不修改项目依赖：
+
+```sh
+npm install --prefix /tmp/exhibition-pg-runtime --no-audit --no-fund embedded-postgres@17.9.0-beta.17 pg@8.16.3
+EMBEDDED_PG_RUNTIME=/tmp/exhibition-pg-runtime node supabase/tests/postgres_concurrency.mjs
+```
+
+该脚本只创建本机临时数据库，禁止传生产连接串，结束自动关闭。它验证实际多连接事务，但Storage/Auth仍是虚构表，不代表完整Supabase栈或物理NFC验收。
+
 见 [Supabase 说明](../supabase/README.md)。不修改已经应用的 migration。管理 API 验证 Auth 用户和 operator_profiles；登录成功不等于运营授权。
 
 ```sh
