@@ -1,5 +1,12 @@
 # 跨端 API 契约
 
+## 可选回忆地点（开发中，尚未部署）
+
+录音可带 `location: null | {source:'pin',lat:number,lng:number} | {source:'place',placeId:string}`。
+省略与 null 均表示跳过。pin 仅接受有限数字，纬度 -90..90、经度 -180..180；placeId 去除首尾空白后非空，输入最多300字符。
+Google 搜索结果仅持久化 place ID，不保存返回的地名、地址、坐标；用户主动地图选点与搜索来源必须区分。
+该字段将随 claim 原子保存并由公共/管理录音查询返回，不能单独修改。旧客户端和旧录音兼容为空。接口接通与部署完成前不视为可用功能。
+
 ## 分类管理 V2（本轮实现契约）
 
 以下扩展与旧接口分开发布：后端、网页和Android同时完成回归前不得将本节视为生产已部署。完整字段及操作参见 [冻结实施计划](superpowers/plans/2026-10-15-operator-experience.md)。访客URL与音频授权规则不变。
