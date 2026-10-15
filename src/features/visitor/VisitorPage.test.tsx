@@ -19,6 +19,9 @@ describe('visitor page', () => {
   it('offers recording and explains public playback for an unbound tag', async () => {
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
 
+    expect(await screen.findByRole('heading', { name: '这段回忆，发生在哪里？' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /开始录音/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '跳过，直接录音' }));
     expect(await screen.findByRole('button', { name: /开始录音/ })).toBeInTheDocument();
     expect(screen.getByText(/扫描这枚展签的人都可以收听/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '你和福冈市，有怎样的回忆？' })).toBeInTheDocument();
@@ -76,6 +79,7 @@ describe('visitor page', () => {
 
   it('translates recording controls on the visitor page', async () => {
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
     await screen.findByRole('button', { name: /开始录音/ });
     fireEvent.click(screen.getByRole('button', { name: '日本語' }));
     expect(await screen.findByRole('heading', { name: '福岡市との思い出を聞かせてください。' })).toBeInTheDocument();
@@ -95,10 +99,12 @@ describe('visitor page', () => {
       getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
     } });
     const view = render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
     fireEvent.click(await screen.findByRole('button', { name: /开始录音/ }));
     fireEvent.click(await screen.findByRole('button', { name: /完成录音/ }));
     expect(await screen.findByRole('button', { name: /重录/ })).toBeInTheDocument();
     view.rerender(<I18nProvider><VisitorPage repository={repository} token="new-recording-token" /></I18nProvider>);
+    fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
     expect(await screen.findByRole('button', { name: /开始录音/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /重录/ })).not.toBeInTheDocument();
   });
@@ -116,6 +122,7 @@ describe('visitor page', () => {
     } });
     vi.spyOn(repository, 'claim').mockReturnValue(new Promise(() => {}));
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
     fireEvent.click(await screen.findByRole('button', { name: /开始录音/ }));
     fireEvent.click(await screen.findByRole('button', { name: /完成录音/ }));
     fireEvent.click(await screen.findByRole('button', { name: /把声音留在这里/ }));
@@ -129,6 +136,7 @@ describe('visitor page', () => {
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } });
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
 
+    fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
     fireEvent.click(await screen.findByRole('button', { name: /开始录音/ }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/iPhone「设置 > Chrome > 麦克风」/);
