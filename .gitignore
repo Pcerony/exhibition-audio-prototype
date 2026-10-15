@@ -8,3 +8,4 @@ dist/
 supabase/.temp/
 *.onedrive-placeholder
 *.dataless-backup
+output/

@@ -42,6 +42,15 @@ export function createHandler(getClient: () => SupabaseClient) {
         if (signError || !signed) return json({ code: 'PLAYBACK_UNAVAILABLE' }, 503);
         return json({ url: signed.signedUrl, expiresInSeconds: 120 });
       }
+      if (body.action === 'list' && Array.isArray(data?.tags)) {
+        const ids = data.tags.flatMap((tag: { recording?: { id: string } | null }) => tag.recording ? [tag.recording.id] : []);
+        if (ids.length) {
+          const { data: locations, error: locationError } = await client.from('recordings').select('id,location').in('id', ids);
+          if (locationError) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);
+          const byId = new Map((locations ?? []).map((recording) => [recording.id, recording.location]));
+          for (const tag of data.tags) if (tag.recording) tag.recording.location = byId.get(tag.recording.id) ?? null;
+        }
+      }
       return json(data);
     } catch {
       return json({ code: 'SERVICE_UNAVAILABLE' }, 503);

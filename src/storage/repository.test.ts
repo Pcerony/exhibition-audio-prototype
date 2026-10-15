@@ -2,6 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { createMemoryRepository } from './repository';
 
 describe('memory repository', () => {
+  it('preserves the winning location and clears it on reset', async () => {
+    const repo = createMemoryRepository();
+    await repo.createTag({ id: 'location-tag', token: 'location-token', label: 'L001' });
+    const candidate = { id: 'location-audio', blob: new Blob(['audio']), nickname: '', duration: 2,
+      location: { source: 'pin' as const, lat: 33.59, lng: 130.4 } };
+    await repo.claim('location-token', candidate);
+    await repo.claim('location-token', { ...candidate, id: 'loser', location: { source: 'pin', lat: 0, lng: 0 } });
+    expect((await repo.getTag('location-token'))?.recording).toHaveProperty('location', candidate.location);
+    await repo.resetTag('location-token');
+    expect((await repo.getTag('location-token'))?.recording).toBeNull();
+  });
   it('keeps the first submitted recording and rejects a later claim', async () => {
     const repository = createMemoryRepository();
     await repository.createTag({ id: 'tag-1', token: 'public-token', label: '展签 01' });

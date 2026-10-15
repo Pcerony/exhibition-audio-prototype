@@ -11,7 +11,7 @@ Deno.serve(async (request) => {
 
   const client = adminClient();
   const { data: tag, error } = await client.from('tags')
-    .select('id,label,batch,status,created_at,recordings(id,nickname,duration_seconds,created_at)')
+    .select('id,label,batch,status,created_at,recordings(id,nickname,duration_seconds,created_at,location)')
     .eq('public_token', token).maybeSingle();
   if (error) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);
   if (!tag) return json({ code: 'TAG_NOT_FOUND' }, 404);
@@ -28,6 +28,7 @@ Deno.serve(async (request) => {
       nickname: recording.nickname,
       durationSeconds: recording.duration_seconds,
       createdAt: recording.created_at,
+      location: recording.location,
     } : null,
   });
 });

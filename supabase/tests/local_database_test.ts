@@ -21,5 +21,8 @@ Deno.test('Postgres migrations and rollback behavioral contract', async () => {
     await db.exec(await Deno.readTextFile('supabase/migrations/202610010001_operator_management.sql'));
     await db.exec(await Deno.readTextFile('supabase/migrations/202610010002_stable_job_order.sql'));
     await db.exec(await Deno.readTextFile('supabase/tests/operator_management.sql'));
+    await db.exec(await Deno.readTextFile('supabase/migrations/202610150002_visitor_location.sql'));
+    await db.exec(await Deno.readTextFile('supabase/tests/visitor_location.sql'));
+    await db.exec(await Deno.readTextFile('supabase/tests/operator_management.sql'));
   } finally { await db.close(); }
 });

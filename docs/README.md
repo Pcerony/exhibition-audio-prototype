@@ -4,6 +4,9 @@
 
 ## 核心文档
 
+- [地图兼容发布](MAPS_COMPATIBLE_RELEASE.md)：地图独立发布与旧安卓写卡协议的兼容边界。
+- [Google 地图接入记录](GOOGLE_MAPS_SETUP.md)：云配置、配额与验证状态。
+
 - [项目目标与需求](PROJECT.md)：用户、角色、工作流、范围和验收标准。
 - [系统架构](ARCHITECTURE.md)：客户端边界、云服务、数据流和仓库演进方向。
 - [API 契约](API_CONTRACT.md)：访客、后台、Android 写卡端共用的服务端接口。

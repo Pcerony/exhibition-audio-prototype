@@ -1,5 +1,6 @@
 import { adminClient } from '../_shared/client.ts';
 import { json, preflight, readJson, sha256 } from '../_shared/http.ts';
+import { parseMemoryLocation } from '../../../src/domain/location.ts';
 
 Deno.serve(async (request) => {
   const options = preflight(request);
@@ -10,6 +11,9 @@ Deno.serve(async (request) => {
   const nickname = typeof body?.nickname === 'string' ? body.nickname.trim() : '';
   const durationSeconds = Number(body?.durationSeconds);
   const claimToken = request.headers.get('x-upload-token') ?? '';
+  let location;
+  try { location = parseMemoryLocation(body?.location); }
+  catch { return json({ code: 'INVALID_LOCATION' }, 400); }
   if (!/^[0-9a-f-]{36}$/i.test(uploadId) || !claimToken) {
     return json({ code: 'REQUEST_INVALID' }, 400);
   }
@@ -34,13 +38,14 @@ Deno.serve(async (request) => {
   if (infoError || !info) return json({ code: 'UPLOAD_MISSING' }, 400);
   const actualMime = (info.contentType ?? '').split(';')[0].trim().toLowerCase();
   const actualSize = Number(info.size);
-  const { data: claim, error: claimError } = await client.rpc('claim_recording', {
+  const { data: claim, error: claimError } = await client.rpc('claim_recording_with_location', {
     p_upload_id: uploadId,
     p_claim_token: claimToken,
     p_nickname: nickname,
     p_duration_seconds: durationSeconds,
     p_actual_size_bytes: actualSize,
     p_actual_mime_type: actualMime,
+    p_location: location,
   }).maybeSingle<{ claim_status: string; recording_id: string; recording_created_at: string }>();
   if (claimError) {
     const code = claimError.message.includes('UPLOAD_SESSION_INVALID') ? 'UPLOAD_SESSION_INVALID'

@@ -1,4 +1,13 @@
 export const zhCN = {
+  'location.title': '这段回忆，发生在哪里？',
+  'location.map': '福冈市地图',
+  'location.loading': '正在加载地图…',
+  'location.failed': '地图暂时无法加载或搜索。你仍可跳过，直接录音。',
+  'location.confirm': '确认地点',
+  'location.skip': '跳过，直接录音',
+  'location.change': '修改地点',
+  'location.view': '查看回忆地点',
+  'location.notice': '地点可不选。选中的地点会随录音公开，请勿选择私人住址等敏感地点。',
   'app.title': '声音档案',
   'app.operator': '展览运营后台',
   'app.openVisitor': '打开参观者页面',
@@ -103,6 +112,15 @@ export const zhCN = {
 export type MessageKey = keyof typeof zhCN;
 
 export const jaJP: Record<MessageKey, string> = {
+  'location.title': 'その思い出は、どこで？',
+  'location.map': '福岡市の地図',
+  'location.loading': '地図を読み込んでいます…',
+  'location.failed': '地図や検索を利用できません。スキップして録音できます。',
+  'location.confirm': 'この場所にする',
+  'location.skip': 'スキップして録音',
+  'location.change': '場所を変更',
+  'location.view': '思い出の場所を見る',
+  'location.notice': '場所の選択は任意です。選んだ場所は音声とともに公開されます。自宅などの個人情報は選ばないでください。',
   'app.title': '音声アーカイブ',
   'app.operator': '展示運営管理',
   'app.openVisitor': '来場者ページを開く',

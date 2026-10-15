@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Tag } from '../domain/tags';
+import { parseMemoryLocation, type MemoryLocation } from '../domain/location';
 import type { ClaimResult, NewRecording, VisitorRepository } from './repository';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -12,7 +13,7 @@ type CloudTag = {
   batch?: string;
   status: Tag['status'];
   createdAt?: string;
-  recording: null | { id: string; nickname: string; durationSeconds: number; createdAt: string };
+  recording: null | { id: string; nickname: string; durationSeconds: number; createdAt: string; location?: MemoryLocation | null };
 };
 
 type UploadGrant = { uploadId: string; path: string; storageToken: string; claimToken: string };
@@ -57,6 +58,7 @@ export function createSupabaseVisitorRepository(): VisitorRepository {
         duration: value.recording.durationSeconds,
         mimeType: '',
         createdAt: value.recording.createdAt,
+        location: parseMemoryLocation(value.recording.location),
       } : null,
     };
   }
@@ -102,7 +104,7 @@ export function createSupabaseVisitorRepository(): VisitorRepository {
       try {
         await request('public-upload-claim', {
           method: 'POST',
-          body: { uploadId: grant.uploadId, nickname: recording.nickname, durationSeconds: recording.duration },
+          body: { uploadId: grant.uploadId, nickname: recording.nickname, durationSeconds: recording.duration, location: parseMemoryLocation(recording.location) },
           headers: { 'x-upload-token': grant.claimToken },
         });
         return { status: 'claimed', tag: await getTag(token) };

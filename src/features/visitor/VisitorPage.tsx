@@ -6,6 +6,8 @@ import { useRecorder } from './useRecorder';
 import { LanguageSwitch } from '../../i18n/LanguageSwitch';
 import { useI18n } from '../../i18n/I18nProvider';
 import './visitor.css';
+import { memoryLocationUrl, type MemoryLocation } from '../../domain/location';
+import { LocationPicker } from './LocationPicker';
 
 type Props = { repository: VisitorRepository; token: string };
 
@@ -20,6 +22,8 @@ export function VisitorPage({ repository, token }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
+  const [locationDone, setLocationDone] = useState(false);
+  const [location, setLocation] = useState<MemoryLocation | null>(null);
   const audioObjectUrl = useRef('');
   const activeToken = useRef(token);
   activeToken.current = token;
@@ -33,6 +37,8 @@ export function VisitorPage({ repository, token }: Props) {
     setMessage('');
     setAudioUrl('');
     setNickname('');
+    setLocationDone(false);
+    setLocation(null);
     setSubmitting(false);
     recorder.discard();
     repository.getTag(token).then((value) => {
@@ -77,7 +83,7 @@ export function VisitorPage({ repository, token }: Props) {
     setMessage('');
     try {
       const result = await repository.claim(token, {
-        id: crypto.randomUUID(), blob: recorder.blob, nickname, duration: recorder.duration,
+        id: crypto.randomUUID(), blob: recorder.blob, nickname, duration: recorder.duration, location,
       });
       if (activeToken.current !== token) return;
       if (result.status === 'claimed' || result.status === 'already-bound') {
@@ -106,6 +112,7 @@ export function VisitorPage({ repository, token }: Props) {
           <p className="eyebrow">{t('visitor.recordedEyebrow')}</p>
           <h1>{tag.recording.nickname ? t('visitor.recordedTitle', { name: tag.recording.nickname }) : t('visitor.recordedAnonymous')}</h1>
           <p className="visitor-intro">{t('visitor.recordedIntro')}</p>
+          {tag.recording.location && <a className="secondary-action" href={memoryLocationUrl(tag.recording.location)!} target="_blank" rel="noreferrer">{t('location.view')}</a>}
           <div className="soundprint" aria-hidden="true">{Array.from({ length: 45 }, (_, index) => <i key={index} style={{ '--bar': `${18 + ((index * 37 + 13) % 76)}%` } as React.CSSProperties} />)}</div>
           <div className="player-wrap">
             {playbackFailed ? <button className="secondary-action" onClick={() => setPlaybackRevision((value) => value + 1)}><RotateCcw size={16} />{t('visitor.retryPlayback')}</button>
@@ -123,10 +130,13 @@ export function VisitorPage({ repository, token }: Props) {
   return (
     <main className="visitor-shell">
       <div className="visitor-topline"><span className="brand-mark"><AudioLines size={17} /></span><span>{t('app.title')}</span><span className="topline-rule" /><LanguageSwitch /></div>
+      <div hidden={locationDone}><LocationPicker key={token} onDone={(value) => { setLocation(value); setLocationDone(true); }} /></div>
+      <div hidden={!locationDone}>
       <section className="recording-view">
         <p className="eyebrow">{t('visitor.newEyebrow', { label: tag.label })}</p>
         <h1>{t('visitor.promptTitle')}</h1>
         <p className="visitor-intro">{t('visitor.promptBody')}</p>
+        <button className="secondary-action" disabled={submitting || recorder.starting || recorder.state === 'recording'} onClick={() => setLocationDone(false)}>{t('location.change')}</button>
         <div className={`recorder-stage ${recorder.state}`}>
           <div className="record-orbit"><span className="record-core"><Mic size={30} strokeWidth={1.7} /></span></div>
           {recorder.state === 'recording' ? <><p className="record-state">{t('visitor.recordingNow')}</p><p className="record-time">{formatDuration(recorder.duration)}</p></> : recorder.state === 'ready' ? <><p className="record-state">{t('visitor.ready')}</p><p className="record-time">{formatDuration(recorder.duration)}</p></> : <><p className="record-state">{t('visitor.pressToRecord')}</p><p className="record-time">{t('visitor.recordHint')}</p></>}
@@ -153,6 +163,7 @@ export function VisitorPage({ repository, token }: Props) {
         <p className="privacy-note">{t('visitor.publicNotice')}</p>
         {message && <p className="visitor-message" role="status">{message}</p>}
       </section>
+      </div>
       <footer className="visitor-footer"><TagIcon size={14} /> {t('visitor.footer')}</footer>
     </main>
   );

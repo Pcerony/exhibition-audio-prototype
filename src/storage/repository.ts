@@ -1,8 +1,9 @@
 import { claimTag, createTag, resetTag, type RecordingInfo, type Tag } from '../domain/tags';
 import { indexedDbAudioStore, type AudioStore } from './indexedDb';
+import { parseMemoryLocation, type MemoryLocation } from '../domain/location';
 
 type NewTag = { id: string; token: string; label: string; batch?: string };
-export type NewRecording = { id: string; blob: Blob; nickname: string; duration: number };
+export type NewRecording = { id: string; blob: Blob; nickname: string; duration: number; location?: MemoryLocation | null };
 export type ClaimResult = { status: 'claimed' | 'already-bound' | 'not-found'; tag: Tag | null };
 
 export interface TagRepository {
@@ -78,6 +79,7 @@ function buildRepository(metadata: MetadataStore, audio: AudioStore): TagReposit
             duration: candidate.duration,
             mimeType: candidate.blob.type,
             createdAt: new Date().toISOString(),
+            location: parseMemoryLocation(candidate.location),
           };
           await audio.set(candidate.id, candidate.blob);
           tags[index] = claimTag(tags[index], recording);
