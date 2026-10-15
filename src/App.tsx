@@ -9,6 +9,7 @@ import { createConfiguredCloudAdminRepository } from './storage/cloudAdminReposi
 import { LanguageSwitch } from './i18n/LanguageSwitch';
 import { useI18n } from './i18n/I18nProvider';
 import './styles.css';
+import { PolicyLinks, PolicyPage } from './features/visitor/PolicyPage';
 
 const repository = createBrowserRepository();
 const cloudConfigured = hasSupabaseConfig();
@@ -53,6 +54,7 @@ export function App() {
 
   if (!ready) return <main className="boot-screen">{t('app.loading')}</main>;
   const resolvedRoute = resolveAppRoute(route.pathname, route.hash);
+  if (resolvedRoute.type === 'privacy' || resolvedRoute.type === 'terms') return <PolicyPage kind={resolvedRoute.type} />;
   if (resolvedRoute.type === 'tag') {
     if (import.meta.env.PROD && !cloudConfigured) return <main className="visitor-shell"><p className="visitor-intro">{t('app.cloudMissing')}</p></main>;
     return <VisitorPage repository={visitorRepository} token={decodeURIComponent(resolvedRoute.token)} />;
@@ -73,6 +75,7 @@ export function App() {
       {!cloudConfigured && !import.meta.env.PROD && <a className="welcome-demo-link" href={`${baseUrl}#/t/${DEMO_TOKEN}`}>{t('welcome.demo')} <ArrowUpRight size={16} /></a>}
     </section>
     {!cloudConfigured && !import.meta.env.PROD && <footer className="visitor-footer"><a href={`${baseUrl}#/admin`}>{t('welcome.admin')}</a></footer>}
+    <PolicyLinks />
   </main>;
 }
 
@@ -81,8 +84,10 @@ export function resolveTagToken(pathname: string, hash: string) {
   return activePath.match(/^\/t\/([^/]+)\/?$/)?.[1] ?? null;
 }
 
-export function resolveAppRoute(pathname: string, hash: string): { type: 'tag'; token: string } | { type: 'admin' } | { type: 'welcome' } {
+export function resolveAppRoute(pathname: string, hash: string): { type: 'tag'; token: string } | { type: 'admin' } | { type: 'welcome' } | { type: 'privacy' | 'terms' } {
   const activePath = hash.startsWith('#/') ? hash.slice(1) : pathname;
+  if (activePath === '/privacy') return { type: 'privacy' };
+  if (activePath === '/terms') return { type: 'terms' };
   const token = activePath.match(/^\/t\/([^/]+)\/?$/)?.[1];
   if (token) return { type: 'tag', token };
   if (activePath === '/admin' || activePath === '/admin/') return { type: 'admin' };

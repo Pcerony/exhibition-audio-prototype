@@ -3,6 +3,7 @@ import { Check, MapPin } from 'lucide-react';
 import type { MemoryLocation } from '../../domain/location';
 import { useI18n } from '../../i18n/I18nProvider';
 import { mountLocationMap } from './googleMaps';
+import { PolicyLinks } from './PolicyPage';
 
 export function LocationPicker({ onDone }: { onDone: (location: MemoryLocation | null) => void }) {
   const { locale, t } = useI18n();
@@ -36,5 +37,6 @@ export function LocationPicker({ onDone }: { onDone: (location: MemoryLocation |
       <button className="secondary-action" onClick={() => onDone(null)}>{t('location.skip')}</button>
     </div>
     <p className="privacy-note">{t('location.notice')}</p>
+    <PolicyLinks />
   </section>;
 }

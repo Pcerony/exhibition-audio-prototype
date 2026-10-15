@@ -6,3 +6,4 @@
 .location-search gmp-place-autocomplete { width: 100%; }
 .location-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
 .location-loading { position: absolute; inset: 40% 12px auto; text-align: center; }
+.policy-links { display: flex; gap: 20px; flex-wrap: wrap; margin: 20px 0; font-size: 13px; }
