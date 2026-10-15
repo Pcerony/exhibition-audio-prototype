@@ -50,8 +50,8 @@ async function upload(grant) {
   const { error } = await client(publicKey).storage.from('recordings').uploadToSignedUrl(grant.path, grant.storageToken, audio, { contentType: 'audio/wav' });
   check(error, 'Synthetic upload failed');
 }
-const claim = (grant, durationSeconds = 1, token = grant.claimToken) => endpoint('public-upload-claim', {
-  uploadId: grant.uploadId, nickname: 'Synthetic fixture', durationSeconds,
+const claim = (grant, durationSeconds = 1, token = grant.claimToken, location = null) => endpoint('public-upload-claim', {
+  uploadId: grant.uploadId, nickname: 'Synthetic fixture', durationSeconds, location,
 }, { 'x-upload-token': token });
 async function makeUser(operator) {
   const password = randomBytes(24).toString('base64url');
@@ -102,9 +102,15 @@ try {
 
   const grants = await Promise.all([init(tags[0]), init(tags[0])]);
   await Promise.all(grants.map(upload));
-  const results = await Promise.all(grants.map((grant) => claim(grant)));
+  const locations = [{ source: 'pin', lat: 33.59, lng: 130.4 }, { source: 'place', placeId: 'synthetic-place-id' }];
+  const results = await Promise.all(grants.map((grant, index) => claim(grant, 1, grant.claimToken, locations[index])));
   assert.deepEqual(results.map((result) => result.status).sort(), [200, 409], 'Concurrent bind did not select exactly one winner');
   const winner = results.findIndex((result) => result.status === 200);
+  const publicTag = await fetch(`${url}/functions/v1/public-tag?token=${tags[0].token}`, { headers: { apikey: publicKey } });
+  assert.equal(publicTag.status, 200, 'Public location lookup failed');
+  assert.deepEqual((await publicTag.json()).recording.location, locations[winner], 'Winning location not preserved');
+  const managed = await admin('list', { search: batch });
+  assert.deepEqual(managed.body.tags.find((tag) => tag.id === tags[0].id).recording.location, locations[winner], 'Admin location missing');
   assert.equal((await claim(grants[winner])).status, 410, 'Claim token reused');
   const playback = await endpoint('public-playback-url', { token: tags[0].token });
   assert.equal(playback.status, 200, 'Independent visitor playback failed');

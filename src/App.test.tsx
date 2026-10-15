@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { resolveAppRoute, resolveTagToken } from './App';
 
 describe('visitor URL routing', () => {
+  it('opens public privacy and terms routes', () => {
+    expect(resolveAppRoute('/', '#/privacy')).toEqual({ type: 'privacy' });
+    expect(resolveAppRoute('/', '#/terms')).toEqual({ type: 'terms' });
+  });
   it('resolves regular paths used in local development', () => {
     expect(resolveTagToken('/t/tag-a', '')).toBe('tag-a');
   });

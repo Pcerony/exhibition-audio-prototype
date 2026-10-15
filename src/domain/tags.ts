@@ -1,9 +1,12 @@
+import type { MemoryLocation } from './location';
+
 export type RecordingInfo = {
   id: string;
   nickname: string;
   duration: number;
   mimeType: string;
   createdAt: string;
+  location?: MemoryLocation | null;
 };
 
 export type Tag = {
