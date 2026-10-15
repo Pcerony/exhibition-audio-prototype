@@ -28,7 +28,7 @@ function loadMaps(language: string): Promise<void> {
 
 export async function mountLocationMap(options: {
   mapElement: HTMLElement; searchElement: HTMLElement; language: string;
-  onSelect: (location: MemoryLocation) => void; onError: () => void;
+  onSelect: (location: MemoryLocation | null) => void; onError: () => void;
 }): Promise<() => void> {
   await loadMaps(options.language);
   const center = { lat: 33.5902, lng: 130.4017 };
@@ -38,12 +38,22 @@ export async function mountLocationMap(options: {
   });
   let disposed = false;
   let selectionRevision = 0;
+  let programmatic = false;
+  let lastCenter = center;
   const selectCenter = () => {
     selectionRevision++;
     const point = map.getCenter();
     if (point && !disposed) options.onSelect({ source: 'pin', lat: point.lat(), lng: point.lng() });
   };
   const drag = map.addListener('dragend', selectCenter);
+  const centerChange = map.addListener('center_changed', () => {
+    const point = map.getCenter();
+    if (!point) return;
+    const next = { lat: point.lat(), lng: point.lng() };
+    const changed = Math.abs(next.lat - lastCenter.lat) > 1e-9 || Math.abs(next.lng - lastCenter.lng) > 1e-9;
+    lastCenter = next;
+    if (changed && !programmatic) selectCenter();
+  });
   const click = map.addListener('click', (event: google.maps.MapMouseEvent) => {
     if (event.latLng) { map.setCenter(event.latLng); selectCenter(); }
   });
@@ -53,13 +63,17 @@ export async function mountLocationMap(options: {
   options.searchElement.append(search);
   const choose = async (event: Event) => {
     const revision = ++selectionRevision;
+    options.onSelect(null);
     try {
       const place = (event as google.maps.places.PlacePredictionSelectEvent).placePrediction.toPlace();
       await place.fetchFields({ fields: ['location'] });
       if (disposed || revision !== selectionRevision) return;
       if (!place.location || !place.id) throw new Error('PLACE_UNAVAILABLE');
-      map.setCenter(place.location);
-      map.setZoom(16);
+      programmatic = true;
+      try {
+        map.setCenter(place.location);
+        map.setZoom(16);
+      } finally { programmatic = false; }
       options.onSelect({ source: 'place', placeId: place.id });
     } catch { if (!disposed && revision === selectionRevision) options.onError(); }
   };
@@ -68,7 +82,7 @@ export async function mountLocationMap(options: {
   search.addEventListener('gmp-error', error);
   return () => {
     disposed = true;
-    drag.remove(); click.remove();
+    drag.remove(); click.remove(); centerChange.remove();
     search.removeEventListener('gmp-select', choose);
     search.removeEventListener('gmp-error', error);
     search.remove();

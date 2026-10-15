@@ -4,6 +4,8 @@
 
 ## 访客 API
 
+录音新增可选 `location`：省略/null 表示跳过；`{source:'pin',lat:number,lng:number}` 为用户确认的地图点，纬度-90..90、经度-180..180且必须为有限数字；`{source:'place',placeId:string}` 为搜索地点，仅保存最多300字符的非空place ID，不永久存储Google返回的地名/地址/坐标。claim请求携带该字段，与录音同事务保存，公共/认证管理录音查询返回；旧客户端仍可省略。重置随录音移除地点，不提供匿名单独修改接口。
+
 - `GET public-tag?token=...` → `{label,status,recording}`；状态 unbound/bound/disabled。recording 含 nickname、durationSeconds、createdAt，不含永久 URL。未知 token 返回404。
 - `POST public-upload-init` 请求 `{token,mimeType,sizeBytes}` → `{uploadId,path,storageToken,claimToken,expiresAt}`。路径由服务器生成，上传不得 upsert。标签必须未绑定且启用；校验 MIME/大小、每标签8次/小时限频。签名生成后会话延长121分钟，覆盖2小时上传凭证。
 - 客户端使用 storageToken 上传指定 private recordings 对象；没有写表权限。
