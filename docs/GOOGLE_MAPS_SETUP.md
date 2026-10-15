@@ -40,6 +40,14 @@
 - 已安装 gcloud beta 组件，成功通过 `gcloud beta quotas info list` 读取 Places 实际配额。自动补全默认每日175000次，远高于小型展览需求，尚未下调。旧 `services quota` 命令不可用，应使用 `quotas`。
 - 下一步仍需费用配额调整、真实地图配置与浏览器验收、后台地点展示和兼容发布。
 
+### 已落地的配额保护与展示
+
+- 已申请并获准：Maps 每日1000次、Places 自动补全每日3000次、Place Details 每日1000次；配额偏好均返回 grantedValue 与目标一致。Maps 实际 quotaInfo 复查为1000。
+- 这是每日请求保护，不是月度费用封顶；多日使用仍可能超出免费额度。预算提醒尚未设置。
+- 本地忽略的 `.env.local` 已接入受限浏览器密钥，不提交配置值。
+- 后台认证列表接口增加地点元数据，网页后台和访客播放页增加 Google Maps 地点入口。前端77项测试、构建通过；管理接口10项Deno测试通过。
+- 仍未生产部署，仍需真实地图测试、页面截图、完整发布兼容检查与双浏览器云端验收。
+
 ## 官方参考
 
 - [价格](https://developers.google.com/maps/billing-and-pricing/pricing)

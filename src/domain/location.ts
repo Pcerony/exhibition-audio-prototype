@@ -2,6 +2,13 @@ export type MemoryLocation =
   | { source: 'pin'; lat: number; lng: number }
   | { source: 'place'; placeId: string };
 
+export function memoryLocationUrl(location: MemoryLocation | null | undefined): string | null {
+  if (!location) return null;
+  const query = new URLSearchParams({ api: '1', query: location.source === 'pin' ? `${location.lat},${location.lng}` : 'place' });
+  if (location.source === 'place') query.set('query_place_id', location.placeId);
+  return `https://www.google.com/maps/search/?${query}`;
+}
+
 export function parseMemoryLocation(value: unknown): MemoryLocation | null {
   if (value == null) return null;
   if (typeof value !== 'object' || Array.isArray(value)) throw new Error('INVALID_LOCATION');

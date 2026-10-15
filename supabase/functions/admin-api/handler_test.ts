@@ -23,12 +23,21 @@ function fixture(role: string | null = 'operator', valid = true, rpcData: unknow
   const calls: unknown[] = [];
   const client = {
     auth: { getUser: async (token: string) => ({ data: { user: valid && token === 'valid-jwt' ? { id } : null }, error: valid ? null : {} }) },
-    from: (table: string) => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: role ? { role } : null, error: null }) }) }) }),
+    from: (table: string) => ({ select: () => ({
+      eq: () => ({ maybeSingle: async () => ({ data: role ? { role } : null, error: null }) }),
+      in: async (_field: string, ids: string[]) => ({ data: ids.map((id) => ({ id, location: { source: 'place', placeId: 'synthetic-place' } })), error: null }),
+    }) }),
     rpc: async (name: string, args: unknown) => { calls.push({ name, args }); return { data: rpcData, error: rpcError }; },
     storage: { from: () => ({ createSignedUrl: async () => ({ data: { signedUrl: 'https://example.invalid/audio' }, error: null }) }) },
   };
   return { handler: createHandler(() => client as never), calls };
 }
+Deno.test('authenticated list includes recording location without exposing object paths', async () => {
+  const response = await fixture('operator', true, { tags: [{ recording: { id, nickname: '' } }], total: 1 }).handler(request({ action: 'list' }));
+  equal(response.status, 200);
+  const body = await response.json();
+  equal(body.tags[0].recording.location, { source: 'place', placeId: 'synthetic-place' });
+});
 function request(body: unknown, token = 'valid-jwt') {
   return new Request('https://example.invalid/admin-api', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 }

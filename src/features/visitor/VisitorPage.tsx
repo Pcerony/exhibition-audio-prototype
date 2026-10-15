@@ -6,7 +6,7 @@ import { useRecorder } from './useRecorder';
 import { LanguageSwitch } from '../../i18n/LanguageSwitch';
 import { useI18n } from '../../i18n/I18nProvider';
 import './visitor.css';
-import type { MemoryLocation } from '../../domain/location';
+import { memoryLocationUrl, type MemoryLocation } from '../../domain/location';
 import { LocationPicker } from './LocationPicker';
 
 type Props = { repository: VisitorRepository; token: string };
@@ -112,6 +112,7 @@ export function VisitorPage({ repository, token }: Props) {
           <p className="eyebrow">{t('visitor.recordedEyebrow')}</p>
           <h1>{tag.recording.nickname ? t('visitor.recordedTitle', { name: tag.recording.nickname }) : t('visitor.recordedAnonymous')}</h1>
           <p className="visitor-intro">{t('visitor.recordedIntro')}</p>
+          {tag.recording.location && <a className="secondary-action" href={memoryLocationUrl(tag.recording.location)!} target="_blank" rel="noreferrer">{t('location.view')}</a>}
           <div className="soundprint" aria-hidden="true">{Array.from({ length: 45 }, (_, index) => <i key={index} style={{ '--bar': `${18 + ((index * 37 + 13) % 76)}%` } as React.CSSProperties} />)}</div>
           <div className="player-wrap">
             {playbackFailed ? <button className="secondary-action" onClick={() => setPlaybackRevision((value) => value + 1)}><RotateCcw size={16} />{t('visitor.retryPlayback')}</button>

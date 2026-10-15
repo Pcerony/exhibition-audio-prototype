@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { parseMemoryLocation } from './location';
+import { memoryLocationUrl, parseMemoryLocation } from './location';
 
 describe('memory location', () => {
+  it('builds safe Google Maps links for points and place IDs', () => {
+    expect(memoryLocationUrl(null)).toBeNull();
+    const point = new URL(memoryLocationUrl({ source: 'pin', lat: 33, lng: 130 })!);
+    expect(point.searchParams.get('query')).toBe('33,130');
+    const place = new URL(memoryLocationUrl({ source: 'place', placeId: 'example&extra' })!);
+    expect(place.origin).toBe('https://www.google.com');
+    expect(place.searchParams.get('query_place_id')).toBe('example&extra');
+  });
   it('supports skipping and old recordings', () => {
     expect(parseMemoryLocation(undefined)).toBeNull();
     expect(parseMemoryLocation(null)).toBeNull();

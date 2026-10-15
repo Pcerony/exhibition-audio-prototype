@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { memoryLocationUrl } from '../../domain/location';
 import {
   Download,
   FileUp,
@@ -724,6 +725,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                           }
                         </span>
                         <small>{tag.recording?.nickname}</small>
+                        {tag.recording?.location && <a href={memoryLocationUrl(tag.recording.location)!} target="_blank" rel="noreferrer">{locale === 'ja-JP' ? '思い出の場所' : '回忆地点'}</a>}
                       </td>
                       <td className="time-cell">
                         {tag.recording
