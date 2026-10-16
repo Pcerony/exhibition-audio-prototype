@@ -401,6 +401,9 @@ verify_jwt = false
 # This endpoint requires x-maintenance-secret, not a browser JWT.
 verify_jwt = false
 
+[functions.transcription-worker]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

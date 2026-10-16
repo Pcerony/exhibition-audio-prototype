@@ -1,0 +1,67 @@
+do $$ declare op uuid:='10000000-0000-4000-8000-000000000001'; rid uuid; task jsonb; task2 jsonb; result jsonb; begin
+ if exists(select 1 from public.recording_transcriptions) or exists(select 1 from public.recordings where transcription_consent) then raise exception 'historical recordings queued or consent invented';end if;
+ insert into auth.users values(op);insert into public.operator_profiles(user_id,role) values(op,'admin');
+ insert into public.tags(id,label,inventory_label,batch,public_token) values('20000000-0000-4000-8000-000000000001','TEST-TRANSCRIPT','TEST-TRANSCRIPT','test',repeat('e',48));
+ perform public.initialize_upload(repeat('e',48),'30000000-0000-4000-8000-000000000001',encode(extensions.digest('test','sha256'),'hex'),'audio/wav',10);
+ perform public.initialize_upload(repeat('e',48),'30000000-0000-4000-8000-000000000005',encode(extensions.digest('other','sha256'),'hex'),'audio/wav',10);
+ select recording_id into rid from public.claim_recording_transcription('30000000-0000-4000-8000-000000000001','test','',1,10,'audio/wav',null,'A',true);
+ if not (select transcription_consent from public.recordings where id=rid) then raise exception 'consent missing';end if;
+ perform public.claim_recording_transcription('30000000-0000-4000-8000-000000000005','other','',1,10,'audio/wav',null,'B',true);
+ if (select count(*) from public.recording_transcriptions)<>1 then raise exception 'losing claim queued transcription';end if;
+ task:=public.claim_transcription();
+ if task->>'recordingId'<>rid::text or (public.claim_transcription()) is not null then raise exception 'exclusive lease failed';end if;
+ perform public.admin_action(op,jsonb_build_object('action','saveTranscription','recordingId',rid,'version',1,'text','Reviewed <plain text>','published',true));
+ if public.finish_transcription(rid,(task->>'leaseToken')::uuid,1,'Late AI',null,0) then raise exception 'stale AI accepted';end if;
+ result:=public.admin_action(op,jsonb_build_object('action','getTranscription','recordingId',rid));
+ if result->'transcription'->>'text'<>'Reviewed <plain text>' then raise exception 'edit lost';end if;
+ begin
+  perform public.admin_action(op,jsonb_build_object('action','saveTranscription','recordingId',rid,'version',1,'text','stale','published',false));
+  raise exception 'stale edit accepted';
+ exception when others then if sqlerrm<>'VERSION_CONFLICT' then raise;end if;end;
+ perform public.admin_action(op,jsonb_build_object('action','retryTranscription','recordingId',rid,'version',2));
+ if public.finish_transcription(rid,(task->>'leaseToken')::uuid,1,'Old generation',null,0) then raise exception 'retry accepted stale worker';end if;
+ task:=public.claim_transcription();
+ update public.tags set status='disabled' where id='20000000-0000-4000-8000-000000000001';
+ if public.finish_transcription(rid,(task->>'leaseToken')::uuid,3,'Disabled',null,0) or public.claim_transcription() is not null then raise exception 'disabled accepted worker';end if;
+ update public.tags set status='bound' where id='20000000-0000-4000-8000-000000000001';
+ update public.recording_transcriptions set lease_expires_at=now()-interval '1 second' where recording_id=rid;
+ task2:=public.claim_transcription();
+ if task2->>'leaseToken'=task->>'leaseToken' then raise exception 'expired lease reused';end if;
+ if public.finish_transcription(rid,(task->>'leaseToken')::uuid,3,'Expired',null,0) then raise exception 'expired lease accepted';end if;
+ perform public.finish_transcription(rid,(task2->>'leaseToken')::uuid,3,null,'PROVIDER_RATE_LIMITED',1200);
+ if not exists(select 1 from public.recording_transcriptions where recording_id=rid and status='pending' and next_attempt_at>=now()+interval '1200 seconds') then raise exception 'Retry-After ignored';end if;
+ if public.claim_transcription() is not null then raise exception 'backoff ignored';end if;
+ update public.recording_transcriptions set next_attempt_at=now()-interval '1 second' where recording_id=rid;
+ task:=public.claim_transcription();
+ perform public.finish_transcription(rid,(task->>'leaseToken')::uuid,3,null,'PROVIDER_UNAVAILABLE',0);
+ if not exists(select 1 from public.recording_transcriptions where recording_id=rid and status='failed' and attempts=3) then raise exception 'automatic attempt limit failed';end if;
+ begin
+  perform public.admin_action(op,jsonb_build_object('action','retryTranscription','recordingId',rid,'version',3));raise exception 'manual rate limit ignored';
+ exception when others then if sqlerrm<>'TRANSCRIPTION_RATE_LIMITED' then raise;end if;end;
+ update public.recording_transcriptions set manual_retry_at=now()-interval '2 minutes' where recording_id=rid;
+ perform public.admin_action(op,jsonb_build_object('action','retryTranscription','recordingId',rid,'version',3));
+ task:=public.claim_transcription();
+ perform public.admin_action(op,jsonb_build_object('action','saveTranscription','recordingId',rid,'version',4,'text','Final draft','published',false));
+ if public.finish_transcription(rid,(task->>'leaseToken')::uuid,4,'Late provider',null,0) then raise exception 'save accepted stale worker';end if;
+ perform public.admin_action(op,jsonb_build_object('action','reset','tagId','20000000-0000-4000-8000-000000000001'));
+ if exists(select 1 from public.recording_transcriptions where recording_id=rid) then raise exception 'reset did not cascade';end if;
+ if public.finish_transcription(rid,(task->>'leaseToken')::uuid,4,'Deleted provider',null,0) then raise exception 'reset accepted stale worker';end if;
+ -- Old callers and explicit false both save audio without queueing or inventing consent.
+ perform public.initialize_upload(repeat('e',48),'30000000-0000-4000-8000-000000000002',encode(extensions.digest('test','sha256'),'hex'),'audio/wav',10);
+ select recording_id into rid from public.claim_recording_transcription('30000000-0000-4000-8000-000000000002','test','',1,10,'audio/wav',null,'A');
+ if (select transcription_consent from public.recordings where id=rid) or exists(select 1 from public.recording_transcriptions where recording_id=rid) then raise exception 'default consent must be false';end if;
+ begin
+  perform public.admin_action(op,jsonb_build_object('action','saveTranscription','recordingId',rid,'version',1,'text','No consent','published',true));raise exception 'no consent accepted';
+ exception when others then if sqlerrm<>'TRANSCRIPTION_CONSENT_REQUIRED' then raise;end if;end;
+ perform public.admin_action(op,jsonb_build_object('action','reset','tagId','20000000-0000-4000-8000-000000000001'));
+ perform public.initialize_upload(repeat('e',48),'30000000-0000-4000-8000-000000000003',encode(extensions.digest('test','sha256'),'hex'),'audio/wav',10);
+ select recording_id into rid from public.claim_recording_transcription('30000000-0000-4000-8000-000000000003','test','',1,10,'audio/wav',null,'A',true);
+ update public.recording_transcriptions set status='processing',attempts=3,lease_token=gen_random_uuid(),lease_expires_at=now()-interval '1 second' where recording_id=rid;
+ insert into public.tags(id,label,inventory_label,batch,public_token) values('20000000-0000-4000-8000-000000000002','TEST-OTHER','TEST-OTHER','test',repeat('f',48));
+ perform public.initialize_upload(repeat('f',48),'30000000-0000-4000-8000-000000000004',encode(extensions.digest('test','sha256'),'hex'),'audio/wav',10);
+ perform public.claim_recording_transcription('30000000-0000-4000-8000-000000000004','test','',1,10,'audio/wav',null,'A',true);
+ if public.claim_transcription() is null then raise exception 'pending job not claimed';end if;
+ if not exists(select 1 from public.recording_transcriptions where recording_id=rid and status='failed') then raise exception 'expired final lease stuck';end if;
+ if public.claim_transcription() is not null then raise exception 'exhausted lease requeued';end if;
+ if has_table_privilege('anon','public.recording_transcriptions','SELECT') or has_function_privilege('authenticated','public.claim_transcription()','EXECUTE') then raise exception 'anonymous access';end if;
+end $$;

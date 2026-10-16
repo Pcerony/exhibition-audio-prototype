@@ -7,6 +7,7 @@ export function createHandler(getClient: () => SupabaseClient) { return async (r
   if (options) return options;
   if (request.method !== 'POST') return json({ code: 'METHOD_NOT_ALLOWED' }, 405);
   const body = await readJson(request);
+  if (body?.transcriptionConsent !== undefined && typeof body.transcriptionConsent !== 'boolean') return json({ code: 'REQUEST_INVALID' }, 400);
   const categoryCode = body?.categoryCode;
   if (categoryCode === undefined || categoryCode === null || categoryCode === '') return json({ code: 'CATEGORY_REQUIRED' }, 400);
   if (typeof categoryCode !== 'string' || !['A', 'B', 'C', 'D'].includes(categoryCode)) return json({ code: 'CATEGORY_INVALID' }, 400);
@@ -41,7 +42,7 @@ export function createHandler(getClient: () => SupabaseClient) { return async (r
   if (infoError || !info) return json({ code: 'UPLOAD_MISSING' }, 400);
   const actualMime = (info.contentType ?? '').split(';')[0].trim().toLowerCase();
   const actualSize = Number(info.size);
-  const { data: claim, error: claimError } = await client.rpc('claim_recording_classified', {
+  const { data: claim, error: claimError } = await client.rpc('claim_recording_transcription', {
     p_upload_id: uploadId,
     p_claim_token: claimToken,
     p_nickname: nickname,
@@ -50,6 +51,7 @@ export function createHandler(getClient: () => SupabaseClient) { return async (r
     p_actual_mime_type: actualMime,
     p_location: location,
     p_category_code: categoryCode,
+    p_transcription_consent: body?.transcriptionConsent === true,
   }).maybeSingle<{ claim_status: string; recording_id: string; recording_created_at: string }>();
   if (claimError) {
     const code = claimError.message.includes('CATEGORY_REQUIRED') ? 'CATEGORY_REQUIRED'
