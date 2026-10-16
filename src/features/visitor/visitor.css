@@ -57,4 +57,7 @@
 @media(max-width:600px) { .outdoor-shell .location-actions { grid-template-columns: 1fr; } }
 .outdoor-shell h1:focus { outline: none; }
 .outdoor-shell h1 { text-wrap: balance; }
+.preview-controls { position: fixed; bottom: 0; left: 0; right: 0; z-index: 30; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: #202718; color: white; font-size: 14px; }
+.preview-controls button { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 12px; border: 1px solid #b2d249; border-radius: 4px; background: #b2d249; color: #202718; font: inherit; cursor: pointer; }
+body:has(.preview-controls) .outdoor-shell { padding-bottom: 110px; }
 html[lang="ko"] .outdoor-shell h1,html[lang="ko"] .outdoor-shell p { word-break: keep-all; overflow-wrap: break-word; }
