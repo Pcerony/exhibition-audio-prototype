@@ -92,16 +92,26 @@ class Api(private val store: SecureSession) {
         return Lease(parseJob(job), response.getString("leaseToken"), Instant.parse(response.getString("expiresAt")).toEpochMilli())
     }
     fun release(lease: Lease) { admin(JSONObject().put("action", "releaseJob").put("jobId", lease.job.id).put("leaseToken", lease.token)) }
+    fun inspect(url: String): Card? {
+        val token = NfcInspection.token(url) ?: return null
+        val job = jobs().find { it.visitorUrl == url }
+        val tag = try { request("/functions/v1/public-tag?token=$token", null, false) }
+        catch (e: ApiException) { if (e.status == 404) return null else throw e }
+        val recording = tag.optJSONObject("recording")
+        return Card(tag.getString("id"), job?.label ?: tag.getString("label"), job?.categoryId.orEmpty(),
+            job?.batch ?: tag.optString("batch"), job?.tagVersion ?: 0, tag.getString("status"),
+            recording?.getString("id"), recording?.optString("nickname").orEmpty(), recording?.optString("createdAt"), job)
+    }
     fun report(r: Report) { check(admin(reportJson(r).put("action", "provision")).optBoolean("ok")) { "REPORT_REJECTED" } }
-    private fun request(path: String, body: JSONObject, authenticated: Boolean): JSONObject {
+    private fun request(path: String, body: JSONObject?, authenticated: Boolean): JSONObject {
         val base = BuildConfig.SUPABASE_URL.trimEnd('/')
         require(base.startsWith("https://") && BuildConfig.SUPABASE_PUBLISHABLE_KEY.isNotBlank()) { "CONFIG_REQUIRED" }
         val connection = URL(base + path).openConnection() as HttpURLConnection
         try {
-            connection.instanceFollowRedirects = false; connection.requestMethod = "POST"; connection.connectTimeout = 15000; connection.readTimeout = 15000
+            connection.instanceFollowRedirects = false; connection.requestMethod = if (body == null) "GET" else "POST"; connection.connectTimeout = 15000; connection.readTimeout = 15000
             connection.setRequestProperty("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY); connection.setRequestProperty("Content-Type", "application/json")
             if (authenticated) connection.setRequestProperty("Authorization", "Bearer $token")
-            connection.doOutput = true; connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            if (body != null) { connection.doOutput = true; connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) } }
             val status = connection.responseCode; val ok = status in 200..299
             val response = (if (ok) connection.inputStream else connection.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
             val json = runCatching { JSONObject(response) }.getOrDefault(JSONObject())

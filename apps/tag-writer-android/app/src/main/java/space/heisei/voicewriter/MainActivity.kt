@@ -28,8 +28,10 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : Activity(), NfcAdapter.ReaderCallback {
-    private enum class Screen { CARDS, SINGLE, AUTO, EDIT }
+    private enum class Screen { CARDS, READ, SINGLE, AUTO, EDIT }
     private val executor = Executors.newSingleThreadExecutor()
+    private val readExecutor = Executors.newSingleThreadExecutor()
+    private val lookupExecutor = Executors.newSingleThreadExecutor()
     private val busy = AtomicBoolean(false)
     private val handler = Handler(Looper.getMainLooper())
     private val flow = WriterFlow()
@@ -42,7 +44,11 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     @Volatile private var resumed = false
     @Volatile private var epoch = 0
     @Volatile private var lease: Lease? = null
-    private var screen = Screen.CARDS
+    @Volatile private var screen = Screen.CARDS
+    @Volatile private var scanArmed = false
+    private var inspectedTag: InspectedTag? = null
+    private var inspectedCards = emptyList<InspectedCard>()
+    private var queryingEpoch: Int? = null
     private var categories = emptyList<Category>()
     private var categoryId = ""
     private var cards = emptyList<Card>()
@@ -70,7 +76,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         super.onCreate(savedInstanceState)
         copy = Copy(prefs().getString("language", "ja").orEmpty())
         api = Api(SecureSession(this))
-        api.onRevoked = { flow.pause(); epoch++; runOnUiThread { reader(); stopPlayback(); cards = emptyList(); jobs = emptyList(); checked.clear(); pendingBulk = null; queue.clear(); loginScreen() } }
+        api.onRevoked = { flow.pause(); epoch++; runOnUiThread { scanArmed = false; inspectedTag = null; inspectedCards = emptyList(); reader(); stopPlayback(); cards = emptyList(); jobs = emptyList(); checked.clear(); pendingBulk = null; queue.clear(); loginScreen() } }
         adapter = NfcAdapter.getDefaultAdapter(this)
         shell = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(245, 248, 246)) }
         shell.setOnApplyWindowInsetsListener { view, insets ->
@@ -109,15 +115,17 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             setOnClickListener { settings() }
         }, LinearLayout.LayoutParams(dp(48), dp(48)))
         if (navigation) {
-            val nav = LinearLayout(this).apply { shell.addView(this) }
-            Screen.entries.forEach { destination ->
-                nav.addView(Button(this).apply {
-                    val key = when(destination) { Screen.CARDS -> "cards"; Screen.SINGLE -> "single"; Screen.AUTO -> "auto"; Screen.EDIT -> "edit" }
-                    text = t(key); textSize = 12f; isAllCaps = false; minHeight = dp(56); maxLines = 2
-                    setTextColor(if (screen == destination) Color.WHITE else green)
-                    backgroundTintList = android.content.res.ColorStateList.valueOf(if (screen == destination) green else Color.WHITE)
-                    setOnClickListener { if (!busy.get()) navigate(destination) }
-                }, LinearLayout.LayoutParams(0, dp(64), 1f))
+            listOf(listOf(Screen.CARDS, Screen.READ), listOf(Screen.SINGLE, Screen.AUTO, Screen.EDIT)).forEach { destinations ->
+                val nav = LinearLayout(this).apply { shell.addView(this) }
+                destinations.forEach { destination ->
+                    nav.addView(Button(this).apply {
+                        val key = when(destination) { Screen.CARDS -> "cards"; Screen.READ -> "readNfc"; Screen.SINGLE -> "single"; Screen.AUTO -> "auto"; Screen.EDIT -> "edit" }
+                        text = t(key); textSize = 12f; isAllCaps = false; minHeight = dp(56); maxLines = 2
+                        setTextColor(if (screen == destination) Color.WHITE else green)
+                        backgroundTintList = android.content.res.ColorStateList.valueOf(if (screen == destination) green else Color.WHITE)
+                        setOnClickListener { if (!busy.get()) navigate(destination) }
+                    }, LinearLayout.LayoutParams(0, dp(56), 1f))
+                }
             }
         }
         val scroll = ScrollView(this)
@@ -161,6 +169,12 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private fun navigate(destination: Screen) {
         pauseWriting(); stopPlayback(); checked.clear(); retryJobId = null; offset = 0; screen = destination
         flow.choose(categoryId, destination == Screen.AUTO)
+        if (destination == Screen.READ) {
+            inspectedTag = null; inspectedCards = emptyList(); scanArmed = true; statusMessage = ""
+            executor.execute { releaseCurrent() }
+            render(); return
+        }
+        scanArmed = false; inspectedTag = null; inspectedCards = emptyList()
         work { releaseCurrent(); load(); ui { render() } }
     }
     private fun load() {
@@ -190,6 +204,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private fun render() {
         if (api.token.isBlank()) { loginScreen(); return }
         header(t("app"), true)
+        if (screen == Screen.READ) { renderReader(); reader(); return }
         categoryPicker(content) { value ->
             pauseWriting(); categoryId = value; checked.clear(); retryJobId = null; offset = 0; flow.choose(value, screen == Screen.AUTO)
             work { releaseCurrent(); load(); ui { render() } }
@@ -202,8 +217,97 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             Screen.AUTO -> renderAuto()
             Screen.SINGLE -> renderSingle()
             Screen.CARDS, Screen.EDIT -> renderCards()
+            Screen.READ -> Unit
         }
         reader()
+    }
+    private fun renderReader() {
+        text(content, t("readNfc"), 25f, true)
+        if (adapter?.isEnabled != true) {
+            text(content, t("nfcOff"))
+            action(content, t("nfc")) { startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) }
+        }
+        val snapshot = inspectedTag
+        if (snapshot == null) text(content, t("readReady"), 18f, true)
+        else {
+            text(content, t("readContents"), 18f, true)
+            text(content, t(when(snapshot.kind) { "empty" -> "readEmpty"; "unformatted" -> "readUnformatted"; "unsupported" -> "unsupported"; "failed" -> "readFailed"; else -> "readContents" }), 16f)
+            snapshot.writable?.let { text(content, t(if (it) "readWritable" else "readReadOnly"), 13f) }
+            snapshot.records.forEachIndexed { index, record ->
+                text(content, "${index + 1} · ${t(when(record.kind) { "uri" -> "readUri"; "text" -> "readText"; "empty" -> "readEmptyRecord"; else -> "readOther" })} · ${record.bytes} B", 13f, true)
+                if (record.value.isNotEmpty()) text(content, NfcInspection.display(record.value), 14f).setTextIsSelectable(true)
+            }
+            if (snapshot.truncated || snapshot.records.any { it.value.endsWith("\u2026") }) text(content, t("readTruncated"), 13f)
+            if (snapshot.kind == "data" && inspectedCards.isEmpty()) text(content, t("readExternal"), 16f)
+            inspectedCards.forEach { result ->
+                val card = result.card
+                text(content, t(result.state), 17f, true)
+                if (card != null) {
+                    text(content, card.label, 28f, true)
+                    text(content, card.categoryName, 15f)
+                    text(content, t(if (card.status == "disabled") "disabled" else if (card.recordingId == null) "empty" else "recorded"), 16f, true)
+                    card.job?.let { job -> text(content, t(job.status), 14f); job.writtenAt?.let { text(content, "${t("writtenAt")} · ${date(it)}", 13f) } }
+                    if (card.nickname.isNotBlank()) text(content, card.nickname, 15f)
+                    card.recordedAt?.let { text(content, "${t("recordedAt")} · ${date(it)}", 13f) }
+                    card.recordingId?.let { id -> action(content, t("play")) { play(id) } }
+                }
+                text(content, result.url, 12f).setTextIsSelectable(true)
+            }
+            if (inspectedCards.isNotEmpty() && queryingEpoch != epoch) action(content, t("readRetry")) { lookupInspection() }
+        }
+        action(content, t("readAgain"), true) {
+            epoch++; stopPlayback(); inspectedTag = null; inspectedCards = emptyList(); scanArmed = true; statusMessage = ""; render()
+        }
+    }
+    private fun inspectionCurrent(expectedEpoch: Int, owner: String) =
+        NfcInspection.current(resumed, screen == Screen.READ, expectedEpoch, epoch, owner, api.userId) && api.token.isNotBlank()
+
+    private fun readTag(tag: Tag) {
+        if (!resumed || !scanArmed || !busy.compareAndSet(false, true)) return
+        scanArmed = false
+        val readEpoch = epoch
+        val owner = api.userId
+        readExecutor.execute {
+            try {
+                val snapshot = try { NfcReader.read(tag) } catch (_: TagLostException) { InspectedTag("lost") } catch (_: Exception) { InspectedTag("failed") }
+                ui {
+                    if (inspectionCurrent(readEpoch, owner)) {
+                        inspectedTag = snapshot
+                        inspectedCards = emptyList()
+                        statusMessage = if (snapshot.kind == "lost") t("lost") else ""
+                        lookupInspection()
+                        render()
+                    }
+                }
+            } finally { busy.set(false) }
+        }
+    }
+    private fun lookupInspection() {
+        val urls = inspectedTag?.let { NfcInspection.urls(it.records) }.orEmpty()
+        if (urls.isEmpty() || queryingEpoch == epoch) return
+        val readEpoch = epoch; val owner = api.userId
+        queryingEpoch = readEpoch
+        inspectedCards = urls.map { InspectedCard(it, "readCloud") }; render()
+        lookupExecutor.execute {
+            try { lookupInspectionResults(urls, readEpoch, owner) }
+            finally { ui {
+                if (queryingEpoch == readEpoch) queryingEpoch = null
+                if (inspectionCurrent(readEpoch, owner)) render()
+            } }
+        }
+    }
+    private fun lookupInspectionResults(urls: List<String>, readEpoch: Int, owner: String) {
+        val results = mutableListOf<InspectedCard>()
+        for (url in urls) {
+            if (!inspectionCurrent(readEpoch, owner)) return
+            val result = try {
+                val card = api.inspect(url)
+                InspectedCard(url, if (card == null) "readMissing" else "readExhibition", card)
+            } catch (_: Exception) { InspectedCard(url, "readUnknown") }
+            results.add(result)
+            val visible = results.toList() + urls.drop(results.size).map { InspectedCard(it, "readCloud") }
+            ui { if (inspectionCurrent(readEpoch, owner)) { inspectedCards = visible; render() } }
+        }
     }
     private fun renderCards() {
         val query = EditText(this).apply { hint = t("search"); setSingleLine(); setText(search); content.addView(this) }
@@ -322,11 +426,12 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     }
     private fun reader() {
         adapter?.disableReaderMode(this)
-        if (resumed && api.token.isNotBlank() && flow.stage in listOf(WriterFlow.Stage.READY, WriterFlow.Stage.REMOVAL) && adapter?.isEnabled == true) {
+        if (resumed && api.token.isNotBlank() && ((screen == Screen.READ && scanArmed) || (screen != Screen.READ && flow.stage in listOf(WriterFlow.Stage.READY, WriterFlow.Stage.REMOVAL))) && adapter?.isEnabled == true) {
             adapter?.enableReaderMode(this, this, NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_NFC_V, null)
         }
     }
     override fun onTagDiscovered(tag: Tag) {
+        if (screen == Screen.READ) { readTag(tag); return }
         val current = lease ?: return
         if (!resumed || !busy.compareAndSet(false, true)) return
         val chipId = tag.id.joinToString("") { "%02x".format(it) }
@@ -527,12 +632,15 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     })
     override fun onResume() {
         super.onResume(); resumed = true; reader()
-        if (::api.isInitialized && api.token.isNotBlank() && !busy.get()) reload()
+        if (::api.isInitialized && api.token.isNotBlank() && !busy.get()) {
+            if (screen == Screen.READ) render() else reload()
+        }
     }
     override fun onPause() {
         resumed = false; pauseWriting(); stopPlayback()
+        inspectedCards = inspectedCards.map { if (it.state == "readCloud") it.copy(state = "readUnknown") else it }
         if (::api.isInitialized && api.token.isNotBlank()) executor.execute { releaseCurrent() }
         super.onPause()
     }
-    override fun onDestroy() { handler.removeCallbacks(autoSync); handler.removeCallbacks(checkLease); executor.shutdown(); super.onDestroy() }
+    override fun onDestroy() { handler.removeCallbacks(autoSync); handler.removeCallbacks(checkLease); executor.shutdown(); readExecutor.shutdown(); lookupExecutor.shutdown(); super.onDestroy() }
 }

@@ -11,7 +11,8 @@
 - [体验优化阶段](EXPERIENCE_PHASE.md)：下一阶段三端目标、范围与待确认事项。
 - [管理体验正式设计](superpowers/specs/2026-10-15-operator-experience-design.md)：已确认的分类、编号、网页管理和安卓独立写卡模式。
 - [V2发布检查](OPERATOR_V2_RELEASE.md)：候选版、迁移顺序与旧安卓升级限制。
-- [安卓V2中文操作说明](ANDROID_V2_GUIDE_ZH.md)：安装、四个入口、版本校验与实体手机验收。
+- [安卓V2中文操作说明](ANDROID_V2_GUIDE_ZH.md)：安装、五个入口、版本校验与实体手机验收。
+- [NFC读取设计](superpowers/specs/2026-10-16-nfc-reader-design.md)：Android 2.1独立只读入口与离线/云端确认边界。
 - [项目目标与需求](PROJECT.md)：用户、角色、工作流、范围和验收标准。
 - [系统架构](ARCHITECTURE.md)：客户端边界、云服务、数据流和仓库演进方向。
 - [API 契约](API_CONTRACT.md)：访客、后台、Android 写卡端共用的服务端接口。
@@ -23,6 +24,6 @@
 
 ## 当前开发重点
 
-地图功能、网页分类管理与云端管理V2已上线，Android V2试用APK已发布。旧安卓协议已受升级保护，需安装新包。真实云端合成联调已通过，剩余为原生安卓界面/实体NFC与iPhone验收；不以自动化测试代替。
+地图功能、网页分类管理与云端管理V2已上线，Android 2.1试用APK已发布，新增独立NFC读取。旧安卓协议已受升级保护，需安装新包。真实云端合成联调已通过，剩余为原生安卓界面/实体NFC与iPhone验收；不以自动化测试代替。
 
 旧的 `docs/superpowers/specs/2026-09-29-exhibition-audio-nfc-design.md` 和早期原型计划记录了单浏览器原型阶段的决定；如与本文档冲突，以本目录核心文档为准。
