@@ -6,14 +6,16 @@ Android工作人员应用、网页后台与云端分类接口一起升级。新�
 
 2.1试用版新增独立“读取 NFC”入口：先查看芯片内容，再联网确认展览分类、编号和录音并试听。此入口只读，不写卡、不格式化、不锁卡。
 
+2.1.1修复“重新写卡”不能替换其他已有内容：进入单张写卡，选目标卡片，选择“覆盖已有内容”，核对目标编号并确认，再触碰要覆盖的芯片。许可仅用于这一次触碰；失败、切后台或切换页面后需重新确认。不先清空芯片，直接用完整目标URL替换NDEF并读回核验。只读/锁定芯片不能强制写入，原云端录音不会自动删除。自动模式仍拒绝覆盖其他内容。
+
 APK是调试签名试用包，不是应用商店正式发行。只支持Android工作人员手机；参观者仍用iPhone/Android浏览器，无需安装。
 
-[下载安卓2.1试用包](https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v2.1.0-rc1/voice-writer-v2.1-candidate.apk)；[网页后台](https://voice.heisei.space/#/admin)。云端V2已上线，旧V1 APK不能继续领取写卡任务。
+[下载安卓2.1.1试用包](https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v2.1.1-rc1/voice-writer-v2.1.1-candidate.apk)；[网页后台](https://voice.heisei.space/#/admin)。云端V2已上线，旧V1 APK不能继续领取写卡任务。
 
 ## 安装前
 
 1. 结束旧版写卡，确认没有待同步结果。本次负责人已确认可以统一升级。
-2. 下载本次发布的 `voice-writer-v2.1-candidate.apk`，在Android允许所用浏览器安装此来源的应用，然后安装。
+2. 下载本次发布的 `voice-writer-v2.1.1-candidate.apk`，在Android允许所用浏览器安装此来源的应用，然后安装。
 3. 优先覆盖安装，保留同一签名包的数据。如果系统提示签名冲突，不强行覆盖；先再次确认旧版没有待同步结果，再卸载旧版并安装新版。云端卡片和录音不因卸载而删除。
 4. 用已有运营账号登录，不要用Google/Supabase控制台账号代替展览运营账号。首次登录后，应用在设备安全存储中保存加密续期会话，不保存明文密码。
 
@@ -35,12 +37,13 @@ APK是调试签名试用包，不是应用商店正式发行。只支持Android�
 4. 自动模式下保持同一枚芯片不移开，确认不会自动覆盖为下一编号；移开后换另一枚再继续。
 5. 检查NFC关闭、断网、切后台、只读/容量不足标签的提示和暂停行为。没有这些标签时标记未测，不猜测通过。
 6. 在“读取 NFC”分别读取空芯片、本展览芯片和其他网址/文本芯片；核对分类、编号与试听，确认芯片内容前后不变。断网读取、移开过快和切后台后重试也需验证。
+7. 用可丢弃内容的测试芯片验证覆盖其他网址/文本/其他展览编号后只保留目标URL；普通/自动模式仍拒绝其他内容。覆盖确认后切后台，回来不得继续原授权。写入中断后不保证原内容完整，先读卡核查，再重新确认覆盖。
 
 记录Android型号/OS、参观者手机/浏览器版本、标签型号与容量。回报截图前避免显示账号、访客网址token或真实个人录音。
 
 ## 版本校验
 
-- 包名：`space.heisei.voicewriter`；版本：2.1，versionCode 3，Release `v2.1.0-rc1`。
-- SHA256：`43d4a00e4f1072862568199fbfc62e16e5893fede10be9bb1d78614ad8dcf33f`。
+- 包名：`space.heisei.voicewriter`；版本：2.1.1，versionCode 4，Release `v2.1.1-rc1`。
+- SHA256：`3b7e3b1ab0f0871ffa265a8473b2f11b4f976900ea3deb9eeba1896a2f8c2479`。
 - 签名：Android Debug；证书SHA256 `48a52ba6a1cdc413f5ee828b11cd922a4604951299547b7cea37c2e901d04b3d`。
 - 当前自动化测试不代替上述实体NFC与iPhone麦克风验收。旧APP将收到需要升级提示，不能继续旧协议写卡。

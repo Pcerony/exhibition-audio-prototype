@@ -9,7 +9,7 @@ import android.nfc.tech.NdefFormatable
 class WriterException(val code: String) : Exception(code)
 
 object NfcWriter {
-    fun writeAndRead(tag: Tag, job: Job, stillAllowed: () -> Boolean): Report {
+    fun writeAndRead(tag: Tag, job: Job, overwriteConfirmed: Boolean = false, stillAllowed: () -> Boolean): Report {
         if (!Provisioning.validUrl(job.visitorUrl)) throw WriterException("INVALID_URL")
         val message = NdefMessage(arrayOf(NdefRecord.createUri(job.visitorUrl)))
         val ndef = Ndef.get(tag)
@@ -28,7 +28,7 @@ object NfcWriter {
             if (ndef.maxSize < message.toByteArray().size) throw WriterException("CAPACITY")
             val current = ndef.ndefMessage
             val existing = current?.records?.map { it.toUri()?.toString().orEmpty() }.orEmpty()
-            if (!WriterSafety.mayWrite(existing, job.visitorUrl)) throw WriterException("FOREIGN_TAG")
+            if (!WriterSafety.mayWrite(existing, job.visitorUrl, overwriteConfirmed)) throw WriterException("FOREIGN_TAG")
             if (!stillAllowed()) throw WriterException("JOB_CONFLICT")
             ndef.writeNdefMessage(message)
         } finally { ndef.close() }
