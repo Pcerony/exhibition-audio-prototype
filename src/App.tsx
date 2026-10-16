@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowUpRight, AudioLines, Nfc } from 'lucide-react';
+import { ArrowUpRight, Nfc } from 'lucide-react';
 import { AdminPage } from './features/admin/AdminPage';
 import { CloudAdminPage } from './features/admin/CloudAdminPage';
 import { VisitorPage } from './features/visitor/VisitorPage';
@@ -52,7 +52,7 @@ export function App() {
     document.title = t('app.title');
   }, [locale, t]);
 
-  if (!ready) return <main className="boot-screen">{t('app.loading')}</main>;
+  if (!ready) return <main className="outdoor-loading" role="status"><span className="loading-ring" aria-hidden="true" /><p>{t('app.loading')}</p></main>;
   const resolvedRoute = resolveAppRoute(route.pathname, route.hash);
   if (resolvedRoute.type === 'privacy' || resolvedRoute.type === 'terms') return <PolicyPage kind={resolvedRoute.type} />;
   if (resolvedRoute.type === 'tag') {
@@ -65,8 +65,8 @@ export function App() {
     if (import.meta.env.PROD) return <main className="visitor-shell"><p className="visitor-intro">{t('app.cloudMissing')}</p></main>;
     return <AdminPage repository={repository} baseUrl={baseUrl} />;
   }
-  return <main className="visitor-shell welcome-shell">
-    <div className="visitor-topline"><span className="brand-mark"><AudioLines size={17} /></span><span>{t('app.title')}</span><span className="topline-rule" /><LanguageSwitch /></div>
+  return <main className="visitor-shell welcome-shell outdoor-shell">
+    <header className="outdoor-header"><LanguageSwitch /><img src={`${import.meta.env.BASE_URL}sodeslab-logo.png`} alt="SoDesLab" width="150" height="48" /></header>
     <section className="welcome-content">
       <p className="eyebrow">{t('welcome.kicker')}</p>
       <h1>{t('welcome.title')}</h1>

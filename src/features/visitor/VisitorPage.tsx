@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AudioLines, Check, Mic, RotateCcw, Send, Tag as TagIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Mic, RotateCcw, Send, Utensils, Compass, HeartHandshake, Sparkles } from 'lucide-react';
 import type { Tag } from '../../domain/tags';
 import type { VisitorRepository } from '../../storage/repository';
 import { useRecorder } from './useRecorder';
@@ -12,19 +12,22 @@ import { LocationPicker } from './LocationPicker';
 type Props = { repository: VisitorRepository; token: string };
 
 export function VisitorPage({ repository, token }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const ja = locale === 'ja-JP';
+  const [stage, setStage] = useState<'intro' | 'theme' | 'map' | 'record'>('intro');
+  const [theme, setTheme] = useState('');
+  const [mapVisited, setMapVisited] = useState(false);
   const [tag, setTag] = useState<Tag | null | undefined>(undefined);
   const [loadedToken, setLoadedToken] = useState('');
-  const [nickname, setNickname] = useState('');
   const [audioUrl, setAudioUrl] = useState('');
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const [playbackRevision, setPlaybackRevision] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
-  const [locationDone, setLocationDone] = useState(false);
   const [location, setLocation] = useState<MemoryLocation | null>(null);
   const audioObjectUrl = useRef('');
+  const shellRef = useRef<HTMLElement>(null);
   const activeToken = useRef(token);
   activeToken.current = token;
   const recorder = useRecorder();
@@ -36,8 +39,7 @@ export function VisitorPage({ repository, token }: Props) {
     setLoadFailed(false);
     setMessage('');
     setAudioUrl('');
-    setNickname('');
-    setLocationDone(false);
+    setStage('intro'); setTheme(''); setMapVisited(false);
     setLocation(null);
     setSubmitting(false);
     recorder.discard();
@@ -83,7 +85,7 @@ export function VisitorPage({ repository, token }: Props) {
     setMessage('');
     try {
       const result = await repository.claim(token, {
-        id: crypto.randomUUID(), blob: recorder.blob, nickname, duration: recorder.duration, location,
+        id: crypto.randomUUID(), blob: recorder.blob, nickname: '', duration: recorder.duration, location,
       });
       if (activeToken.current !== token) return;
       if (result.status === 'claimed' || result.status === 'already-bound') {
@@ -100,73 +102,69 @@ export function VisitorPage({ repository, token }: Props) {
     }
   }
 
-  if (loadedToken !== token || tag === undefined) return <main className="visitor-shell"><p className="quiet-state">{t('app.loading')}</p></main>;
-  if (!tag) return <main className="visitor-shell"><div className="visitor-topline"><span className="brand-mark"><AudioLines size={17} /></span><span>{t('app.title')}</span><span className="topline-rule" /><LanguageSwitch /></div><p className="eyebrow">EXHIBITION AUDIO</p><h1>{loadFailed ? t('visitor.unavailable') : t('visitor.notFoundTitle')}</h1><p className="visitor-intro">{loadFailed ? t('visitor.submitFailure') : t('visitor.notFoundBody')}</p></main>;
-  if (tag.status === 'disabled') return <main className="visitor-shell"><div className="visitor-topline"><span className="brand-mark"><AudioLines size={17} /></span><span>{t('app.title')}</span><span className="topline-rule" /><LanguageSwitch /></div><p className="eyebrow">EXHIBITION AUDIO</p><h1>{t('visitor.unavailable')}</h1></main>;
-
-  if (tag.recording) {
-    return (
-      <main className="visitor-shell">
-        <div className="visitor-topline"><span className="brand-mark"><AudioLines size={17} /></span><span>{t('app.title')}</span><span className="topline-rule" /><LanguageSwitch /></div>
-        <section className="recorded-view">
-          <p className="eyebrow">{t('visitor.recordedEyebrow')}</p>
-          <h1>{tag.recording.nickname ? t('visitor.recordedTitle', { name: tag.recording.nickname }) : t('visitor.recordedAnonymous')}</h1>
-          <p className="visitor-intro">{t('visitor.recordedIntro')}</p>
-          {tag.recording.location && <a className="secondary-action" href={memoryLocationUrl(tag.recording.location)!} target="_blank" rel="noreferrer">{t('location.view')}</a>}
-          <div className="soundprint" aria-hidden="true">{Array.from({ length: 45 }, (_, index) => <i key={index} style={{ '--bar': `${18 + ((index * 37 + 13) % 76)}%` } as React.CSSProperties} />)}</div>
-          <div className="player-wrap">
-            {playbackFailed ? <button className="secondary-action" onClick={() => setPlaybackRevision((value) => value + 1)}><RotateCcw size={16} />{t('visitor.retryPlayback')}</button>
-              : audioUrl ? <audio controls aria-label={t('visitor.player')} src={audioUrl} onError={() => setPlaybackFailed(true)} /> : <p className="quiet-state">{t('visitor.loadingAudio')}</p>}
-            <span>{formatDuration(tag.recording.duration)}</span>
-          </div>
-          <p className="listening-note"><Check size={15} /> {t('visitor.listenNote')}</p>
-          {message && <p className="visitor-message" role="status">{message}</p>}
-        </section>
-        <footer className="visitor-footer">{t('visitor.tag', { label: tag.label })}</footer>
-      </main>
-    );
+  async function retryLoading() {
+    setLoadedToken('');
+    try {
+      const value = await repository.getTag(token);
+      if (activeToken.current !== token) return;
+      setTag(value);
+      setLoadFailed(false);
+    } finally {
+      if (activeToken.current === token) setLoadedToken(token);
+    }
   }
 
-  return (
-    <main className="visitor-shell">
-      <div className="visitor-topline"><span className="brand-mark"><AudioLines size={17} /></span><span>{t('app.title')}</span><span className="topline-rule" /><LanguageSwitch /></div>
-      <div hidden={locationDone}><LocationPicker key={token} onDone={(value) => { setLocation(value); setLocationDone(true); }} /></div>
-      <div hidden={!locationDone}>
-      <section className="recording-view">
-        <p className="eyebrow">{t('visitor.newEyebrow', { label: tag.label })}</p>
-        <h1>{t('visitor.promptTitle')}</h1>
-        <p className="visitor-intro">{t('visitor.promptBody')}</p>
-        <button className="secondary-action" disabled={submitting || recorder.starting || recorder.state === 'recording'} onClick={() => setLocationDone(false)}>{t('location.change')}</button>
-        <div className={`recorder-stage ${recorder.state}`}>
-          <div className="record-orbit"><span className="record-core"><Mic size={30} strokeWidth={1.7} /></span></div>
-          {recorder.state === 'recording' ? <><p className="record-state">{t('visitor.recordingNow')}</p><p className="record-time">{formatDuration(recorder.duration)}</p></> : recorder.state === 'ready' ? <><p className="record-state">{t('visitor.ready')}</p><p className="record-time">{formatDuration(recorder.duration)}</p></> : <><p className="record-state">{t('visitor.pressToRecord')}</p><p className="record-time">{t('visitor.recordHint')}</p></>}
-        </div>
-        {recorder.error && <p className="inline-error" role="alert">{recorder.error}</p>}
-        {recorder.state === 'ready' && recorder.previewUrl && <audio className="preview-player" controls aria-label={t('visitor.preview')} src={recorder.previewUrl} />}
-        <div className="record-actions">
-          {recorder.state === 'recording' ? (
-            <button className="primary-action stop-action" onClick={recorder.stop}><span className="stop-square" /> {t('visitor.stop')}</button>
-          ) : recorder.state === 'ready' ? (
-            <button className="secondary-action" onClick={recorder.discard} disabled={submitting}><RotateCcw size={16} /> {t('visitor.retake')}</button>
-          ) : (
-            <button className="primary-action" onClick={recorder.start} disabled={recorder.starting || submitting}><Mic size={18} /> {t('visitor.start')}</button>
-          )}
-        </div>
-        <p className="mic-permission-help">{t('visitor.micPermissionHelp')}</p>
-        {recorder.state === 'ready' && <div className="submit-panel">
-          <label htmlFor="nickname">{t('visitor.nickname')} <span>{t('visitor.optional')}</span></label>
-          <input id="nickname" value={nickname} disabled={submitting} onChange={(event) => setNickname(event.target.value)} maxLength={24} placeholder={t('visitor.nicknamePlaceholder')} />
-          <button className="primary-action submit-action" onClick={submitRecording} disabled={submitting}>
-            <Send size={16} /> {submitting ? t('visitor.submitting') : t('visitor.submit')}
-          </button>
-        </div>}
-        <p className="privacy-note">{t('visitor.publicNotice')}</p>
-        {message && <p className="visitor-message" role="status">{message}</p>}
-      </section>
-      </div>
-      <footer className="visitor-footer"><TagIcon size={14} /> {t('visitor.footer')}</footer>
-    </main>
-  );
+
+  const header = <header className="outdoor-header"><LanguageSwitch /><img src={`${import.meta.env.BASE_URL}sodeslab-logo.png`} alt="SoDesLab" width="150" height="48" /></header>;
+  const loading = loadedToken !== token || tag === undefined;
+  const step = stage === 'intro' ? 1 : stage === 'theme' ? 2 : stage === 'map' ? 3 : recorder.state === 'ready' ? 5 : 4;
+  const stepLabel = ja ? ['はじめに', 'テーマ', '場所', '録音', '確認'] : ['说明', '主题', '地点', '录音', '确认'];
+  useEffect(() => {
+    if (loading) return;
+    const heading = Array.from(shellRef.current?.querySelectorAll('h1') ?? [])
+      .find(element => !element.closest('[hidden]'));
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
+  }, [stage, step, loading, Boolean(tag?.recording)]);
+  const back = () => {
+    if (stage === 'theme') setStage('intro');
+    else if (stage === 'map') setStage('theme');
+    else if (stage === 'record') setStage('map');
+  };
+  return <main ref={shellRef} className="visitor-shell outdoor-shell">
+    {header}
+    {loading ? <section className="outdoor-loading" role="status"><span className="loading-ring" aria-hidden="true" /><p>{t('app.loading')}</p></section>
+      : !tag || tag.status === 'disabled' ? <section className="outdoor-step"><h1>{!tag && !loadFailed ? t('visitor.notFoundTitle') : t('visitor.unavailable')}</h1><p>{!tag && !loadFailed ? t('visitor.notFoundBody') : t('visitor.submitFailure')}</p>{loadFailed && <button className="primary-action" onClick={() => { void retryLoading().catch(() => {}); }}>{ja ? 'もう一度' : '重试'}</button>}</section>
+      : tag.recording ? <section className="outdoor-step recorded-view">
+        <p className="step-kicker">{message ? (ja ? 'ありがとう' : '谢谢你的分享') : (ja ? '福岡の思い出' : '福冈回忆')}</p>
+        <h1>{tag.recording.nickname ? t('visitor.recordedTitle', { name: tag.recording.nickname }) : t('visitor.recordedAnonymous')}</h1>
+        <div className="outdoor-wave" aria-hidden="true">{Array.from({length:25}, (_,i) => <i key={i} style={{height: `${20+(i*37)%80}%`}} />)}</div>
+        {playbackFailed ? <button className="secondary-action" onClick={() => setPlaybackRevision(v => v+1)}><RotateCcw />{t('visitor.retryPlayback')}</button> : audioUrl ? <audio className="preview-player" controls aria-label={t('visitor.player')} src={audioUrl} onError={() => setPlaybackFailed(true)} /> : <p role="status">{t('visitor.loadingAudio')}</p>}
+        {tag.recording.location && <a className="secondary-action" href={memoryLocationUrl(tag.recording.location)!} target="_blank" rel="noreferrer">{t('location.view')}<ArrowRight size={22}/></a>}
+        {message && <p role="status" className="visitor-message"><Check size={22}/>{message}</p>}
+      </section> : <>
+        <div className="outdoor-progress"><span className="step-number">{String(step).padStart(2,'0')}<small> / 05</small></span><span>{stepLabel[step-1]}</span>{stage !== 'intro' && <button title={ja ? '戻る' : '返回'} aria-label={ja ? '戻る' : '返回'} disabled={submitting || recorder.starting || recorder.state === 'recording'} onClick={back}><ArrowLeft size={25}/></button>}</div>
+        {stage === 'intro' && <section className="outdoor-step intro-step"><p className="step-kicker">FUKUOKA VOICE MEMORIES</p><h1>{ja ? <>あなたの声で、<br/>福岡を残そう。</> : <>用你的声音，<br/>留下福冈的回忆。</>}</h1><p>{ja ? 'この街の思い出を、ひとつ。' : '分享一段属于你与这座城市的记忆。'}</p><button className="primary-action" onClick={() => setStage('theme')}>{ja ? 'はじめる' : '开始'}<ArrowRight size={25}/></button></section>}
+        {stage === 'theme' && <section className="outdoor-step"><h1>{ja ? 'どんな思い出？' : '你想分享哪种回忆？'}</h1><div className="theme-options">{[
+          ['food',ja ? '食べもの' : '饮食',Utensils],
+          ['travel',ja ? '旅・おでかけ' : '旅行',Compass],
+          ['encounter',ja ? '出会い' : '相遇',HeartHandshake],
+          ['other',ja ? 'そのほかの思い出' : '未分类回忆',Sparkles],
+        ].map(([id,label,Icon]) => { const Symbol = Icon as typeof Mic; return <button key={String(id)} aria-pressed={theme===id} onClick={() => { setTheme(String(id)); setMapVisited(true); setStage('map'); }}><Symbol size={30}/><span>{String(label)}</span><ArrowRight size={22}/></button>; })}</div></section>}
+        {mapVisited && <div hidden={stage !== 'map'}><LocationPicker key={token} onDone={value => { setLocation(value); setStage('record'); }} /></div>}
+        {stage === 'record' && <section className="outdoor-step recording-view">
+          <h1>{recorder.state === 'ready' ? (ja ? '声を聞いてみよう。' : '听听你的声音。') : t('visitor.promptTitle')}</h1>
+          {recorder.state !== 'ready' && <div className={`outdoor-recorder ${recorder.state}`}><Mic size={52} strokeWidth={1.7}/><p className="record-time">{formatDuration(recorder.duration)}</p><p>{recorder.state === 'recording' ? t('visitor.recordingNow') : t('visitor.recordHint')}</p></div>}
+          {recorder.error && <p className="inline-error" role="alert">{recorder.error}</p>}
+          {recorder.state === 'ready' && recorder.previewUrl && <><div className="outdoor-wave" aria-hidden="true">{Array.from({length:25},(_,i)=><i key={i} style={{height:`${20+(i*37)%80}%`}}/>)}</div><audio className="preview-player" controls aria-label={t('visitor.preview')} src={recorder.previewUrl}/></>}
+          <div className="outdoor-actions">{recorder.state === 'recording' ? <button className="primary-action stop-action" onClick={recorder.stop}><span className="stop-square"/>{t('visitor.stop')}</button> : recorder.state === 'ready' ? <><button className="primary-action" disabled={submitting} onClick={submitRecording}><Send size={24}/>{submitting ? t('visitor.submitting') : t('visitor.submit')}</button><button className="secondary-action" disabled={submitting} onClick={recorder.discard}><RotateCcw size={23}/>{t('visitor.retake')}</button></> : <button className="primary-action" onClick={recorder.start} disabled={recorder.starting || submitting}><Mic size={26}/>{t('visitor.start')}</button>}</div>
+          <p className="outdoor-notice">{ja ? '送信した音声は、このタグから誰でも聞けます。' : '提交后，扫描这枚展签的人都可以收听。'}</p>
+          {message && <p className="visitor-message" role="status">{message}</p>}
+        </section>}
+      </>}
+  </main>;
 }
 
 function formatDuration(seconds: number) {

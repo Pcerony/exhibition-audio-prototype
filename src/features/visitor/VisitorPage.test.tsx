@@ -15,11 +15,28 @@ beforeEach(async () => {
   }
 });
 
+async function enterMap() {
+  fireEvent.click(await screen.findByRole('button', { name: '开始' }));
+  fireEvent.click(screen.getByRole('button', { name: /饮食/ }));
+}
+
 describe('visitor page', () => {
+  it('keeps maps out of the introduction and numbers the theme step', async () => {
+    render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    expect(await screen.findByRole('button', { name: '开始' })).toBeVisible();
+    expect(screen.queryByLabelText('福冈市地图')).not.toBeInTheDocument();
+    expect(screen.getByAltText('SoDesLab')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '开始' }));
+    expect(screen.getByRole('heading', { name: '你想分享哪种回忆？' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: '你想分享哪种回忆？' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: '未分类回忆' })).toBeVisible();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
   it('lets a visitor return to the location step without losing the recording flow', async () => {
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    await enterMap();
     fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
-    fireEvent.click(screen.getByRole('button', { name: '修改地点' }));
+    fireEvent.click(screen.getByRole('button', { name: '返回' }));
     expect(screen.getByRole('heading', { name: '这段回忆，发生在哪里？' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '跳过，直接录音' }));
     expect(screen.getByRole('button', { name: '开始录音' })).toBeVisible();
@@ -27,13 +44,14 @@ describe('visitor page', () => {
   it('offers recording and explains public playback for an unbound tag', async () => {
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
 
-    expect(await screen.findByRole('heading', { name: '这段回忆，发生在哪里？' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '开始' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /开始录音/ })).not.toBeInTheDocument();
+    await enterMap();
     fireEvent.click(screen.getByRole('button', { name: '跳过，直接录音' }));
     expect(await screen.findByRole('button', { name: /开始录音/ })).toBeInTheDocument();
     expect(screen.getByText(/扫描这枚展签的人都可以收听/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '你和福冈市，有怎样的回忆？' })).toBeInTheDocument();
-    expect(screen.getByText(/iPhone Chrome 没有出现授权弹窗/)).toBeInTheDocument();
+    expect(screen.queryByText(/iPhone Chrome 没有出现授权弹窗/)).not.toBeInTheDocument();
   });
 
   it('shows the bound recording instead of recording controls', async () => {
@@ -87,6 +105,7 @@ describe('visitor page', () => {
 
   it('translates recording controls on the visitor page', async () => {
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    await enterMap();
     fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
     await screen.findByRole('button', { name: /开始录音/ });
     fireEvent.click(screen.getByRole('button', { name: '日本語' }));
@@ -107,17 +126,19 @@ describe('visitor page', () => {
       getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
     } });
     const view = render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    await enterMap();
     fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
     fireEvent.click(await screen.findByRole('button', { name: /开始录音/ }));
     fireEvent.click(await screen.findByRole('button', { name: /完成录音/ }));
     expect(await screen.findByRole('button', { name: /重录/ })).toBeInTheDocument();
     view.rerender(<I18nProvider><VisitorPage repository={repository} token="new-recording-token" /></I18nProvider>);
+    await enterMap();
     fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
     expect(await screen.findByRole('button', { name: /开始录音/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /重录/ })).not.toBeInTheDocument();
   });
 
-  it('locks the take and nickname while uploading', async () => {
+  it('shows separate confirmation without nickname and locks the take while uploading', async () => {
     vi.stubGlobal('MediaRecorder', class {
       state = 'inactive'; mimeType = 'audio/webm';
       ondataavailable?: (event: { data: Blob }) => void;
@@ -130,12 +151,15 @@ describe('visitor page', () => {
     } });
     vi.spyOn(repository, 'claim').mockReturnValue(new Promise(() => {}));
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    await enterMap();
     fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
     fireEvent.click(await screen.findByRole('button', { name: /开始录音/ }));
     fireEvent.click(await screen.findByRole('button', { name: /完成录音/ }));
+    expect(screen.getByRole('heading', { name: '听听你的声音。' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: '开始录音' })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: /把声音留在这里/ }));
     expect(screen.getByRole('button', { name: /重录/ })).toBeDisabled();
-    expect(screen.getByRole('textbox')).toBeDisabled();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   it('explains how to recover when the browser blocks microphone permission', async () => {
@@ -144,6 +168,7 @@ describe('visitor page', () => {
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } });
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
 
+    await enterMap();
     fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
     fireEvent.click(await screen.findByRole('button', { name: /开始录音/ }));
 

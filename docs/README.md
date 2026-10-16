@@ -4,6 +4,8 @@
 
 ## 核心文档
 
+- [户外参观流程设计](superpowers/specs/2026-10-16-visitor-outdoor-design.md)：五步编号、研究室视觉、无昵称与第一版主题边界。
+
 - [地图兼容发布](MAPS_COMPATIBLE_RELEASE.md)：地图独立发布与旧安卓写卡协议的兼容边界。
 - [Google 地图接入记录](GOOGLE_MAPS_SETUP.md)：云配置、配额与验证状态。
 
