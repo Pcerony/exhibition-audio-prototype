@@ -1,5 +1,9 @@
 # 跨端 API 契约
 
+## 工作人员界面边界（2026-10-17）
+
+固定A/B/C/D是参观者主题，空卡无主题，提交录音后自动赋号。新版网页/Android管理界面不提供分类侧栏、分类筛选、创建/改名/移动分类，按batchDate/search/status/sort管理；卡号、只读元数据和CSV保留主题。为兼容历史客户端，本轮不删除categoryId/uncategorized/move等服务端契约、不迁移或清除数据，但新版不发送这些操作。Android历史待处理move必须人工核查丢弃，禁止新版重发。
+
 ## 按需写卡（已部署，旧nextJob语义不变）
 
 认证prepareWrite请求{deviceId:string,requestKey:UUID,protocolVersion:3}，返回{job,leaseToken,expiresAt}，expiresAt同leaseJob为UTC毫秒Z格式。服务端按运营者/设备串行，当前有效自动租约优先（等待当前任务锁而非跳过），其次可租的pending统一空卡，再无则创建一张并租约。requestKey幂等绑定任务和卡片/任务版本，网络重放不多创建；已完成/录音/禁用/删除/版本改变不复活原请求，JOB_INELIGIBLE/JOB_CONFLICT。同key过期仅可续原任务，有其他当前自动任务返回LEASE_CONFLICT；跨账号/设备key冲突返回REQUEST_KEY_CONFLICT，协议错误426 CLIENT_UPGRADE_REQUIRED。新key不领取仍有旧lease_token的未知过期任务。旧nextJob仍只领取现有池不自动创建。失败卡显式leaseJob重试，后台批量开卡仍可备用。Android按账号/服务端持久保存请求key，收到任务后原子替换为含原版本/网址的持久指派，物理开始前另存不确定标记；错误重试原任务，实体写后读回及provision确认不变。详见[设计](superpowers/specs/2026-10-17-on-demand-writing-design.md)。
