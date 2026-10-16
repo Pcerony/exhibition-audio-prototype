@@ -305,6 +305,27 @@
   height: 36px;
   margin-top: 8px;
 }
+.transcription-editor textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 200px;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid #cbd0d5;
+  border-radius: 4px;
+  font: inherit;
+  line-height: 1.7;
+  color: #222;
+  background: white;
+}
+.transcription-count {
+  text-align: right;
+  color: #656b71;
+  font-size: 12px;
+}
+.transcription-status {
+  color: #15583d;
+}
 .cloud-pagination {
   display: flex;
   justify-content: flex-end;

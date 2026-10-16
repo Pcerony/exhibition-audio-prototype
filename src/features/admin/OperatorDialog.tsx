@@ -19,7 +19,7 @@ export function OperatorDialog({
         : null;
     const scroll = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    element.current?.querySelector<HTMLElement>("input,button,select")?.focus();
+    (element.current?.querySelector<HTMLElement>("input:not(:disabled),textarea:not(:disabled),button:not(:disabled),select:not(:disabled)") ?? element.current)?.focus();
     return () => {
       document.body.style.overflow = scroll;
       previous?.focus();
@@ -32,6 +32,7 @@ export function OperatorDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
         className="operator-modal"
         onKeyDown={(event) => {
           if (event.key === "Escape" && !locked) {
@@ -41,12 +42,18 @@ export function OperatorDialog({
           if (event.key === "Tab") {
             const controls = Array.from(
               element.current?.querySelectorAll<HTMLElement>(
-                "button:not(:disabled),input:not(:disabled),select:not(:disabled),a[href]",
+                "button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),a[href]",
               ) ?? [],
             );
             const first = controls[0],
               last = controls.at(-1);
-            if (event.shiftKey && document.activeElement === first) {
+            if (!first) {
+              event.preventDefault();
+              element.current?.focus();
+            } else if (document.activeElement === element.current) {
+              event.preventDefault();
+              (event.shiftKey ? last : first)?.focus();
+            } else if (event.shiftKey && document.activeElement === first) {
               event.preventDefault();
               last?.focus();
             } else if (!event.shiftKey && document.activeElement === last) {
