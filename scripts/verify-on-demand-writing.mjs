@@ -20,9 +20,17 @@ const endpoint=async(payload=body,auth=jwt)=>{
  return {status:r.status,body:await r.json()};
 };
 const snapshot=async()=>{
- const tags=await privileged.from('tags').select('id,public_token,status,version,deleted_at').neq('id',tagId).order('id');check(tags.error);
- const jobs=await privileged.from('provisioning_jobs').select('id,tag_id,visitor_url,status,version,lease_token,lease_expires_at').neq('id',jobId).order('id');check(jobs.error);
- return {tags:tags.data,jobs:jobs.data};
+ const all=async(table,columns,excluded)=>{
+  const rows=[];
+  for(let offset=0;;offset+=500){
+   const page=await privileged.from(table).select(columns).neq('id',excluded).order('id').range(offset,offset+499);check(page.error);
+   rows.push(...page.data);if(page.data.length<500)return rows;
+  }
+ };
+ return {
+  tags:await all('tags','id,public_token,status,version,deleted_at',tagId),
+  jobs:await all('provisioning_jobs','id,tag_id,visitor_url,status,version,lease_token,lease_expires_at',jobId),
+ };
 };
 try {
  const keys=JSON.parse(cli(['projects','api-keys','--project-ref',ref,'-o','json']));
