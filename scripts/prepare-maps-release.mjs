@@ -7,7 +7,7 @@ const cli = process.env.SUPABASE_CLI;
 const project = process.argv[process.argv.indexOf('--project-ref') + 1];
 const migrationIndex = process.argv.indexOf('--migration');
 const migrationName = migrationIndex < 0 ? '202610150002_visitor_location.sql' : process.argv[migrationIndex + 1];
-assert.ok(['202610150002_visitor_location.sql', '202610150001_categories_and_leases.sql', '202610160001_post_recording_classification.sql', '202610170001_transcription.sql'].includes(migrationName), 'Unsupported release migration');
+assert.ok(['202610150002_visitor_location.sql', '202610150001_categories_and_leases.sql', '202610160001_post_recording_classification.sql', '202610170001_transcription.sql', '202610170002_on_demand_writing.sql'].includes(migrationName), 'Unsupported release migration');
 if (!cli || !process.argv.includes('--allow-remote-backup') || !/^[a-z]{20}$/.test(project ?? '')) {
   throw new Error('Set SUPABASE_CLI and pass --project-ref <ref> --allow-remote-backup');
 }
