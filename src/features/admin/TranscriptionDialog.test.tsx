@@ -32,15 +32,16 @@ it('saves edits as a draft and publishes or hides only through explicit actions'
   const { repository } = setup();
   const field = await screen.findByRole('textbox', { name: '文字' });
   fireEvent.change(field, { target: { value: '<b>校正した文章</b>' } });
+  repository.getTranscription.mockResolvedValue({ configured: true, consented: true, transcription: { ...transcription, text: '<b>校正した文章</b>', version: 4 } });
   fireEvent.click(screen.getByRole('button', { name: '下書き保存' }));
   await waitFor(() => expect(repository.saveTranscription).toHaveBeenCalledWith('r1', 3, '<b>校正した文章</b>', false));
   await waitFor(() => expect(screen.getByRole('button', { name: '公開' })).toBeEnabled());
-  repository.getTranscription.mockResolvedValue({ configured: true, consented: true, transcription: { ...transcription, text: '<b>校正した文章</b>', published: true, version: 4 } });
+  repository.getTranscription.mockResolvedValue({ configured: true, consented: true, transcription: { ...transcription, text: '<b>校正した文章</b>', published: true, version: 5 } });
   fireEvent.click(screen.getByRole('button', { name: '公開' }));
   await waitFor(() => expect(screen.getByText(/· 公開中/)).toBeVisible());
   expect(screen.queryByText('校正した文章', { selector: 'b' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '非公開にする' }));
-  await waitFor(() => expect(repository.saveTranscription).toHaveBeenLastCalledWith('r1', 4, '<b>校正した文章</b>', false));
+  await waitFor(() => expect(repository.saveTranscription).toHaveBeenLastCalledWith('r1', 5, '<b>校正した文章</b>', false));
 });
 it('retries only the selected task version and refreshes its state', async () => {
   const { repository } = setup({ transcription: { ...transcription, status: 'failed', errorCode: 'PROVIDER_FAILED' } });
@@ -120,4 +121,44 @@ it('does not reuse a consumed version after a save succeeds but its follow-up re
   await screen.findByRole('alert');
   expect(field).toHaveValue('校正を保つ');
   expect(screen.getByRole('button', { name: '公開' })).toBeDisabled();
+});
+it('refreshes saved text from the server after a successful save', async () => {
+  const { repository } = setup();
+  const field = await screen.findByRole('textbox', { name: '文字' });
+  fireEvent.change(field, { target: { value: '保存する校正' } });
+  repository.getTranscription.mockResolvedValue({ configured: true, consented: true, transcription: { ...transcription, text: '保存する校正', version: 4 } });
+  fireEvent.click(screen.getByRole('button', { name: '下書き保存' }));
+  await screen.findByText('保存しました。');
+  repository.getTranscription.mockResolvedValue({ configured: true, consented: true, transcription: { ...transcription, text: '別の担当者の校正', version: 5 } });
+  fireEvent.click(screen.getByRole('button', { name: '更新' }));
+  await waitFor(() => expect(field).toHaveValue('別の担当者の校正'));
+});
+it('shows retried AI text before publishing instead of retaining the previous draft', async () => {
+  const { repository } = setup();
+  const field = await screen.findByRole('textbox', { name: '文字' });
+  fireEvent.change(field, { target: { value: '古い校正' } });
+  repository.getTranscription.mockResolvedValue({ configured: true, consented: true, transcription: { ...transcription, text: '古い校正', version: 4 } });
+  fireEvent.click(screen.getByRole('button', { name: '下書き保存' }));
+  await screen.findByText('保存しました。');
+  fireEvent.change(field, { target: { value: '再試行前の未保存文字' } });
+  repository.getTranscription.mockResolvedValue({ configured: true, consented: true, transcription: { ...transcription, status: 'pending', text: null, version: 5 } });
+  fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+  await waitFor(() => expect(field).toHaveValue(''));
+  repository.getTranscription.mockResolvedValue({ configured: true, consented: true, transcription: { ...transcription, text: '新しいAIの文字', version: 6 } });
+  fireEvent.click(screen.getByRole('button', { name: '更新' }));
+  await waitFor(() => expect(field).toHaveValue('新しいAIの文字'));
+  fireEvent.click(screen.getByRole('button', { name: '公開' }));
+  await waitFor(() => expect(repository.saveTranscription).toHaveBeenLastCalledWith('r1', 6, '新しいAIの文字', true));
+});
+it('preserves unsaved text across a failed retry and refresh', async () => {
+  const { repository } = setup();
+  const field = await screen.findByRole('textbox', { name: '文字' });
+  fireEvent.change(field, { target: { value: '未保存文字' } });
+  repository.retryTranscription.mockRejectedValueOnce(new Error('NETWORK'));
+  fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+  await screen.findByRole('alert');
+  repository.getTranscription.mockResolvedValue({ configured: true, consented: true, transcription: { ...transcription, text: 'サーバー文字', version: 4 } });
+  fireEvent.click(screen.getByRole('button', { name: '更新' }));
+  await waitFor(() => expect(repository.getTranscription).toHaveBeenCalledTimes(2));
+  expect(field).toHaveValue('未保存文字');
 });

@@ -62,6 +62,7 @@ export function TranscriptionDialog({ repository, recordingId, label, locale, on
   async function save(published: boolean) {
     if (!task || !editable || (published && !text.trim()) || text.length > 10000) return;
     await repository.saveTranscription(recordingId, task.version, text, published);
+    dirty.current = false;
     // A successful mutation invalidates the old version, even if the follow-up read fails.
     setStale(true);
     await load();
@@ -89,6 +90,7 @@ export function TranscriptionDialog({ repository, recordingId, label, locale, on
         <button disabled={!editable || !result?.configured} onClick={() => void run(async () => {
           if (!task) return;
           await repository.retryTranscription(recordingId, task.version);
+          dirty.current = false;
           setStale(true);
           await load();
           if (active.current) setNotice(m.retried);
