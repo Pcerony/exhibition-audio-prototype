@@ -1,6 +1,6 @@
 # 跨端 API 契约
 
-## 可选语音转写（开发契约，尚未启用）
+## 可选语音转写（接口已部署，Groq待配置启用）
 
 - public-upload-claim新增`transcriptionConsent?:boolean`，缺省false，非boolean拒绝400 REQUEST_INVALID；成功原子claim后只为true同意录音插入pending任务。历史/旧Android/未同意录音不自动传Groq。失败/无密钥不影响录音保存；此功能不改变V3卡号或协议。
 - RecordingInfo新增`transcriptionConsent?:boolean,transcript?:string|null`；public-tag只返回同意标记及已发布且ready的transcript纯文本，未审核/隐藏/处理/失败任务不返回正文。匿名不能直读转写表或编辑/执行任务。disabled/deleted/reset卡不返回文字。
