@@ -13,10 +13,8 @@ import {
   Wrench,
   History,
   Trash2,
-  ArrowRightLeft,
   RotateCcw,
   X,
-  Folder,
   FileText,
 } from "lucide-react";
 import type {
@@ -27,7 +25,6 @@ import type {
   ProvisioningJob,
   TagQuery,
   BulkGroup,
-  BulkOperation,
   BulkApply,
 } from "../../storage/adminRepository";
 import { useOperatorI18n as useI18n } from "../../i18n/I18nProvider";
@@ -42,8 +39,7 @@ import "./cloud-admin.css";
 type Props = { repository: AdminRepository; baseUrl: string };
 type CreateRequest = { count: number; key: string };
 type BulkDialog = {
-  operation: BulkOperation;
-  targetCategoryId?: string;
+  operation: "reset" | "delete";
   ids: string[];
   groups: BulkGroup[];
   index: number;
@@ -84,9 +80,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
     ...category,
     name: n.categoryNames[category.code],
   }));
-  const [categoryId, setCategoryId] = useState("");
   const [batchDate, setBatchDate] = useState("");
-  const [uncategorized, setUncategorized] = useState(false);
   const [count, setCount] = useState(1);
   const [pending, setPending] = useState<CreateRequest | null>(null);
   const [tags, setTags] = useState<ManagedTag[]>([]);
@@ -96,7 +90,6 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
   const [sort, setSort] = useState<TagQuery["sort"]>("recorded_desc");
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
-  const [target, setTarget] = useState("");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [loading, setLoading] = useState(false);
@@ -143,13 +136,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
     ) {
       setStale(true);
       setError(n.stale);
-    } else if (code === "CATEGORY_NAME_EXISTS")
-      setError(
-        locale === "ja-JP"
-          ? "同じ名前の分類が既にあります。"
-          : "已存在同名分类。",
-      );
-    else setError(code === "LOGIN_FAILED" ? m.loginError : m.error);
+    } else setError(code === "LOGIN_FAILED" ? m.loginError : m.error);
   }
   async function run(work: () => Promise<void>) {
     if (busyRef.current) return;
@@ -194,9 +181,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
       .listTags({
         search,
         status,
-        categoryId: categoryId || undefined,
         batchDate: batchDate || undefined,
-        uncategorized: uncategorized || undefined,
         sort,
         offset,
         limit: PAGE_SIZE,
@@ -220,7 +205,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
     return () => {
       active = false;
     };
-  }, [repository, session, search, status, categoryId, batchDate, uncategorized, sort, offset, revision]);
+  }, [repository, session, search, status, batchDate, sort, offset, revision]);
   const refresh = () => setRevision((v) => v + 1);
   async function create(request: CreateRequest) {
     setPending(request);
@@ -233,19 +218,12 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
     refresh();
   }
   async function preview(
-    operation: BulkOperation,
+    operation: BulkDialog["operation"],
     ids = selected,
-    targetCategoryId = operation === "move" ? target : undefined,
   ) {
-    if (
-      operation === "move" &&
-      (!categories.some((category) => category.id === targetCategoryId) ||
-        ids.some((id) => !tags.find((tag) => tag.id === id)?.recording))
-    ) return;
     const result = await repository.previewBulk(
       ids,
       operation,
-      targetCategoryId,
     );
     const groups = result.groups.filter((group) => group.cards.length);
     if (!groups.length) {
@@ -257,7 +235,6 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
     setBulk({
       operation,
       ids,
-      targetCategoryId,
       groups,
       index: 0,
       requestKey: crypto.randomUUID(),
@@ -294,7 +271,6 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
         label: card.label,
       })),
       kind: group.kind,
-      targetCategoryId: bulk.targetCategoryId,
       requestKey: bulk.requestKey,
     };
     await repository.applyBulk(request);
@@ -346,7 +322,6 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
       </button>
     );
   }
-  const current = categories.find((category) => category.id === categoryId);
   const group = bulk?.groups[bulk.index];
   return (
     <main className="admin-shell cloud-admin">
@@ -423,55 +398,9 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
         </section>
       ) : (
         <div className="operator-layout">
-          <aside className="category-nav">
-            <div className="category-heading">
-              <h2>{n.categories}</h2>
-            </div>
-            <nav aria-label={n.categories}>
-              <button
-                className={!categoryId && !uncategorized ? "active" : ""}
-                disabled={busy || !!bulk}
-                onClick={() => {
-                  setCategoryId("");
-                  setUncategorized(false);
-                  setOffset(0);
-                }}
-              >
-                <Folder size={16} />
-                {m.all}
-              </button>
-              <button
-                className={uncategorized ? "active" : ""}
-                disabled={busy || !!bulk}
-                onClick={() => {
-                  setCategoryId("");
-                  setUncategorized(true);
-                  setOffset(0);
-                }}
-              >
-                <Folder size={16} />
-                {n.uncategorized}
-              </button>
-              {categories.map((category) => (
-                <button
-                  key={category.id}
-                  className={categoryId === category.id ? "active" : ""}
-                  disabled={busy || !!bulk}
-                  onClick={() => {
-                    setCategoryId(category.id);
-                    setUncategorized(false);
-                    setOffset(0);
-                  }}
-                >
-                  <span className="category-code">{category.code}</span>
-                  {category.name}
-                </button>
-              ))}
-            </nav>
-          </aside>
           <div className="admin-content">
             <div className="admin-title-row">
-              <h1>{current ? `${current.code} · ${current.name}` : uncategorized ? n.uncategorized : m.title}</h1>
+              <h1>{m.title}</h1>
               <span>{total}</span>
               <div className="row-actions">
                 {icon(
@@ -615,26 +544,6 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
               <span>
                 {n.selected}: {selected.length}
               </span>
-              <select
-                aria-label={n.destination}
-                disabled={busy || !!bulk}
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-              >
-                <option value="">{n.destination}</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code} · {c.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                disabled={!selected.length || !target || busy || !!bulk || selected.some((id) => !tags.find((tag) => tag.id === id)?.recording)}
-                onClick={() => void run(() => preview("move"))}
-              >
-                <ArrowRightLeft size={16} />
-                {n.move}
-              </button>
               <button
                 disabled={!selected.length || busy || !!bulk}
                 onClick={() => void run(() => preview("reset"))}
@@ -700,7 +609,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                       <td>
                         <strong>{tag.serialNumber ?? tag.label}</strong>
                         {tag.inventoryLabel && tag.inventoryLabel !== tag.label && <small title={n.inventory}>{tag.inventoryLabel}</small>}
-                        <small>{categories.find((category) => category.id === tag.categoryId)?.name ?? n.uncategorized}</small>
+                        {tag.categoryId && <small>{categories.find((category) => category.id === tag.categoryId)?.name ?? tag.categoryCode}</small>}
                         {tag.batchDate ? <small title={n.batchDate}>{tag.batchDate}</small> : tag.batch && <small>{n.legacyBatch}: {tag.batch}</small>}
                       </td>
                       <td>
@@ -925,14 +834,10 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
           <p>
             {bulk.operation === "delete"
               ? n.deleteWarning
-              : bulk.operation === "reset"
-                ? n.resetWarning
-                : n.moveWarning}
+              : n.resetWarning}
           </p>
           <p>
             {group.recordingCount} {n.recordings}
-            {bulk.operation === "move" &&
-              ` → ${categories.find((c) => c.id === bulk.targetCategoryId)?.name ?? ""}`}
           </p>
           <ul className="preview-labels">
             {group.cards.map((card) => (
@@ -954,7 +859,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
               disabled={busy}
               onClick={() =>
                 void run(() =>
-                  preview(bulk.operation, bulk.ids, bulk.targetCategoryId),
+                  preview(bulk.operation, bulk.ids),
                 )
               }
             >
@@ -989,9 +894,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                 ? n.working
                 : bulk.operation === "delete"
                   ? n.confirmDelete
-                  : bulk.operation === "move"
-                    ? n.confirmMove
-                    : n.confirmReset}
+                  : n.confirmReset}
             </button>
           </footer>
         </OperatorDialog>

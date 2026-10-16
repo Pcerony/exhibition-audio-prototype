@@ -6,7 +6,7 @@
 
 应用内大弹窗区分准备、可触碰、写入读回、成功、失败及已写入待同步。声音默认开启，可在弹窗或设置关闭，遵循静音和勿扰；震动遵循系统触感设置。无需悬浮窗权限。成功显示至少一秒，并等待系统确认标签已移开才准备下一张。失败停止；已物理写入但云端未确认时只同步结果，不重写芯片。停止或切后台不能撤销已发生的物理写入。
 
-升级版本 `3.1.0` / versionCode `6`。必须真机验收声音、震动、三语弹窗、小屏、写后读回和离场回调；JVM/APK/lint 不代表实体标签已验收。
+升级版本 `3.1.1` / versionCode `7`。管理列表不再提供人工分类或分类筛选；参观者选择的 A/B/C/D 编号保持不变。旧版待处理分类操作不会重发，需在「核查历史操作」中核对云端现状后明确丢弃本机待处理记录；丢弃不撤销可能已经完成的操作。日期、搜索、状态、排序和分组重置/删除保持。必须真机验收声音、震动、三语弹窗、小屏、写后读回和离场回调；JVM/APK/lint 不代表实体标签已验收。
 
 运营人员专用 Kotlin Android 应用，界面支持日语（默认）、中文和英语。参观者不需要安装或创建账号。V3 必须配合录音后分类 V3 后端，不能单独安装后继续使用旧服务器写卡协议。
 
@@ -40,7 +40,7 @@ Only public configuration belongs in these fields. Never use a privileged databa
 ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
 ```
 
-服务器须实现 `docs/API_CONTRACT.md` V3 及 `docs/superpowers/specs/2026-10-16-post-recording-classification.md`。jobs/leaseJob/nextJob/provision 使用 protocolVersion 3；nextJob 仅发送设备 ID，不发送分类。任务与完整 URL 由服务端产生；URL 必须精确匹配 `https://voice.heisei.space/#/t/<opaque-token>`。任务分页每页 500，卡片每页 50。APK 版本为 3.0.0 / versionCode 5。
+服务器须实现 `docs/API_CONTRACT.md` V3 及 `docs/superpowers/specs/2026-10-16-post-recording-classification.md`。jobs/leaseJob/nextJob/provision 使用 protocolVersion 3；nextJob 仅发送设备 ID，不发送分类。任务与完整 URL 由服务端产生；URL 必须精确匹配 `https://voice.heisei.space/#/t/<opaque-token>`。任务分页每页 500，卡片每页 50。APK 版本为 3.1.1 / versionCode 7。
 
 空卡显示稳定库存号 U000001；成功录音后显示正式号（例如 261017-A003）和录音日期批次，写卡日期不是录音批次。固定分类为 A 美食、B 旅行、C 相遇、D 其他回忆。历史录音的旧编号与未分类状态按服务端返回保留，不强制套用新分类。
 
