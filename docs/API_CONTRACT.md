@@ -1,5 +1,9 @@
 # 跨端 API 契约
 
+## 按需写卡（已部署，旧nextJob语义不变）
+
+认证prepareWrite请求{deviceId:string,requestKey:UUID,protocolVersion:3}，返回{job,leaseToken,expiresAt}，expiresAt同leaseJob为UTC毫秒Z格式。服务端按运营者/设备串行，当前有效自动租约优先（等待当前任务锁而非跳过），其次可租的pending统一空卡，再无则创建一张并租约。requestKey幂等绑定任务和卡片/任务版本，网络重放不多创建；已完成/录音/禁用/删除/版本改变不复活原请求，JOB_INELIGIBLE/JOB_CONFLICT。同key过期仅可续原任务，有其他当前自动任务返回LEASE_CONFLICT；跨账号/设备key冲突返回REQUEST_KEY_CONFLICT，协议错误426 CLIENT_UPGRADE_REQUIRED。新key不领取仍有旧lease_token的未知过期任务。旧nextJob仍只领取现有池不自动创建。失败卡显式leaseJob重试，后台批量开卡仍可备用。Android按账号/服务端持久保存请求key，收到任务后原子替换为含原版本/网址的持久指派，物理开始前另存不确定标记；错误重试原任务，实体写后读回及provision确认不变。详见[设计](superpowers/specs/2026-10-17-on-demand-writing-design.md)。
+
 ## 可选语音转写（接口与调度已启用，真实录音识别待验收）
 
 - public-upload-claim新增`transcriptionConsent?:boolean`，缺省false，非boolean拒绝400 REQUEST_INVALID；成功原子claim后只为true同意录音插入pending任务。历史/旧Android/未同意录音不自动传Groq。失败/无密钥不影响录音保存；此功能不改变V3卡号或协议。

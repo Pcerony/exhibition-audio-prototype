@@ -1,0 +1,47 @@
+begin;
+insert into auth.users values ('10000000-0000-4000-8000-000000000001'),('10000000-0000-4000-8000-000000000002');
+insert into public.operator_profiles(user_id,role) select id,'operator' from auth.users;
+do $$
+declare op uuid:='10000000-0000-4000-8000-000000000001';other uuid:='10000000-0000-4000-8000-000000000002';
+ b jsonb:=jsonb_build_object('action','prepareWrite','deviceId','writer-a','requestKey',gen_random_uuid(),'protocolVersion',3);
+ r jsonb;s jsonb;tag uuid;n bigint;upload uuid;
+begin
+ if public.admin_action(op,'{"action":"nextJob","deviceId":"old","protocolVersion":3}')->'job'<>'null'::jsonb then raise exception 'old nextJob changed';end if;
+ r:=public.admin_action(op,b);tag:=(r->'job'->>'tagId')::uuid;
+ if r->'job' is null or r->>'leaseToken' is null then raise exception 'no auto creation';end if;
+ s:=public.admin_action(op,b);if s<>r then raise exception 'replay changed lease';end if;
+ s:=public.admin_action(op,b||jsonb_build_object('requestKey',gen_random_uuid()));
+ if s<>r then raise exception 'new key duplicated active device';end if;
+ if (select count(*) from public.tags)<>1 then raise exception 'created extra card';end if;
+ begin perform public.admin_action(other,b);raise exception 'owner accepted';exception when raise_exception then if sqlerrm<>'REQUEST_KEY_CONFLICT' then raise;end if;end;
+ begin perform public.admin_action(op,b||'{"deviceId":"other"}');raise exception 'device accepted';exception when raise_exception then if sqlerrm<>'REQUEST_KEY_CONFLICT' then raise;end if;end;
+ update public.provisioning_jobs set lease_expires_at=now()-interval '1 second' where tag_id=tag;
+ s:=public.admin_action(op,b||jsonb_build_object('requestKey',gen_random_uuid()));
+ begin perform public.admin_action(op,b);raise exception 'two active device tasks accepted';exception when raise_exception then if sqlerrm<>'LEASE_CONFLICT' then raise;end if;end;
+ perform public.admin_action(op,jsonb_build_object('action','releaseJob','jobId',s->'job'->>'id','leaseToken',s->>'leaseToken'));
+ s:=public.admin_action(op,b);if s->'job'->>'id'<>r->'job'->>'id' then raise exception 'expired replay changed task';end if;
+ perform public.admin_action(op,jsonb_build_object('action','provision','jobId',s->'job'->>'id','version',s->'job'->'version','visitorUrl',s->'job'->>'visitorUrl','leaseToken',s->>'leaseToken','protocolVersion',3,'status','verified'));
+ begin perform public.admin_action(op,b);raise exception 'completed replay accepted';exception when raise_exception then if sqlerrm<>'JOB_INELIGIBLE' then raise;end if;end;
+ -- Explicit pool inventory wins before automatic creation.
+ perform public.admin_action(op,jsonb_build_object('action','createCards','count',1,'requestKey',gen_random_uuid(),'protocolVersion',3));
+ select count(*) into n from public.tags;
+ b:=b||jsonb_build_object('requestKey',gen_random_uuid());s:=public.admin_action(op,b);tag:=(s->'job'->>'tagId')::uuid;
+ if (select count(*) from public.tags)<>n then raise exception 'ignored pending pool';end if;
+ update public.provisioning_jobs set version=version+1 where tag_id=tag;
+ begin perform public.admin_action(op,b);raise exception 'new job version accepted';exception when raise_exception then if sqlerrm<>'JOB_CONFLICT' then raise;end if;end;
+ update public.provisioning_jobs set version=version-1 where tag_id=tag;
+ update public.tags set status='disabled' where id=tag;
+ begin perform public.admin_action(op,b);raise exception 'disabled accepted';exception when raise_exception then if sqlerrm<>'JOB_INELIGIBLE' then raise;end if;end;
+ update public.tags set status='unbound',version=version+1 where id=tag;
+ begin perform public.admin_action(op,b);raise exception 'new version accepted';exception when raise_exception then if sqlerrm<>'JOB_CONFLICT' then raise;end if;end;
+ update public.tags set deleted_at=now() where id=tag;
+ begin perform public.admin_action(op,b);raise exception 'deleted accepted';exception when raise_exception then if sqlerrm<>'JOB_INELIGIBLE' then raise;end if;end;
+ b:=b||jsonb_build_object('requestKey',gen_random_uuid());s:=public.admin_action(op,b);tag:=(s->'job'->>'tagId')::uuid;upload:=gen_random_uuid();
+ perform public.initialize_upload((select public_token from public.tags where id=tag),upload,encode(extensions.digest('synthetic','sha256'),'hex'),'audio/wav',10);
+ perform public.claim_recording_classified(upload,'synthetic','',1,10,'audio/wav',null,'A');
+ begin perform public.admin_action(op,b);raise exception 'bound accepted';exception when raise_exception then if sqlerrm<>'JOB_INELIGIBLE' then raise;end if;end;
+ begin perform public.admin_action('90000000-0000-4000-8000-000000000001',b);raise exception 'nonoperator accepted';exception when raise_exception then if sqlerrm<>'OPERATOR_REQUIRED' then raise;end if;end;
+ if has_table_privilege('anon','public.write_preparations','select') or has_table_privilege('authenticated','public.write_preparations','select') then raise exception 'request table exposed';end if;
+ if has_function_privilege('authenticated','public.admin_action(uuid,jsonb)','execute') then raise exception 'rpc exposed';end if;
+end $$;
+rollback;

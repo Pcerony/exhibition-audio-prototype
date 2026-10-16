@@ -4,6 +4,19 @@ function equal(actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${JSON.stringify(actual)} != ${JSON.stringify(expected)}`);
 }
 const id = '00000000-0000-4000-8000-000000000001';
+Deno.test('prepareWrite validates required fields and normalizes lease expiry', async () => {
+ const body={action:'prepareWrite',deviceId:'writer',requestKey:id,protocolVersion:3};
+ const data={job:{id},leaseToken:'synthetic',expiresAt:'2026-10-16T01:11:25.65647+00:00'};
+ const response=await fixture('operator',true,data).handler(request(body));
+ equal(response.status,200);equal(await response.json(),{...data,expiresAt:'2026-10-16T01:11:25.656Z'});
+ for(const fields of [{deviceId:undefined},{deviceId:7},{deviceId:''},{deviceId:' '.repeat(3)},{deviceId:'x'.repeat(121)},{requestKey:undefined},{requestKey:'invalid'}]) {
+  const f=fixture();const r=await f.handler(request({...body,...fields}));equal(r.status,400);equal(f.calls,[]);
+ }
+ equal((await fixture('operator',true,{...data,expiresAt:null}).handler(request(body))).status,503);
+ for(const protocolVersion of [undefined,'3',2]) {
+  const f=fixture();const r=await f.handler(request({...body,protocolVersion}));equal(r.status,426);equal(await r.json(),{code:'CLIENT_UPGRADE_REQUIRED'});equal(f.calls,[]);
+ }
+});
 Deno.test('lease responses use UTC Z timestamps compatible with older Android Instant.parse', async () => {
   for (const action of ['leaseJob', 'nextJob']) {
     for (const expiresAt of ['2026-10-16T01:11:25.65647+00:00', '2026-10-16T10:11:25.65647+09:00', '2026-10-16T01:11:25.656Z']) {

@@ -8,7 +8,7 @@ android {
     buildToolsVersion = "36.0.0"
     defaultConfig {
         applicationId = "space.heisei.voicewriter"; minSdk = 26; targetSdk = 36
-        versionCode = 5; versionName = "3.0.0"
+        versionCode = 6; versionName = "3.1.0"
         buildConfigField("String", "SUPABASE_URL", "\"${config("SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${config("SUPABASE_PUBLISHABLE_KEY")}\"")
     }

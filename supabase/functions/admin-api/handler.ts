@@ -3,6 +3,7 @@ import { json, preflight, readJson } from '../_shared/http.ts';
 import { runMaintenance } from '../_shared/maintenance.ts';
 
 const actions = new Set(['session', 'list', 'createBatch', 'reset', 'setEnabled', 'playback', 'jobs', 'provision', 'audit', 'maintenance', 'categories', 'createCategory', 'renameCategory', 'createCards', 'bulkPreview', 'bulkApply', 'leaseJob', 'nextJob', 'releaseJob', 'getTranscription', 'retryTranscription', 'saveTranscription']);
+actions.add('prepareWrite');
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const errors: Record<string, number> = {
   REQUEST_INVALID: 400, OPERATOR_REQUIRED: 403, TAG_NOT_FOUND: 404,
@@ -33,6 +34,11 @@ export function createHandler(getClient: () => SupabaseClient, isTranscriptionCo
       for (const field of ['tagId', 'recordingId', 'jobId', 'requestKey', 'categoryId', 'targetCategoryId']) {
         if (field in body && (typeof body[field] !== 'string' || !uuid.test(body[field]))) return json({ code: 'REQUEST_INVALID' }, 400);
       }
+      if (body.action === 'prepareWrite' && (
+        typeof body.deviceId !== 'string' || !body.deviceId.trim() || body.deviceId.length > 120
+        || typeof body.requestKey !== 'string' || !uuid.test(body.requestKey)
+      )) return json({ code: 'REQUEST_INVALID' }, 400);
+      if (body.action === 'prepareWrite' && body.protocolVersion !== 3) return json({ code: 'CLIENT_UPGRADE_REQUIRED' }, 426);
       if (body.action === 'saveTranscription' && (
         typeof body.text !== 'string' || Array.from(body.text).length > 10000 || typeof body.published !== 'boolean'
         || !Number.isSafeInteger(body.version) || body.version < 1 || (body.published && !body.text.trim())
@@ -46,7 +52,7 @@ export function createHandler(getClient: () => SupabaseClient, isTranscriptionCo
         return json({ code }, errors[code] ?? 503);
       }
       if (body.action === 'getTranscription') return json({ ...data, configured: isTranscriptionConfigured() });
-      if (['leaseJob', 'nextJob'].includes(body.action) && data?.job) {
+      if (['leaseJob', 'nextJob', 'prepareWrite'].includes(body.action) && data?.job) {
         const expiresAt = typeof data.expiresAt === 'string' ? Date.parse(data.expiresAt) : NaN;
         if (!Number.isFinite(expiresAt)) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);
         // Older Android Instant.parse requires Z, not PostgreSQL's +00:00 offset.

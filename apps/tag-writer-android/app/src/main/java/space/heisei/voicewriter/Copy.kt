@@ -7,6 +7,17 @@ class Copy(requested: String = "ja") {
     fun category(category: Category) = if (category.code in listOf("A", "B", "C", "D")) "${category.code} · ${get("category${category.code}")}" else category.name
     companion object {
         private val entries = mapOf(
+            "sound" to listOf("通知音", "提示音", "Sound"),
+            "reviewPreparation" to listOf("実物を確認して準備をやり直す", "核查实体卡后重新准备", "Review Tag and Reset Preparation"),
+            "preparing" to listOf("カードを準備中", "正在准备卡片", "Preparing Card"),
+            "preparingBody" to listOf("固有のURLを安全に取得しています。", "正在安全领取唯一网址。", "Securing a unique card URL."),
+            "readyBody" to listOf("空のタグを1枚だけかざしてください。", "请靠近一枚空白芯片。", "Hold one blank tag near the phone."),
+            "writingTitle" to listOf("書き込み・読取確認中", "正在写入并读回核验", "Writing and Verifying"),
+            "writeSuccess" to listOf("書き込み成功", "写卡成功", "Write Successful"),
+            "failureBody" to listOf("停止しました。同じカードで再試行してください。", "已停止，请重试同一张卡。", "Stopped. Retry this same card."),
+            "pendingCloud" to listOf("書込済み・送信待ち", "已写入，等待云端同步", "Written, Pending Cloud Sync"),
+            "pendingCloudBody" to listOf("タグは書込済みです。書き直さず接続を復旧してください。停止は物理書込を取り消しません。", "芯片已经写入，请恢复网络，不要重写。停止不会撤销已发生的物理写入。", "The tag is already written. Restore connectivity; do not rewrite it. Stopping cannot undo a physical write."),
+            "stopWrite" to listOf("停止しても完了した物理書込は元に戻りません。", "停止不会撤销已经发生的实体写入。", "Stopping cannot undo a physical write already performed."),
             "categoryA" to listOf("食べ物", "美食", "Food"),
             "categoryB" to listOf("旅行", "旅行", "Travel"),
             "categoryC" to listOf("出会い", "相遇", "Encounters"),
