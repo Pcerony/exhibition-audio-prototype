@@ -4,6 +4,8 @@
 
 ## 核心文档
 
+- [按需开卡与强反馈设计](superpowers/specs/2026-10-17-on-demand-writing-design.md)：取消先开卡的必经步骤、连续写卡弹窗与安全重试。
+
 - [语音转文字试用接入](TRANSCRIPTION_SETUP_ZH.md)：Groq 可选同意、私有草稿、审核发布、密钥配置与验收步骤。
 
 - [后置分类V3](superpowers/specs/2026-10-16-post-recording-classification.md)：固定四类、统一空卡池、录音日批次与不复用编号；取代旧分类开卡规则。
