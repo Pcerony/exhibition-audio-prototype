@@ -66,6 +66,24 @@ Deno.test('unconfigured transcription retry does not call database and get repor
   equal(response.status,status);equal(await response.json(),{code});
  }
 });
+Deno.test('transcription save validates plain text, publication and integer version before RPC',async()=>{
+ for(const fields of [
+  {text:'\n\t\r',published:true,version:1},
+  {text:' \u3000\u00a0 ',published:true,version:1},
+  {text:'x'.repeat(10001),published:false,version:1},
+  {text:null,published:false,version:1},
+  {text:'text',published:'true',version:1},
+  {text:'text',published:true,version:1.5},
+  {text:'text',published:true,version:0},
+  {text:'text',published:true,version:'1'},
+ ]){
+  const f=fixture();const response=await f.handler(request({action:'saveTranscription',recordingId:id,...fields}));
+  equal(response.status,400);equal(await response.json(),{code:'REQUEST_INVALID'});equal(f.calls,[]);
+ }
+ for(const text of ['\n\t',String.fromCodePoint(0x1f600).repeat(10000)]){
+  const f=fixture();equal((await f.handler(request({action:'saveTranscription',recordingId:id,version:1,text,published:false}))).status,200);equal(f.calls.length,1);
+ }
+});
 Deno.test('authenticated list includes recording location without exposing object paths', async () => {
   const response = await fixture('operator', true, { tags: [{ recording: { id, nickname: '' } }], total: 1 }).handler(request({ action: 'list' }));
   equal(response.status, 200);

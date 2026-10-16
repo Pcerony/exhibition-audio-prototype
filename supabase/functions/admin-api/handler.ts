@@ -33,6 +33,10 @@ export function createHandler(getClient: () => SupabaseClient, isTranscriptionCo
       for (const field of ['tagId', 'recordingId', 'jobId', 'requestKey', 'categoryId', 'targetCategoryId']) {
         if (field in body && (typeof body[field] !== 'string' || !uuid.test(body[field]))) return json({ code: 'REQUEST_INVALID' }, 400);
       }
+      if (body.action === 'saveTranscription' && (
+        typeof body.text !== 'string' || Array.from(body.text).length > 10000 || typeof body.published !== 'boolean'
+        || !Number.isSafeInteger(body.version) || body.version < 1 || (body.published && !body.text.trim())
+      )) return json({ code: 'REQUEST_INVALID' }, 400);
       if (body.action === 'maintenance') return json(await runMaintenance(client));
       if (body.action === 'retryTranscription' && !isTranscriptionConfigured()) return json({ code: 'TRANSCRIPTION_NOT_CONFIGURED' }, 503);
       const { data, error } = await client.rpc('admin_action', { p_operator: identity.user.id, p_body: body });
