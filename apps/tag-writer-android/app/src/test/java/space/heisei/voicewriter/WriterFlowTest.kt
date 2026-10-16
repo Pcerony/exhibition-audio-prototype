@@ -6,7 +6,7 @@ import org.junit.Test
 class WriterFlowTest {
     @Test fun automaticModeRequiresExplicitStartAndRemovalBetweenCards() {
         val flow = WriterFlow()
-        flow.choose("food", true)
+        flow.choose(true)
         assertFalse(flow.canWrite)
         flow.start("job", "lease", Long.MAX_VALUE)
         assertTrue(flow.canWrite)
@@ -18,7 +18,7 @@ class WriterFlowTest {
     }
     @Test fun backgroundingInvalidatesArmAndNeverAutomaticallyResumes() {
         val flow = WriterFlow()
-        flow.choose("food", true)
+        flow.choose(true)
         flow.start("job", "lease", Long.MAX_VALUE)
         flow.pause()
         assertFalse(flow.canWrite)
@@ -26,7 +26,7 @@ class WriterFlowTest {
     }
     @Test fun expiredLeaseNeverWritesAndRepeatedChipCannotAdvance() {
         val flow = WriterFlow()
-        flow.choose("food", true)
+        flow.choose(true)
         flow.start("job", "lease", 0)
         assertFalse(flow.begin("chip"))
         flow.start("job", "lease", Long.MAX_VALUE)
@@ -54,7 +54,7 @@ class WriterFlowTest {
     }
     @Test fun expiredLeaseTransitionsToActionablePause() {
         val flow = WriterFlow()
-        flow.choose("food", true)
+        flow.choose(true)
         flow.start("job", "lease", 10)
         assertTrue(flow.expire(11))
         assertEquals(WriterFlow.Stage.PAUSED, flow.stage)

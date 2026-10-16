@@ -65,30 +65,26 @@ class Api(private val store: SecureSession) {
         val values = admin(JSONObject().put("action", "categories")).getJSONArray("categories")
         return (0 until values.length()).map { val c = values.getJSONObject(it); Category(c.getString("id"), c.getString("name"), c.getString("code")) }
     }
-    fun cards(categoryId: String, search: String, sort: String, offset: Int, status: String = ""): Pair<List<Card>, Int> {
+    fun cards(categoryId: String, search: String, sort: String, offset: Int, status: String = "", batchDate: String = ""): Pair<List<Card>, Int> {
         val body = JSONObject().put("action", "list").put("limit", 50).put("offset", offset).put("search", search).put("sort", sort)
-        if (categoryId.isNotBlank()) body.put("categoryId", categoryId)
+        if (categoryId == "uncategorized") body.put("uncategorized", true)
+        else if (categoryId.isNotBlank()) body.put("categoryId", categoryId)
         if (status.isNotBlank()) body.put("status", status)
+        if (batchDate.isNotBlank()) body.put("batchDate", batchDate)
         val result = admin(body); val rows = result.getJSONArray("tags")
-        return (0 until rows.length()).map { val c = rows.getJSONObject(it); val r = c.optJSONObject("recording")
-            Card(c.getString("id"), c.getString("label"), c.optString("categoryId"), c.optString("batch"), c.getInt("version"), c.optString("status", "unbound"), r?.getString("id"), r?.optString("nickname").orEmpty(), r?.optString("createdAt"), c.optJSONObject("provisioning")?.let(::parseJob))
-        } to result.getInt("total")
+        return (0 until rows.length()).map { parseCard(rows.getJSONObject(it)) } to result.getInt("total")
     }
-    fun jobs(categoryId: String = ""): List<Job> {
+    fun jobs(): List<Job> {
         val jobs = mutableListOf<Job>()
         do {
-            val body = JSONObject().put("action", "jobs").put("offset", jobs.size).put("limit", 500).put("protocolVersion", 2)
-            if (categoryId.isNotEmpty()) body.put("categoryId", categoryId)
-            val response = admin(body); val array = response.getJSONArray("jobs"); val total = response.getInt("total")
+            val response = admin(jobsRequest(jobs.size)); val array = response.getJSONArray("jobs"); val total = response.getInt("total")
             check(array.length() > 0 || jobs.size >= total) { "JOBS_INCOMPLETE" }
             for (i in 0 until array.length()) jobs.add(parseJob(array.getJSONObject(i)))
         } while (jobs.size < total)
         return jobs
     }
-    fun lease(categoryId: String, jobId: String?, deviceId: String): Lease? {
-        val body = JSONObject().put("action", if (jobId == null) "nextJob" else "leaseJob").put("deviceId", deviceId).put("protocolVersion", 2)
-        if (jobId == null) body.put("categoryId", categoryId) else body.put("jobId", jobId)
-        val response = admin(body); val job = response.optJSONObject("job") ?: return null
+    fun lease(jobId: String?, deviceId: String): Lease? {
+        val response = admin(leaseRequest(jobId, deviceId)); val job = response.optJSONObject("job") ?: return null
         return Lease(parseJob(job), response.getString("leaseToken"), Instant.parse(response.getString("expiresAt")).toEpochMilli())
     }
     fun release(lease: Lease) { admin(JSONObject().put("action", "releaseJob").put("jobId", lease.job.id).put("leaseToken", lease.token)) }
@@ -97,12 +93,12 @@ class Api(private val store: SecureSession) {
         val job = jobs().find { it.visitorUrl == url }
         val tag = try { request("/functions/v1/public-tag?token=$token", null, false) }
         catch (e: ApiException) { if (e.status == 404) return null else throw e }
-        val recording = tag.optJSONObject("recording")
-        return Card(tag.getString("id"), job?.label ?: tag.getString("label"), job?.categoryId.orEmpty(),
-            job?.batch ?: tag.optString("batch"), job?.tagVersion ?: 0, tag.getString("status"),
-            recording?.getString("id"), recording?.optString("nickname").orEmpty(), recording?.optString("createdAt"), job)
+        return parseCard(tag).copy(version = job?.tagVersion ?: 0, job = job)
     }
-    fun report(r: Report) { check(admin(reportJson(r).put("action", "provision")).optBoolean("ok")) { "REPORT_REJECTED" } }
+    fun report(r: Report) {
+        check(Provisioning.canSync(r)) { "CLIENT_UPGRADE_REQUIRED" }
+        check(admin(reportJson(r).put("action", "provision")).optBoolean("ok")) { "REPORT_REJECTED" }
+    }
     private fun request(path: String, body: JSONObject?, authenticated: Boolean): JSONObject {
         val base = BuildConfig.SUPABASE_URL.trimEnd('/')
         require(base.startsWith("https://") && BuildConfig.SUPABASE_PUBLISHABLE_KEY.isNotBlank()) { "CONFIG_REQUIRED" }
@@ -121,5 +117,13 @@ class Api(private val store: SecureSession) {
     }
 }
 class ApiException(val code: String, val status: Int) : Exception(code)
-fun parseJob(j: JSONObject) = Job(j.getString("id"), j.getString("tagId"), j.getString("label"), j.optString("batch"), j.getString("visitorUrl"), j.getInt("version"), j.getString("status"), j.optString("errorCode").takeUnless { it == "null" || it.isEmpty() }, j.optString("categoryId"), j.optString("recordingStatus", "unbound"), j.optInt("tagVersion"), j.optString("writtenAt").takeUnless { it.isBlank() || it == "null" })
-fun reportJson(r: Report) = JSONObject().put("jobId", r.jobId).put("version", r.version).put("visitorUrl", r.visitorUrl).put("status", r.status).put("protocolVersion", 2).put("leaseToken", r.leaseToken).apply { r.errorCode?.let { put("errorCode", it) } }
+fun JSONObject.nullableString(key: String) = if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() && it != "null" }
+fun jobsRequest(offset: Int) = JSONObject().put("action", "jobs").put("offset", offset).put("limit", 500).put("protocolVersion", 3)
+fun leaseRequest(jobId: String?, deviceId: String) = JSONObject().put("action", if (jobId == null) "nextJob" else "leaseJob").put("deviceId", deviceId).put("protocolVersion", 3).apply { jobId?.let { put("jobId", it) } }
+fun parseCard(c: JSONObject): Card {
+    val r = c.optJSONObject("recording")
+    return Card(c.getString("id"), c.getString("label"), c.nullableString("categoryId"), c.nullableString("batch").orEmpty(), c.optInt("version"), c.optString("status", "unbound"), r?.nullableString("id"), r?.nullableString("nickname").orEmpty(), r?.nullableString("createdAt"), c.optJSONObject("provisioning")?.let(::parseJob), c.nullableString("inventoryLabel").orEmpty(), c.nullableString("categoryCode"), c.nullableString("batchDate"), c.nullableString("serialNumber"))
+}
+fun parseReport(r: JSONObject) = Report(r.getString("jobId"), r.getInt("version"), r.getString("visitorUrl"), r.getString("status"), r.nullableString("errorCode"), r.optString("leaseToken"), r.optInt("protocolVersion", 2))
+fun parseJob(j: JSONObject) = Job(j.getString("id"), j.getString("tagId"), j.getString("label"), j.nullableString("batch").orEmpty(), j.getString("visitorUrl"), j.getInt("version"), j.getString("status"), j.nullableString("errorCode"), j.nullableString("categoryId"), j.optString("recordingStatus", "unbound"), j.optInt("tagVersion"), j.nullableString("writtenAt"), j.nullableString("inventoryLabel").orEmpty(), j.nullableString("categoryCode"), j.nullableString("batchDate"), j.nullableString("serialNumber"))
+fun reportJson(r: Report) = JSONObject().put("jobId", r.jobId).put("version", r.version).put("visitorUrl", r.visitorUrl).put("status", r.status).put("protocolVersion", r.protocolVersion).put("leaseToken", r.leaseToken).apply { r.errorCode?.let { put("errorCode", it) } }

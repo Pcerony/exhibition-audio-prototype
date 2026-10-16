@@ -4,14 +4,13 @@ class WriterFlow {
     enum class Stage { IDLE, READY, WRITING, REMOVAL, NEXT, PAUSED }
     var stage = Stage.IDLE; private set
     var automatic = false; private set
-    var categoryId = ""; private set
     var jobId = ""; private set
     var leaseToken = ""; private set
     var expiresAt = 0L; private set
     private var chip = ""
     val canWrite get() = stage == Stage.READY && System.currentTimeMillis() < expiresAt
     val readyForNext get() = automatic && stage == Stage.NEXT
-    @Synchronized fun choose(category: String, auto: Boolean) { categoryId = category; automatic = auto; stage = Stage.IDLE; chip = "" }
+    @Synchronized fun choose(auto: Boolean) { automatic = auto; stage = Stage.IDLE; chip = "" }
     @Synchronized fun start(job: String, lease: String, expires: Long) { jobId = job; leaseToken = lease; expiresAt = expires; stage = Stage.READY }
     @Synchronized fun begin(identity: String): Boolean {
         if (!canWrite || identity == chip) return false
