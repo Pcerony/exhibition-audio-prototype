@@ -36,6 +36,8 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private val handler = Handler(Looper.getMainLooper())
     private val flow = WriterFlow()
     private val overwritePermission = OverwritePermission()
+    private val successGate = SuccessGate()
+    private lateinit var feedback: WriteFeedbackDialog
     private lateinit var api: Api
     private lateinit var copy: Copy
     private lateinit var shell: LinearLayout
@@ -66,6 +68,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private val queue = mutableListOf<Report>()
     private var pendingBulk: JSONObject? = null
     private var retryJobId: String? = null
+    private var preparationBlocked = false
     private var player: MediaPlayer? = null
     private val ink = Color.rgb(25, 40, 35)
     private val green = Color.rgb(21, 110, 78)
@@ -73,12 +76,24 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun prefs() = getSharedPreferences("operator-ui-v2", MODE_PRIVATE)
     private fun accountKey(suffix: String) = BuildConfig.SUPABASE_URL + ":" + api.userId + ":" + suffix
+    private fun preparation(owner: String = api.userId): PreparationMemory {
+        val key = BuildConfig.SUPABASE_URL + ":" + owner + ":prepare"
+        return PreparationMemory({ prefs().getString(key, null) }, { prefs().edit().putString(key, it).commit() })
+    }
+    private fun showFeedback(value: WriteFeedback, expected: Int = epoch, detail: String = "") {
+        if (!resumed || epoch != expected || api.token.isBlank()) return
+        feedback.show(value, copy, lease?.job?.displayLabel.orEmpty(), detail) {
+            pauseWriting(); message(t("stopWrite")); render()
+            executor.execute { releaseCurrent() }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         copy = Copy(prefs().getString("language", "ja").orEmpty())
+        feedback = WriteFeedbackDialog(this, { prefs().getBoolean("sound", true) }, { prefs().edit().putBoolean("sound", it).apply() })
         api = Api(SecureSession(this))
-        api.onRevoked = { overwritePermission.clear(); flow.pause(); epoch++; runOnUiThread { scanArmed = false; inspectedTag = null; inspectedCards = emptyList(); reader(); stopPlayback(); cards = emptyList(); jobs = emptyList(); checked.clear(); pendingBulk = null; queue.clear(); loginScreen() } }
+        api.onRevoked = { overwritePermission.clear(); flow.pause(); epoch++; runOnUiThread { feedback.close(); successGate.cancel(); scanArmed = false; inspectedTag = null; inspectedCards = emptyList(); reader(); stopPlayback(); cards = emptyList(); jobs = emptyList(); checked.clear(); pendingBulk = null; queue.clear(); loginScreen() } }
         adapter = NfcAdapter.getDefaultAdapter(this)
         shell = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(245, 248, 246)) }
         shell.setOnApplyWindowInsetsListener { view, insets ->
@@ -148,9 +163,13 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         }
     }
     private fun settings() {
-        val items = if (api.token.isBlank()) arrayOf(t("language"), t("nfc")) else arrayOf(api.email, t("language"), t("nfc"), t("logout"))
+        val items = if (api.token.isBlank()) arrayOf(t("language"), t("nfc"), t("sound")) else arrayOf(api.email, t("language"), t("nfc"), t("logout"), t("sound"))
         AlertDialog.Builder(this).setTitle(t("menu")).setItems(items) { _, index ->
             val real = if (api.token.isBlank()) index + 1 else index
+            if ((api.token.isBlank() && index == 2) || (api.token.isNotBlank() && index == 4)) {
+                AlertDialog.Builder(this).setTitle(t("sound")).setMultiChoiceItems(arrayOf(t("sound")), booleanArrayOf(prefs().getBoolean("sound", true))) { _, _, checked -> prefs().edit().putBoolean("sound", checked).apply() }.setPositiveButton(t("confirm"), null).show()
+                return@setItems
+            }
             when(real) {
                 1 -> AlertDialog.Builder(this).setTitle(t("language")).setSingleChoiceItems(arrayOf("日本語", "中文", "English"), listOf("ja", "zh", "en").indexOf(copy.language)) { dialog, value ->
                     copy = Copy(listOf("ja", "zh", "en")[value]); prefs().edit().putString("language", copy.language).apply(); dialog.dismiss()
@@ -401,16 +420,20 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     }
     private fun renderAuto() {
         text(content, t("auto"), 25f, true)
-        val count = jobs.count { it.status == "pending" && it.recordingStatus == "unbound" }
-        text(content, "${t("remaining")}: $count · ${t("completed")}: $completed", 16f, true)
+        text(content, "${t("completed")}: $completed", 16f, true)
         renderWriteState()
+        if (preparationBlocked) action(content, t("reviewPreparation")) {
+            AlertDialog.Builder(this).setTitle(t("reviewPreparation")).setMessage(t("stale"))
+                .setNegativeButton(t("cancel"), null).setPositiveButton(t("confirm")) { _, _ ->
+                    runCatching { preparation().resetReviewed() }.onSuccess { preparationBlocked = false; retryJobId = null; render() }.onFailure { message(t("saveFailed")) }
+                }.show()
+        }
         retryJobId?.let { retry ->
             action(content, t("retryCurrent"), true) { arm(retry) }
-            action(content, t("skip")) { retryJobId = null; arm(null) }
         }
         action(content, t(if (flow.stage == WriterFlow.Stage.PAUSED) "continue" else "start"), true) {
             arm(null)
-        }.isEnabled = retryJobId == null && flow.stage !in listOf(WriterFlow.Stage.WRITING, WriterFlow.Stage.REMOVAL, WriterFlow.Stage.READY)
+        }.isEnabled = !preparationBlocked && retryJobId == null && flow.stage !in listOf(WriterFlow.Stage.WRITING, WriterFlow.Stage.REMOVAL, WriterFlow.Stage.READY)
         action(content, t("pause")) { pauseWriting(); work { releaseCurrent(); ui { render() } } }
     }
     private fun renderWriteState() {
@@ -428,20 +451,30 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         if (queue.isNotEmpty()) { message(t("unsynced")); return }
         if (adapter?.isEnabled != true) { message(t("nfcOff")); return }
         val startEpoch = epoch
+        val automatic = screen == Screen.AUTO
+        val owner = api.userId
+        showFeedback(WriteFeedback.PREPARING, startEpoch)
         work {
             releaseCurrent(); api.verify()
-            val acquired = api.lease(jobId, deviceId())
-            if (acquired == null) { ui { message(t("done")) }; return@work }
+            val memory = preparation(owner)
+            val target = jobId ?: if (automatic) memory.jobId() else null
+            if (automatic && target != null) {
+                val fresh = api.jobs().find { it.id == target }
+                if (fresh == null || !WriterSafety.autoRetry(fresh) || !memory.matches(fresh) || memory.physicalUncertain()) throw WriterException("JOB_INELIGIBLE")
+            }
+            val acquired = if (target == null && automatic) api.prepareWrite(deviceId(), memory.requestKey()) else api.lease(target, deviceId())
+            if (acquired == null) { ui { if (resumed && startEpoch == epoch) { feedback.close(); message(t("done")) } }; return@work }
+            if (automatic) memory.accepted(acquired.job)
             if (!resumed || startEpoch != epoch) { api.release(acquired); return@work }
             lease = acquired
             if (overwriteConfirmed && screen == Screen.SINGLE && jobId == acquired.job.id) overwritePermission.approve(acquired.job.id, acquired.token)
             retryJobId = null
-            flow.choose(screen == Screen.AUTO)
+            flow.choose(automatic)
             flow.start(acquired.job.id, acquired.token, acquired.expiresAt)
-            ui { statusMessage = ""; render() }
+            ui { if (resumed && startEpoch == epoch) { statusMessage = ""; render(); showFeedback(WriteFeedback.READY, startEpoch) } }
         }
     }
-    private fun pauseWriting() { overwritePermission.clear(); epoch++; flow.pause(); reader() }
+    private fun pauseWriting() { overwritePermission.clear(); epoch++; flow.pause(); successGate.cancel(); feedback.close(); reader() }
     private fun releaseCurrent() {
         overwritePermission.clear()
         val old = lease ?: return
@@ -451,7 +484,8 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private fun reader() {
         adapter?.disableReaderMode(this)
         if (resumed && api.token.isNotBlank() && ((screen == Screen.READ && scanArmed) || (screen != Screen.READ && flow.stage in listOf(WriterFlow.Stage.READY, WriterFlow.Stage.REMOVAL))) && adapter?.isEnabled == true) {
-            adapter?.enableReaderMode(this, this, NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_NFC_V, null)
+            val flags = NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_NFC_V
+            adapter?.enableReaderMode(this, this, flags or if (screen == Screen.READ) 0 else NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS, null)
         }
     }
     override fun onTagDiscovered(tag: Tag) {
@@ -463,16 +497,18 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         if (!flow.begin(chipId)) { busy.set(false); return }
         val overwriteConfirmed = overwritePermission.consume(current.job.id, current.token, screen != Screen.SINGLE)
         val writeOwner = api.userId
+        val automaticWrite = screen == Screen.AUTO
         val reportKey = accountKey("reports")
-        ui { message(t("writing")) }
+        ui { if (resumed && epoch == writeEpoch) { message(t("writing")); showFeedback(WriteFeedback.WRITING, writeEpoch) } }
         executor.execute {
             try {
                 api.verify()
                 val fresh = api.jobs().find { it.id == current.job.id }
                 if (fresh == null || !WriterSafety.sameAssignment(current.job, fresh)) throw WriterException("JOB_CONFLICT")
                 if (!resumed || epoch != writeEpoch) throw WriterException("JOB_CONFLICT")
+                if (automaticWrite) preparation(writeOwner).beginPhysical(current.job.id)
             } catch (e: Exception) {
-                flow.pause(); busy.set(false); ui { reader(); message(error(e)) }; return@execute
+                flow.pause(); busy.set(false); ui { if (resumed && epoch == writeEpoch) { reader(); message(error(e)); showFeedback(WriteFeedback.ERROR, writeEpoch, error(e)) } }; return@execute
             }
             val report = try {
                 NfcWriter.writeAndRead(tag, current.job, overwriteConfirmed) { resumed && epoch == writeEpoch && System.currentTimeMillis() < current.expiresAt }
@@ -494,27 +530,40 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 sync()
                 if (queue.contains(report)) throw WriterException("JOB_CONFLICT")
                 if (report.status != "verified") throw WriterException(report.errorCode ?: "NFC_IO")
+                preparation(writeOwner).completed(current.job.id)
                 completed++
                 if (resumed && epoch == writeEpoch) {
                     flow.verified()
                     ui {
+                        if (!resumed || epoch != writeEpoch) return@ui
                         message(t("remove"))
+                        successGate.success(System.currentTimeMillis())
+                        showFeedback(WriteFeedback.SUCCESS, writeEpoch)
                         // Android's ignore callback only fires once this physical tag has left the field.
                         val accepted = adapter?.ignore(tag, 800, {
                             if (resumed && epoch == writeEpoch && flow.stage == WriterFlow.Stage.REMOVAL) {
-                                flow.removed(); lease = null
-                                if (flow.readyForNext) arm(null) else reload()
+                                successGate.removed()
                             }
                         }, handler) == true
                         if (!accepted) { pauseWriting(); message(t("paused")) }
+                        else awaitRemoval(writeEpoch)
                     }
                 } else flow.pause()
             } catch (e: Exception) {
                 flow.pause()
-                retryJobId = current.job.id
-                ui { message(if (queue.isNotEmpty()) t("unsynced") else error(e)); render() }
+                retryJobId = if (report.status == "verified") null else current.job.id
+                ui { if (resumed && epoch == writeEpoch) { reader(); message(if (queue.isNotEmpty()) t("unsynced") else error(e)); render(); showFeedback(if (report.status == "verified") WriteFeedback.PENDING else WriteFeedback.ERROR, writeEpoch, error(e)) } }
             } finally { busy.set(false) }
         }
+    }
+    private fun awaitRemoval(expected: Int) {
+        handler.postDelayed({
+            if (!resumed || expected != epoch || flow.stage != WriterFlow.Stage.REMOVAL) return@postDelayed
+            if (successGate.advance(System.currentTimeMillis()) && !busy.get()) {
+                feedback.close(); flow.removed(); lease = null
+                if (flow.readyForNext) arm(null) else reload()
+            } else awaitRemoval(expected)
+        }, 100)
     }
     private fun persistQueue() {
         check(prefs().edit().putString(accountKey("reports"), JSONArray(queue.map { reportJson(it) }).toString()).commit()) { "LOCAL_SAVE_FAILED" }
@@ -535,7 +584,12 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             if (!Provisioning.canSync(report)) continue
             val job = authoritative.find { it.id == report.jobId }
             if (job == null || !Provisioning.matches(report, job) || Provisioning.superseded(report, job)) continue
-            try { api.report(report); queue.remove(report); persistQueue() }
+            try {
+                api.report(report)
+                queue.remove(report)
+                try { persistQueue() } catch (e: Exception) { queue.add(report); throw e }
+                if (report.status == "verified") preparation().completed(report.jobId) else preparation().failedPhysical(report.jobId)
+            }
             catch (e: ApiException) {
                 if (e.code !in listOf("LEASE_EXPIRED", "LEASE_CONFLICT", "VERSION_CONFLICT", "JOB_CONFLICT", "JOB_INELIGIBLE")) throw e
             }
@@ -545,7 +599,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         override fun run() {
             if (resumed && api.token.isNotBlank() && queue.isNotEmpty() && !busy.get()) work {
                 val before = queue.size; sync()
-                if (before != queue.size) ui { statusMessage = if (queue.isEmpty()) t("paused") else t("unsynced"); render() }
+                if (before != queue.size) ui { if (queue.isEmpty()) feedback.close(); statusMessage = if (queue.isEmpty()) t("paused") else t("unsynced"); render() }
             }
             handler.postDelayed(this, 15000)
         }
@@ -556,6 +610,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 reader()
                 statusMessage = t("expired")
                 render()
+                showFeedback(WriteFeedback.ERROR, detail = t("expired"))
             }
             handler.postDelayed(this, 1000)
         }
@@ -635,7 +690,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private fun reload() { work { load(); ui { render() } } }
     private fun deviceId(): String {
         prefs().getString("device", null)?.let { return it }
-        return UUID.randomUUID().toString().also { prefs().edit().putString("device", it).commit() }
+        return UUID.randomUUID().toString().also { check(prefs().edit().putString("device", it).commit()) { "LOCAL_SAVE_FAILED" } }
     }
     private fun date(value: String): String = runCatching {
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(Instant.parse(value))
@@ -645,10 +700,11 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private fun ui(action: () -> Unit) { runOnUiThread { if (!isFinishing && !isDestroyed) action() } }
     private fun work(action: () -> Unit) {
         if (!busy.compareAndSet(false, true)) return
+        val expected = epoch
         message(t("loading"))
         executor.execute {
             try { action() }
-            catch (e: Exception) { flow.pause(); ui { reader(); message(error(e)) } }
+            catch (e: Exception) { if (epoch == expected) { flow.pause(); ui { if (epoch == expected && resumed) { reader(); message(error(e)); if (screen == Screen.AUTO && e.message in listOf("JOB_INELIGIBLE", "JOB_CONFLICT")) { preparationBlocked = true; render() }; if (screen in listOf(Screen.AUTO, Screen.SINGLE)) showFeedback(WriteFeedback.ERROR, expected, error(e)) } } } }
             finally { busy.set(false) }
         }
     }

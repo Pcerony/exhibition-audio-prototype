@@ -38,6 +38,7 @@ class SessionRevision {
 }
 
 object WriterSafety {
+    fun autoRetry(job: Job) = job.status in listOf("pending", "failed") && job.recordingStatus == "unbound"
     fun mayWrite(existingUris: List<String>, target: String, overwriteConfirmed: Boolean = false) = overwriteConfirmed || existingUris.isEmpty() || existingUris == listOf(target)
     fun sameAssignment(original: Job, fresh: Job) = original.id == fresh.id && original.tagId == fresh.tagId &&
         original.version == fresh.version && original.tagVersion == fresh.tagVersion && original.visitorUrl == fresh.visitorUrl &&

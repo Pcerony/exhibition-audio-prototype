@@ -87,6 +87,10 @@ class Api(private val store: SecureSession) {
         val response = admin(leaseRequest(jobId, deviceId)); val job = response.optJSONObject("job") ?: return null
         return Lease(parseJob(job), response.getString("leaseToken"), Instant.parse(response.getString("expiresAt")).toEpochMilli())
     }
+    fun prepareWrite(deviceId: String, requestKey: String): Lease {
+        val response = admin(prepareWriteRequest(deviceId, requestKey))
+        return Lease(parseJob(response.getJSONObject("job")), response.getString("leaseToken"), Instant.parse(response.getString("expiresAt")).toEpochMilli())
+    }
     fun release(lease: Lease) { admin(JSONObject().put("action", "releaseJob").put("jobId", lease.job.id).put("leaseToken", lease.token)) }
     fun inspect(url: String): Card? {
         val token = NfcInspection.token(url) ?: return null
@@ -119,6 +123,7 @@ class Api(private val store: SecureSession) {
 class ApiException(val code: String, val status: Int) : Exception(code)
 fun JSONObject.nullableString(key: String) = if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() && it != "null" }
 fun jobsRequest(offset: Int) = JSONObject().put("action", "jobs").put("offset", offset).put("limit", 500).put("protocolVersion", 3)
+fun prepareWriteRequest(deviceId: String, requestKey: String) = JSONObject().put("action", "prepareWrite").put("deviceId", deviceId).put("requestKey", requestKey).put("protocolVersion", 3)
 fun leaseRequest(jobId: String?, deviceId: String) = JSONObject().put("action", if (jobId == null) "nextJob" else "leaseJob").put("deviceId", deviceId).put("protocolVersion", 3).apply { jobId?.let { put("jobId", it) } }
 fun parseCard(c: JSONObject): Card {
     val r = c.optJSONObject("recording")
