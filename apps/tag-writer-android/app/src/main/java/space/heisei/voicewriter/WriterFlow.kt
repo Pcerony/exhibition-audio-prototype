@@ -39,8 +39,20 @@ class SessionRevision {
 }
 
 object WriterSafety {
-    fun mayWrite(existingUris: List<String>, target: String) = existingUris.isEmpty() || existingUris == listOf(target)
+    fun mayWrite(existingUris: List<String>, target: String, overwriteConfirmed: Boolean = false) = overwriteConfirmed || existingUris.isEmpty() || existingUris == listOf(target)
     fun sameAssignment(original: Job, fresh: Job) = original.id == fresh.id && original.tagId == fresh.tagId &&
         original.version == fresh.version && original.tagVersion == fresh.tagVersion && original.visitorUrl == fresh.visitorUrl &&
         original.categoryId == fresh.categoryId && original.recordingStatus == fresh.recordingStatus
+}
+
+class OverwritePermission {
+    private var approval: Pair<String, String>? = null
+    @Synchronized fun approve(jobId: String, leaseToken: String) { approval = jobId to leaseToken }
+    @Synchronized fun clear() { approval = null }
+    @Synchronized fun pending(jobId: String, leaseToken: String) = approval == jobId to leaseToken
+    @Synchronized fun consume(jobId: String, leaseToken: String, automatic: Boolean): Boolean {
+        val allowed = !automatic && pending(jobId, leaseToken)
+        clear()
+        return allowed
+    }
 }
