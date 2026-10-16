@@ -1,6 +1,6 @@
 # 跨端 API 契约
 
-## 录音后分类 V3（开发冻结，尚未上线）
+## 录音后分类 V3（当前契约）
 
 - 固定分类A/B/C/D，固定UUID依次`00000000-0000-4000-8000-000000000001`至`...0004`，名称美食/旅行/相遇/其他回忆。`categories`只返回这四项，nextNumber兼容字段不用于预分配；createCategory/renameCategory拒绝CATEGORIES_FIXED。
 - `createCards`请求`{count,requestKey,protocolVersion:3}`，不传categoryId。全批幂等创建未分类空卡及稳定随机网址。内部库存号U000001全局不复用。
@@ -11,7 +11,7 @@
 - jobs/leaseJob/nextJob/provision均protocolVersion:3；旧协议HTTP426 CLIENT_UPGRADE_REQUIRED。jobs不按创建分类过滤；nextJob只需要deviceId，不带categoryId，从统一可写空卡池领取，幂等/租约/人工重写规则与V2一致。releaseJob仍按租约身份执行。
 - 前端`NewRecording.categoryCode`可选以兼容本地旧测试，但生产claim必须提供。`AdminRepository.createCards(count,requestKey)`改签名，createCategory/renameCategory保留兼容类型但UI不再提供入口；date filter和DTO新增为可选字段，读取null容错。公开网址/token/音频私有/原子一对一不变。
 
-## 分类管理 V2（本轮实现契约）
+## 分类管理 V2（历史契约，被V3同名规则取代）
 
 以下扩展与旧接口分开发布：后端、网页和Android同时完成回归前不得将本节视为生产已部署。完整字段及操作参见 [冻结实施计划](superpowers/plans/2026-10-15-operator-experience.md)。访客URL与音频授权规则不变。
 

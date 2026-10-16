@@ -58,6 +58,8 @@ docs/
 
 ## 关键状态
 
+V3分类与日期批次：空卡无活动分类，只有稳定内部库存号；参观者选择固定A美食/B旅行/C相遇/D其他回忆，成功claim时数据库在同一事务赋类、记录最终提交时间，并按该时刻Asia/Tokyo日期和分类分配不复用日序号。正式显示号为YYMMDD-A001。固定memory_topics与历史categories分表，避免旧A-D分类碰撞；旧录音/编号保留不强制重分。reset清除当前正式号/主题/日期但永久保留编号历史；纠正录音分类沿原日期分配新号。库存号、正式号都不替代随机token和NFC网址。
+
 标签云状态：`unbound -> bound -> unbound`（认证重置）或 `disabled`。物理写卡状态单独维护：`pending -> verified`，可转为 `failed` 或通过显式重写回到 `pending`。写卡状态不能决定录音绑定状态。
 
 录音绑定通过服务端原子操作和 `recordings.tag_id UNIQUE` 约束实现。上传对象创建成功不等于绑定成功；只有 finalize/claim 成功后才对外显示录音。竞争失败者的对象进入清理流程。
