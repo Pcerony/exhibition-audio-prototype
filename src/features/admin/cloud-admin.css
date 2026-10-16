@@ -294,6 +294,9 @@
 .cloud-admin .tag-table {
   min-width: 760px;
 }
+.cloud-admin .tag-table td {
+  padding-block: 10px;
+}
 .cloud-admin .tag-table-wrap {
   overflow-x: auto;
 }
