@@ -42,6 +42,9 @@ function repository(): AdminRepository {
     resetTag: vi.fn(),
     setEnabled: vi.fn(),
     getPlaybackUrl: vi.fn(),
+    getTranscription: vi.fn().mockResolvedValue({ configured: false, consented: false, transcription: null }),
+    retryTranscription: vi.fn(),
+    saveTranscription: vi.fn(),
     listJobs: vi.fn().mockResolvedValue([]),
     provision: vi.fn(),
     getAudit: vi.fn().mockResolvedValue([]),
@@ -374,4 +377,18 @@ it("contains private error messages", async () => {
   show(r);
   fireEvent.click(await screen.findByRole("button", { name: "試聴" }));
   expect(await screen.findByRole("alert")).not.toHaveTextContent("SECRET");
+});
+it('loads transcription only when its recording action is opened', async () => {
+  const r = repository();
+  show(r);
+  const button = await screen.findByRole('button', { name: '文字起こし' });
+  expect(button).toHaveAttribute('title', '文字起こし');
+  expect(r.getTranscription).not.toHaveBeenCalled();
+  button.focus();
+  fireEvent.click(button);
+  expect(await screen.findByRole('dialog')).toHaveTextContent('A001');
+  await waitFor(() => expect(r.getTranscription).toHaveBeenCalledWith('r1'));
+  expect(r.retryTranscription).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
+  expect(button).toHaveFocus();
 });

@@ -9,6 +9,8 @@ it.each(visitorLocales)('shows privacy content in %s', locale => {
   render(<I18nProvider><PolicyPage kind="privacy" /></I18nProvider>);
   expect(screen.getByRole('heading', { name: visitorMessages[locale]['policy.privacy'] })).toBeVisible();
   expect(screen.getByText(visitorMessages[locale]['policy.optional'])).toBeVisible();
+  expect(screen.getByText(visitorMessages[locale]['policy.transcription'], { exact: false })).toBeVisible();
+  expect(screen.getByRole('link', { name: visitorMessages[locale]['policy.groqPrivacy'] })).toHaveAttribute('href', 'https://groq.com/privacy-policy/');
   expect(screen.getByRole('link', { name: visitorMessages[locale]['policy.googlePrivacy'] })).toHaveAttribute('href', 'https://policies.google.com/privacy');
 });
 

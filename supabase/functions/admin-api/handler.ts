@@ -2,16 +2,17 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import { json, preflight, readJson } from '../_shared/http.ts';
 import { runMaintenance } from '../_shared/maintenance.ts';
 
-const actions = new Set(['session', 'list', 'createBatch', 'reset', 'setEnabled', 'playback', 'jobs', 'provision', 'audit', 'maintenance', 'categories', 'createCategory', 'renameCategory', 'createCards', 'bulkPreview', 'bulkApply', 'leaseJob', 'nextJob', 'releaseJob']);
+const actions = new Set(['session', 'list', 'createBatch', 'reset', 'setEnabled', 'playback', 'jobs', 'provision', 'audit', 'maintenance', 'categories', 'createCategory', 'renameCategory', 'createCards', 'bulkPreview', 'bulkApply', 'leaseJob', 'nextJob', 'releaseJob', 'getTranscription', 'retryTranscription', 'saveTranscription']);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const errors: Record<string, number> = {
   REQUEST_INVALID: 400, OPERATOR_REQUIRED: 403, TAG_NOT_FOUND: 404,
   JOB_NOT_FOUND: 404, RECORDING_NOT_FOUND: 404, REQUEST_KEY_CONFLICT: 409, JOB_CONFLICT: 409, TAG_LABEL_EXISTS: 409,
   CATEGORY_NOT_FOUND: 404, CATEGORY_NAME_EXISTS: 409, CATEGORIES_FIXED: 409, CATEGORY_UNASSIGNED: 409, VERSION_CONFLICT: 409, GROUP_CONFLICT: 409,
   LEASE_CONFLICT: 409, LEASE_EXPIRED: 409, CLIENT_UPGRADE_REQUIRED: 426, JOB_INELIGIBLE: 409,
+  TRANSCRIPTION_CONSENT_REQUIRED: 409, TRANSCRIPTION_NOT_FOUND: 404, TRANSCRIPTION_RATE_LIMITED: 429,
 };
 
-export function createHandler(getClient: () => SupabaseClient) {
+export function createHandler(getClient: () => SupabaseClient, isTranscriptionConfigured = () => !!Deno.env.get('GROQ_API_KEY')) {
   return async (request: Request): Promise<Response> => {
     const options = preflight(request);
     if (options) return options;
@@ -32,13 +33,19 @@ export function createHandler(getClient: () => SupabaseClient) {
       for (const field of ['tagId', 'recordingId', 'jobId', 'requestKey', 'categoryId', 'targetCategoryId']) {
         if (field in body && (typeof body[field] !== 'string' || !uuid.test(body[field]))) return json({ code: 'REQUEST_INVALID' }, 400);
       }
+      if (body.action === 'saveTranscription' && (
+        typeof body.text !== 'string' || Array.from(body.text).length > 10000 || typeof body.published !== 'boolean'
+        || !Number.isSafeInteger(body.version) || body.version < 1 || (body.published && !body.text.trim())
+      )) return json({ code: 'REQUEST_INVALID' }, 400);
       if (body.action === 'maintenance') return json(await runMaintenance(client));
+      if (body.action === 'retryTranscription' && !isTranscriptionConfigured()) return json({ code: 'TRANSCRIPTION_NOT_CONFIGURED' }, 503);
       const { data, error } = await client.rpc('admin_action', { p_operator: identity.user.id, p_body: body });
       if (error) {
         const code = Object.keys(errors).find((value) => error.message.includes(value))
           ?? (['22P02', '22003', '22007', '22008', '22023', '23502'].includes(error.code) ? 'REQUEST_INVALID' : 'SERVICE_UNAVAILABLE');
         return json({ code }, errors[code] ?? 503);
       }
+      if (body.action === 'getTranscription') return json({ ...data, configured: isTranscriptionConfigured() });
       if (['leaseJob', 'nextJob'].includes(body.action) && data?.job) {
         const expiresAt = typeof data.expiresAt === 'string' ? Date.parse(data.expiresAt) : NaN;
         if (!Number.isFinite(expiresAt)) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);

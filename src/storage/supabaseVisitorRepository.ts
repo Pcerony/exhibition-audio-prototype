@@ -15,7 +15,7 @@ type CloudTag = {
   status: Tag['status'];
   createdAt?: string;
   inventoryLabel?: string; categoryId?: string | null; categoryCode?: unknown; batchDate?: string | null; serialNumber?: string | null;
-  recording: null | { id: string; nickname: string; durationSeconds: number; createdAt: string; location?: MemoryLocation | null };
+  recording: null | { id: string; nickname: string; durationSeconds: number; createdAt: string; location?: MemoryLocation | null; transcriptionConsent?: boolean; transcript?: string | null };
 };
 
 type UploadGrant = { uploadId: string; path: string; storageToken: string; claimToken: string };
@@ -66,6 +66,8 @@ export function createSupabaseVisitorRepository(): VisitorRepository {
         mimeType: '',
         createdAt: value.recording.createdAt,
         location: parseMemoryLocation(value.recording.location),
+        transcriptionConsent: value.recording.transcriptionConsent === true,
+        transcript: typeof value.recording.transcript === 'string' ? value.recording.transcript : null,
       } : null,
     };
   }
@@ -112,7 +114,7 @@ export function createSupabaseVisitorRepository(): VisitorRepository {
       try {
         await request('public-upload-claim', {
           method: 'POST',
-          body: { uploadId: grant.uploadId, nickname: recording.nickname, durationSeconds: recording.duration, location: parseMemoryLocation(recording.location), categoryCode: recording.categoryCode },
+          body: { uploadId: grant.uploadId, nickname: recording.nickname, durationSeconds: recording.duration, location: parseMemoryLocation(recording.location), categoryCode: recording.categoryCode, transcriptionConsent: recording.transcriptionConsent === true },
           headers: { 'x-upload-token': grant.claimToken },
         });
         return { status: 'claimed', tag: await getTag(token) };

@@ -17,6 +17,7 @@ import {
   RotateCcw,
   X,
   Folder,
+  FileText,
 } from "lucide-react";
 import type {
   AdminRepository,
@@ -34,6 +35,8 @@ import { LanguageSwitch } from "../../i18n/LanguageSwitch";
 import { cloudAdminMessages } from "./cloudAdminMessages";
 import { operatorMessages } from "./operatorMessages";
 import { OperatorDialog } from "./OperatorDialog";
+import { TranscriptionDialog } from './TranscriptionDialog';
+import { transcriptionMessages } from './transcriptionMessages';
 import "./admin.css";
 import "./cloud-admin.css";
 type Props = { repository: AdminRepository; baseUrl: string };
@@ -101,6 +104,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
   const [notice, setNotice] = useState("");
   const [revision, setRevision] = useState(0);
   const [audio, setAudio] = useState<{ id: string; url: string } | null>(null);
+  const [transcription, setTranscription] = useState<{ recordingId: string; label: string } | null>(null);
   const [jobs, setJobs] = useState<ProvisioningJob[] | null>(null);
   const [audit, setAudit] = useState<AuditEntry[] | null>(null);
   const [bulk, setBulk] = useState<BulkDialog | null>(null);
@@ -119,6 +123,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
     setJobs(null);
     setAudit(null);
     setAudio(null);
+    setTranscription(null);
   }
   function failure(cause: unknown) {
     const code = cause instanceof Error ? cause.message : "";
@@ -748,6 +753,11 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                                   }),
                               )}
                               {icon(
+                                transcriptionMessages[locale].title,
+                                <FileText size={16} />,
+                                () => setTranscription({ recordingId: tag.recording!.id, label: tag.serialNumber ?? tag.label }),
+                              )}
+                              {icon(
                                 m.reset,
                                 <RotateCcw size={16} />,
                                 () =>
@@ -885,6 +895,15 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
           </div>
         </div>
       )}
+      {session && transcription && <TranscriptionDialog
+        key={transcription.recordingId}
+        repository={repository}
+        recordingId={transcription.recordingId}
+        label={transcription.label}
+        locale={locale}
+        onAuthError={failure}
+        onClose={() => setTranscription(null)}
+      />}
       {bulk && group && (
         <OperatorDialog
           titleId="bulk-title"

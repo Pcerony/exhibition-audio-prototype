@@ -24,7 +24,12 @@ for (const tag of before.tags) {
   assert.equal(current.status, tag.status, 'Original status changed');
   if (before.recordings.some(recording => recording.tag_id === tag.id)) assert.equal(current.label, tag.label, 'Legacy bound label changed');
 }
-for (const recording of before.recordings) assert.deepEqual(after.recordings.find(value => value.id === recording.id), recording, 'Original recording metadata changed');
+for (const recording of before.recordings) {
+  const current = after.recordings.find(value => value.id === recording.id);
+  assert.ok(current, 'Original recording missing');
+  for (const key of Object.keys(recording)) assert.deepEqual(current[key], recording[key], 'Original recording metadata changed');
+  if (!Object.hasOwn(recording, 'transcription_consent')) assert.equal(current.transcription_consent, false, 'Legacy recording unexpectedly opted in');
+}
 for (const job of before.provisioningJobs) {
   const current = after.jobs.find(value => value.id === job.id);
   assert.ok(current, 'Original writing job missing');

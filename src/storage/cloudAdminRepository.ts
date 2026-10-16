@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import type { TranscriptionResult } from '../domain/transcription';
 import type { AdminRepository, AuditEntry, Category, ManagedTag, OperatorSession, ProvisioningJob } from './adminRepository';
 export type AdminAuth = {
   getSession(): Promise<{ accessToken: string; userId: string; email?: string } | null>;
@@ -28,6 +29,9 @@ export function createCloudAdminRepository(config: { url: string; key: string; a
     return { ...membership, email: session.email };
   }
   return {
+    getTranscription: (recordingId) => request<TranscriptionResult>('getTranscription', { recordingId }),
+    async retryTranscription(recordingId, version) { await request('retryTranscription', { recordingId, version }); },
+    async saveTranscription(recordingId, version, text, published) { await request('saveTranscription', { recordingId, version, text, published }); },
     async listCategories() { return (await request<{ categories: Category[] }>('categories')).categories; },
     async createCategory(name, requestKey) { return (await request<{ category: Category }>('createCategory', { name, requestKey })).category; },
     async renameCategory(categoryId, name) { await request('renameCategory', { categoryId, name }); },

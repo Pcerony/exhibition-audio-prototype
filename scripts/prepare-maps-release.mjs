@@ -7,7 +7,7 @@ const cli = process.env.SUPABASE_CLI;
 const project = process.argv[process.argv.indexOf('--project-ref') + 1];
 const migrationIndex = process.argv.indexOf('--migration');
 const migrationName = migrationIndex < 0 ? '202610150002_visitor_location.sql' : process.argv[migrationIndex + 1];
-assert.ok(['202610150002_visitor_location.sql', '202610150001_categories_and_leases.sql', '202610160001_post_recording_classification.sql'].includes(migrationName), 'Unsupported release migration');
+assert.ok(['202610150002_visitor_location.sql', '202610150001_categories_and_leases.sql', '202610160001_post_recording_classification.sql', '202610170001_transcription.sql'].includes(migrationName), 'Unsupported release migration');
 if (!cli || !process.argv.includes('--allow-remote-backup') || !/^[a-z]{20}$/.test(project ?? '')) {
   throw new Error('Set SUPABASE_CLI and pass --project-ref <ref> --allow-remote-backup');
 }
@@ -43,7 +43,7 @@ create temp table release_recordings_before as select to_jsonb(r) data from publ
 create temp table release_jobs_before as select id,tag_id,visitor_url from public.provisioning_jobs;`;
 const protectedData = `do $$ begin
 if exists(select 1 from release_tags_before b left join public.tags t using(id) where t.id is null or t.public_token is distinct from b.public_token or t.status is distinct from b.status or (b.status='bound' and t.label is distinct from b.label)) then raise exception 'RELEASE_TAG_IDENTITY_CHANGED';end if;
-if exists((select data from release_recordings_before except select to_jsonb(r) from public.recordings r) union all (select to_jsonb(r) from public.recordings r except select data from release_recordings_before)) then raise exception 'RELEASE_RECORDING_CHANGED';end if;
+if (select count(*) from release_recordings_before)<>(select count(*) from public.recordings) or exists(select 1 from release_recordings_before b left join public.recordings r on r.id=(b.data->>'id')::uuid where r.id is null or not to_jsonb(r) @> b.data) then raise exception 'RELEASE_RECORDING_CHANGED';end if;
 if exists(select 1 from release_jobs_before b left join public.provisioning_jobs j using(id) where j.id is null or j.tag_id is distinct from b.tag_id or j.visitor_url is distinct from b.visitor_url) then raise exception 'RELEASE_NFC_URL_CHANGED';end if;
 end $$;`;
 writeFileSync(rehearsal, `begin;\nset local lock_timeout='5s';\nset local statement_timeout='30s';\n${before}\n${migration}\n${protectedData}\nrollback;\n`, { mode: 0o600 });

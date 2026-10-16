@@ -24,6 +24,7 @@ export function VisitorPage({ repository, token }: Props) {
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const [playbackRevision, setPlaybackRevision] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [transcriptionConsent, setTranscriptionConsent] = useState(false);
   const [message, setMessage] = useState<MessageKey | ''>('');
   const [loadFailed, setLoadFailed] = useState(false);
   const [location, setLocation] = useState<MemoryLocation | null>(null);
@@ -43,6 +44,7 @@ export function VisitorPage({ repository, token }: Props) {
     setStage('intro'); setTheme(''); setMapVisited(false);
     setLocation(null);
     setSubmitting(false);
+    setTranscriptionConsent(false);
     recorder.discard();
     repository.getTag(token).then((value) => {
       if (active) {
@@ -87,7 +89,7 @@ export function VisitorPage({ repository, token }: Props) {
     setMessage('');
     try {
       const result = await repository.claim(token, {
-        id: crypto.randomUUID(), blob: recorder.blob, nickname: '', duration: recorder.duration, location, categoryCode: theme,
+        id: crypto.randomUUID(), blob: recorder.blob, nickname: '', duration: recorder.duration, location, categoryCode: theme, transcriptionConsent,
       });
       if (activeToken.current !== token) return;
       if (result.status === 'claimed' || result.status === 'already-bound') {
@@ -146,6 +148,7 @@ export function VisitorPage({ repository, token }: Props) {
         {playbackFailed ? <button className="secondary-action" onClick={() => setPlaybackRevision(v => v+1)}><RotateCcw />{t('visitor.retryPlayback')}</button> : audioUrl ? <audio className="preview-player" controls aria-label={t('visitor.player')} src={audioUrl} onError={() => setPlaybackFailed(true)} /> : <p role="status">{t('visitor.loadingAudio')}</p>}
         {tag.recording.location && <a className="secondary-action" href={memoryLocationUrl(tag.recording.location)!} target="_blank" rel="noreferrer">{t('location.view')}<ArrowRight size={22}/></a>}
         {message && <p role="status" className="visitor-message"><Check size={22}/>{t(message)}</p>}
+        {tag.recording.transcript?.trim() && <details className="visitor-transcript"><summary>{t('transcription.show')}</summary><p>{tag.recording.transcript}</p><small>{t('transcription.accuracy')}</small></details>}
         <p className="visitor-serial" data-testid="visitor-serial">{tag.serialNumber ?? tag.label}</p>
       </section> : <>
         <div className="outdoor-progress"><span className="step-number">{String(step).padStart(2,'0')}<small> / 05</small></span><span>{stepLabel[step-1]}</span>{stage !== 'intro' && <button title={t('flow.back')} aria-label={t('flow.back')} disabled={submitting || recorder.starting || recorder.state === 'recording'} onClick={back}><ArrowLeft size={25}/></button>}</div>
@@ -162,6 +165,7 @@ export function VisitorPage({ repository, token }: Props) {
           {recorder.state !== 'ready' && <div className={`outdoor-recorder ${recorder.state}`}><Mic size={52} strokeWidth={1.7}/><p className="record-time">{formatDuration(recorder.duration)}</p><p>{recorder.state === 'recording' ? t('visitor.recordingNow') : t('visitor.recordHint')}</p></div>}
           {recorder.error && <p className="inline-error" role="alert">{recorder.error}</p>}
           {recorder.state === 'ready' && recorder.previewUrl && <><div className="outdoor-wave" aria-hidden="true">{Array.from({length:25},(_,i)=><i key={i} style={{height:`${20+(i*37)%80}%`}}/>)}</div><audio className="preview-player" controls aria-label={t('visitor.preview')} src={recorder.previewUrl}/></>}
+          {recorder.state === 'ready' && <div className="transcription-choice"><label><input type="checkbox" checked={transcriptionConsent} disabled={submitting} onChange={event => setTranscriptionConsent(event.target.checked)} aria-describedby="transcription-notice"/><span>{t('transcription.consent')}</span></label><p id="transcription-notice">{t('transcription.notice')}</p></div>}
           <div className="outdoor-actions">{recorder.state === 'recording' ? <button className="primary-action stop-action" onClick={recorder.stop}><span className="stop-square"/>{t('visitor.stop')}</button> : recorder.state === 'ready' ? <><button className="primary-action" disabled={submitting} onClick={submitRecording}><Send size={24}/>{submitting ? t('visitor.submitting') : t('visitor.submit')}</button><button className="secondary-action" disabled={submitting} onClick={recorder.discard}><RotateCcw size={23}/>{t('visitor.retake')}</button></> : <button className="primary-action" onClick={recorder.start} disabled={recorder.starting || submitting}><Mic size={26}/>{t('visitor.start')}</button>}</div>
           <p className="outdoor-notice">{t('flow.publicNotice')}</p>
           {message && <p className="visitor-message" role="status">{t(message)}</p>}

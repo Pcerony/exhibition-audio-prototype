@@ -13,6 +13,20 @@ function setup(loggedIn = true) {
 }
 
 describe('cloud admin repository', () => {
+  it('loads, saves and retries transcription with the reviewed recording version', async () => {
+    const { repository, fetcher } = setup();
+    fetcher.mockResolvedValueOnce(new Response(JSON.stringify({ configured: false, consented: true, transcription: null })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true })));
+    expect(await repository.getTranscription('recording-id')).toMatchObject({ configured: false, consented: true });
+    await repository.saveTranscription('recording-id', 3, 'A memory of Fukuoka.', true);
+    await repository.retryTranscription('recording-id', 4);
+    expect(fetcher.mock.calls.map(([, options]) => JSON.parse(options?.body as string))).toEqual([
+      { action: 'getTranscription', recordingId: 'recording-id' },
+      { action: 'saveTranscription', recordingId: 'recording-id', version: 3, text: 'A memory of Fukuoka.', published: true },
+      { action: 'retryTranscription', recordingId: 'recording-id', version: 4 },
+    ]);
+  });
   it('creates generic empty cards without preselecting category or generating public labels', async () => {
     const { repository, fetcher } = setup();
     const category = { id: 'category-id', name: 'Food', code: 'A', nextNumber: 1 };
