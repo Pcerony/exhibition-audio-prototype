@@ -52,8 +52,6 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private var inspectedTag: InspectedTag? = null
     private var inspectedCards = emptyList<InspectedCard>()
     private var queryingEpoch: Int? = null
-    private var categories = emptyList<Category>()
-    private var categoryId = ""
     private var cards = emptyList<Card>()
     private var jobs = emptyList<Job>()
     private var total = 0
@@ -74,6 +72,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun prefs() = getSharedPreferences("operator-ui-v2", MODE_PRIVATE)
     private fun accountKey(suffix: String) = BuildConfig.SUPABASE_URL + ":" + api.userId + ":" + suffix
+    private fun bulkKey() = OperatorPolicy.pendingKey(BuildConfig.SUPABASE_URL, api.userId)
     private fun preparation(owner: String = api.userId): PreparationMemory {
         val key = BuildConfig.SUPABASE_URL + ":" + owner + ":prepare"
         return PreparationMemory({ prefs().getString(key, null) }, { prefs().edit().putString(key, it).commit() })
@@ -199,37 +198,18 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private fun load() {
         api.verify(); sync()
         if (screen == Screen.CARDS || screen == Screen.EDIT) {
-            categories = api.categories()
-            if (categoryId.isNotEmpty() && categoryId != "uncategorized" && categories.none { it.id == categoryId }) categoryId = ""
-            val page = api.cards(categoryId, search, sort, offset, statusFilter, batchDate)
+            val page = api.cards("", search, sort, offset, statusFilter, batchDate)
             cards = page.first; total = page.second
         }
         jobs = api.jobs()
-    }
-    private fun categoryPicker(parent: LinearLayout, all: Boolean = true, changed: (String) -> Unit) {
-        text(parent, t("category"), 13f, true)
-        val choices = if (all) listOf(Category("", t("all"), ""), Category("uncategorized", t("uncategorized"), "")) + categories else categories
-        val picker = Spinner(this)
-        picker.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, choices.map { copy.category(it) })
-        picker.setSelection(choices.indexOfFirst { it.id == categoryId }.coerceAtLeast(0))
-        parent.addView(picker, LinearLayout.LayoutParams(-1, dp(52)))
-        var initial = true
-        picker.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                if (initial) { initial = false; return }
-                val value = choices.getOrNull(position)?.id ?: return
-                if (value != categoryId && !busy.get()) changed(value)
-            }
-        }
     }
     private fun render() {
         if (api.token.isBlank()) { loginScreen(); return }
         header(t("app"), true)
         if (screen == Screen.READ) { renderReader(); reader(); return }
-        if (screen == Screen.CARDS || screen == Screen.EDIT) categoryPicker(content) { value ->
-            pauseWriting(); categoryId = value; checked.clear(); writeSession.retryJobId = null; offset = 0
-            work { releaseCurrent(); load(); ui { render() } }
+        pendingBulk?.takeIf { OperatorPolicy.requiresReview(it.optString("operation")) }?.let {
+            text(content, t("historicalBulkSummary"), 14f, true)
+            action(content, t("reviewHistoricalBulk")) { reviewHistoricalBulk() }
         }
         if (queue.isNotEmpty()) {
             text(content, "${queue.size} · ${t("unsynced")}", 14f)
@@ -366,10 +346,8 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         action(content, t("refresh")) { checked.clear(); reload() }
         if (screen == Screen.EDIT) {
             text(content, "${t("selected")}: ${checked.size}", 15f, true)
-            action(content, t("move")) { selectMoveTarget() }
-            action(content, t("reset")) { bulkPreview("reset") }
-            action(content, t("delete")) { bulkPreview("delete") }
-            pendingBulk?.let { action(content, t("retryOperation")) { applyPending() } }
+            OperatorPolicy.bulkOperations.forEach { operation -> action(content, t(operation)) { bulkPreview(operation) } }
+            pendingBulk?.takeIf { OperatorPolicy.canSubmit(it.optString("operation")) }?.let { action(content, t("retryOperation")) { applyPending() } }
         }
         text(content, "${offset + if (cards.isEmpty()) 0 else 1}–${offset + cards.size} / $total", 13f)
         if (cards.isEmpty()) text(content, t("noCards"))
@@ -575,7 +553,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             val r = array.getJSONObject(i)
             queue.add(parseReport(r))
         }
-        pendingBulk = prefs().getString(accountKey("bulk"), null)?.let { JSONObject(it) }
+        pendingBulk = OperatorPolicy.restorePending { prefs().getString(bulkKey(), null) }
     }
     private fun sync() {
         if (queue.none { Provisioning.canSync(it) }) return
@@ -623,49 +601,62 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 queue.remove(report); persistQueue(); ui { render() }
             } }.show()
     }
-    private fun selectMoveTarget() {
-        if (checked.isEmpty()) { message(t("selectCard")); return }
-        if (!Provisioning.canMove(cards.filter { it.id in checked })) { message(t("emptyMove")); return }
-        AlertDialog.Builder(this).setTitle(t("move")).setItems(categories.map { copy.category(it) }.toTypedArray()) { _, index -> bulkPreview("move", categories[index].id) }.show()
+    private fun reviewHistoricalBulk() {
+        val body = pendingBulk ?: return
+        if (!OperatorPolicy.requiresReview(body.optString("operation"))) return
+        val rows = body.optJSONArray("cards") ?: JSONArray()
+        val names = (0 until rows.length()).joinToString(", ") { rows.optJSONObject(it)?.optString("label").orEmpty() }
+        AlertDialog.Builder(this).setTitle(t("reviewHistoricalBulk"))
+            .setMessage("${t("historicalBulkDetail")}\n\n${body.optString("requestKey")}\n$names")
+            .setNegativeButton(t("cancel"), null)
+            .setPositiveButton(t("discardHistoricalBulk")) { _, _ ->
+                if (pendingBulk !== body) return@setPositiveButton
+                pendingBulk = OperatorPolicy.discardHistorical(body) { prefs().edit().remove(bulkKey()).commit() }
+                if (pendingBulk != null) { message(t("saveFailed")); return@setPositiveButton }
+                reload()
+            }.show()
     }
-    private fun bulkPreview(operation: String, target: String? = null) {
+    private fun bulkPreview(operation: String) {
+        if (!OperatorPolicy.canSubmit(operation)) return
         if (checked.isEmpty()) { message(t("selectCard")); return }
-        if (operation == "move" && !Provisioning.canMove(cards.filter { it.id in checked })) { message(t("emptyMove")); return }
-        if (pendingBulk != null) { message(t("retryOperation")); return }
+        if (pendingBulk != null) {
+            if (OperatorPolicy.requiresReview(pendingBulk!!.optString("operation"))) reviewHistoricalBulk() else message(t("retryOperation"))
+            return
+        }
         val ids = checked.toList()
         work {
             val body = JSONObject().put("action", "bulkPreview").put("tagIds", JSONArray(ids)).put("operation", operation)
-            target?.let { body.put("targetCategoryId", it) }
             val groups = api.admin(body).getJSONArray("groups")
-            ui { confirmGroup(groups, 0, operation, target) }
+            ui { confirmGroup(groups, 0, operation) }
         }
     }
-    private fun confirmGroup(groups: JSONArray, index: Int, operation: String, target: String?) {
+    private fun confirmGroup(groups: JSONArray, index: Int, operation: String) {
+        if (!OperatorPolicy.canSubmit(operation)) return
         if (index >= groups.length()) { checked.clear(); reload(); return }
         val group = groups.getJSONObject(index); val rows = group.getJSONArray("cards")
-        if (rows.length() == 0) { confirmGroup(groups, index + 1, operation, target); return }
+        if (rows.length() == 0) { confirmGroup(groups, index + 1, operation); return }
         val kind = group.getString("kind")
-        if (operation == "move" && kind != "recorded") { message(t("emptyMove")); return }
         val description = t(if (kind == "recorded") "recordedConfirm" else "emptyConfirm")
-        val detail = if (operation == "reset") t("resetConfirm") else if (operation == "move") t("moveConfirm") else ""
+        val detail = if (operation == "reset") t("resetConfirm") else ""
         val names = (0 until rows.length()).take(12).joinToString(", ") { rows.getJSONObject(it).optString("label") }
         AlertDialog.Builder(this).setTitle("${t(operation)} · ${rows.length()}").setMessage("$description\n$detail\n\n$names")
-            .setNegativeButton(t("cancel")) { _, _ -> confirmGroup(groups, index + 1, operation, target) }
+            .setNegativeButton(t("cancel")) { _, _ -> confirmGroup(groups, index + 1, operation) }
             .setPositiveButton(t("confirm")) { _, _ ->
-                pendingBulk = JSONObject().put("action", "bulkApply").put("operation", operation).put("cards", rows).put("kind", kind).put("requestKey", UUID.randomUUID().toString()).apply { target?.let { put("targetCategoryId", it) } }
-                if (!prefs().edit().putString(accountKey("bulk"), pendingBulk.toString()).commit()) { message(t("saveFailed")); return@setPositiveButton }
-                applyPending { confirmGroup(groups, index + 1, operation, target) }
+                pendingBulk = JSONObject().put("action", "bulkApply").put("operation", operation).put("cards", rows).put("kind", kind).put("requestKey", UUID.randomUUID().toString())
+                if (!prefs().edit().putString(bulkKey(), pendingBulk.toString()).commit()) { message(t("saveFailed")); return@setPositiveButton }
+                applyPending { confirmGroup(groups, index + 1, operation) }
             }.show()
     }
     private fun applyPending(then: (() -> Unit)? = null) {
         val body = pendingBulk ?: return
+        if (!OperatorPolicy.canSubmit(body.optString("operation"))) { reviewHistoricalBulk(); return }
         work {
             try { api.admin(body) }
             catch (e: ApiException) {
-                if (e.code in listOf("VERSION_CONFLICT", "GROUP_CONFLICT", "TAG_NOT_FOUND", "CATEGORY_UNASSIGNED", "CATEGORY_NOT_FOUND")) { pendingBulk = null; prefs().edit().remove(accountKey("bulk")).commit() }
+                if (e.code in listOf("VERSION_CONFLICT", "GROUP_CONFLICT", "TAG_NOT_FOUND", "CATEGORY_UNASSIGNED", "CATEGORY_NOT_FOUND")) { pendingBulk = null; prefs().edit().remove(bulkKey()).commit() }
                 throw e
             }
-            pendingBulk = null; prefs().edit().remove(accountKey("bulk")).commit()
+            pendingBulk = null; prefs().edit().remove(bulkKey()).commit()
             load(); ui { message(t("success")); if (then == null) render() else then() }
         }
     }
