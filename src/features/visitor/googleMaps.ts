@@ -88,3 +88,32 @@ export async function mountLocationMap(options: {
     search.remove();
   };
 }
+
+export async function mountMemoryLocationMap(options: {
+  mapElement: HTMLElement; location: MemoryLocation; language: string; onReady: () => void; onError: () => void;
+}): Promise<() => void> {
+  await loadMaps(options.language);
+  let disposed = false;
+  const point = options.location.source === 'pin'
+    ? { lat: options.location.lat, lng: options.location.lng }
+    : { lat: 33.5902, lng: 130.4017 };
+  const map = new google.maps.Map(options.mapElement, {
+    center: point, zoom: options.location.source === 'pin' ? 16 : 13,
+    disableDefaultUI: true, clickableIcons: false, gestureHandling: 'none',
+  });
+
+  if (options.location.source === 'pin') options.onReady();
+  else {
+    const place = new google.maps.places.Place({ id: options.location.placeId });
+    void place.fetchFields({ fields: ['location'] }).then(() => {
+      if (disposed) return;
+      if (place.location) {
+        map.setCenter(place.location);
+        map.setZoom(16);
+        options.onReady();
+      } else options.onError();
+    }).catch(() => { if (!disposed) options.onError(); });
+  }
+
+  return () => { disposed = true; };
+}

@@ -45,7 +45,8 @@ it('simulates recording and submission, then restarts unbound without uploading'
   fireEvent.click(screen.getByRole('button', { name: 'Start recording' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Finish recording' }));
   fireEvent.click(screen.getByRole('button', { name: 'Leave this voice' }));
-  expect(await screen.findByLabelText('Play recording')).toHaveAttribute('src', expect.stringContaining('blob:'));
+  expect(await screen.findByRole('heading', { name: 'You can now place your marker on the exhibition map.' })).toBeVisible();
+  expect(screen.queryByLabelText('Play recording')).not.toBeInTheDocument();
   expect(fetch.mock.calls.some(([url]) => String(url).includes('.supabase.co'))).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: 'Start again' }));
   expect(await screen.findByRole('button', { name: 'Begin' })).toBeVisible();

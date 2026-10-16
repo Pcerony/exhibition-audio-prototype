@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Mic, RotateCcw, Send, Utensils, Compass, HeartHandshake, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ExternalLink, Mic, Pencil, RotateCcw, Send, Utensils, Compass, HeartHandshake, Sparkles, X } from 'lucide-react';
 import type { Tag } from '../../domain/tags';
 import type { VisitorRepository } from '../../storage/repository';
 import { useRecorder } from './useRecorder';
@@ -8,6 +8,8 @@ import { useI18n } from '../../i18n/I18nProvider';
 import './visitor.css';
 import { memoryLocationUrl, type MemoryLocation } from '../../domain/location';
 import { LocationPicker } from './LocationPicker';
+import { MemoryLocationMap } from './MemoryLocationMap';
+import { VisitorAudioPlayer } from './VisitorAudioPlayer';
 import type { MessageKey } from '../../i18n/messages';
 import { isMemoryCategoryCode, type MemoryCategoryCode } from '../../domain/classification';
 
@@ -21,15 +23,19 @@ export function VisitorPage({ repository, token }: Props) {
   const [tag, setTag] = useState<Tag | null | undefined>(undefined);
   const [loadedToken, setLoadedToken] = useState('');
   const [audioUrl, setAudioUrl] = useState('');
+  const [justSubmitted, setJustSubmitted] = useState(false);
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const [playbackRevision, setPlaybackRevision] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [transcriptionConsent, setTranscriptionConsent] = useState(false);
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [message, setMessage] = useState<MessageKey | ''>('');
   const [loadFailed, setLoadFailed] = useState(false);
   const [location, setLocation] = useState<MemoryLocation | null>(null);
   const audioObjectUrl = useRef('');
   const shellRef = useRef<HTMLElement>(null);
+  const categoryButtonRef = useRef<HTMLButtonElement>(null);
+  const categoryDialogRef = useRef<HTMLDivElement>(null);
   const activeToken = useRef(token);
   activeToken.current = token;
   const recorder = useRecorder();
@@ -41,10 +47,12 @@ export function VisitorPage({ repository, token }: Props) {
     setLoadFailed(false);
     setMessage('');
     setAudioUrl('');
+    setJustSubmitted(false);
     setStage('intro'); setTheme(''); setMapVisited(false);
     setLocation(null);
     setSubmitting(false);
     setTranscriptionConsent(false);
+    setCategoryDialogOpen(false);
     recorder.discard();
     repository.getTag(token).then((value) => {
       if (active) {
@@ -65,7 +73,7 @@ export function VisitorPage({ repository, token }: Props) {
     let active = true;
     setPlaybackFailed(false);
     setAudioUrl('');
-    if (!tag?.recording) {
+    if (justSubmitted || !tag?.recording) {
       setAudioUrl('');
       return;
     }
@@ -80,7 +88,7 @@ export function VisitorPage({ repository, token }: Props) {
       if (audioObjectUrl.current) URL.revokeObjectURL(audioObjectUrl.current);
       audioObjectUrl.current = '';
     };
-  }, [repository, token, tag?.recording?.id, playbackRevision]);
+  }, [repository, token, tag?.recording?.id, playbackRevision, justSubmitted]);
 
   async function submitRecording() {
     if (!recorder.blob || submitting) return;
@@ -94,6 +102,7 @@ export function VisitorPage({ repository, token }: Props) {
       if (activeToken.current !== token) return;
       if (result.status === 'claimed' || result.status === 'already-bound') {
         setTag(result.tag);
+        setJustSubmitted(result.status === 'claimed');
         recorder.discard();
         setMessage(result.status === 'claimed' ? 'visitor.success' : 'visitor.duplicate');
       } else {
@@ -119,10 +128,18 @@ export function VisitorPage({ repository, token }: Props) {
   }
 
 
-  const header = <header className="outdoor-header"><LanguageSwitch visitor /><img src={`${import.meta.env.BASE_URL}sodeslab-logo.png`} alt="SoDesLab" width="150" height="48" /></header>;
+  const tagNumber = tag ? tag.serialNumber ?? tag.label : '';
+  const header = <header className="outdoor-header"><LanguageSwitch visitor /><div className="outdoor-brand"><img src={`${import.meta.env.BASE_URL}sodeslab-logo.png`} alt="SoDesLab" width="150" height="48" />{tag && <span className="visitor-tag-number" data-testid="visitor-tag-number">{t('visitor.tag', { label: tagNumber })}</span>}</div></header>;
   const loading = loadedToken !== token || tag === undefined;
   const step = stage === 'intro' ? 1 : stage === 'theme' ? 2 : stage === 'map' ? 3 : recorder.state === 'ready' ? 5 : 4;
   const stepLabel = [t('flow.intro'), t('flow.theme'), t('flow.map'), t('flow.record'), t('flow.confirm')];
+  const categories = [
+    { code: 'A', label: t('flow.food'), Icon: Utensils },
+    { code: 'B', label: t('flow.travel'), Icon: Compass },
+    { code: 'C', label: t('flow.encounter'), Icon: HeartHandshake },
+    { code: 'D', label: t('flow.other'), Icon: Sparkles },
+  ] as const;
+  const selectedCategory = categories.find(category => category.code === theme);
   useEffect(() => {
     if (loading) return;
     const heading = Array.from(shellRef.current?.querySelectorAll('h1') ?? [])
@@ -132,6 +149,10 @@ export function VisitorPage({ repository, token }: Props) {
       heading.focus({ preventScroll: true });
     }
   }, [stage, step, loading, Boolean(tag?.recording)]);
+  useEffect(() => {
+    if (categoryDialogOpen) categoryDialogRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    else categoryButtonRef.current?.focus();
+  }, [categoryDialogOpen]);
   const back = () => {
     if (stage === 'theme') setStage('intro');
     else if (stage === 'map') setStage('theme');
@@ -141,30 +162,58 @@ export function VisitorPage({ repository, token }: Props) {
     {header}
     {loading ? <section className="outdoor-loading" role="status"><span className="loading-ring" aria-hidden="true" /><p>{t('app.loading')}</p></section>
       : !tag || tag.status === 'disabled' ? <section className="outdoor-step"><h1>{!tag && !loadFailed ? t('visitor.notFoundTitle') : t('visitor.unavailable')}</h1><p>{!tag && !loadFailed ? t('visitor.notFoundBody') : t('visitor.submitFailure')}</p>{loadFailed && <button className="primary-action" onClick={() => { void retryLoading().catch(() => {}); }}>{t('flow.retry')}</button>}</section>
-      : tag.recording ? <section className="outdoor-step recorded-view">
+      : tag.recording && justSubmitted ? <section className="outdoor-step placement-view">
+        <p className="step-kicker">{t('flow.thanks')}</p>
+        <h1>{t('visitor.placementTitle')}</h1>
+        <p className="placement-help">{t('visitor.placementHelp')}</p>
+        {tag.recording.location && <>
+          <MemoryLocationMap location={tag.recording.location} />
+          <a className="secondary-action placement-map-link" href={memoryLocationUrl(tag.recording.location)!} target="_blank" rel="noreferrer"><ExternalLink size={20}/>{t('location.openInMaps')}</a>
+        </>}
+        {message && <p role="status" className="visitor-message"><Check size={22}/>{t(message)}</p>}
+      </section> : tag.recording ? <section className="outdoor-step recorded-view">
         <p className="step-kicker">{message ? t('flow.thanks') : t('flow.memory')}</p>
         <h1>{tag.recording.nickname ? t('visitor.recordedTitle', { name: tag.recording.nickname }) : t('visitor.recordedAnonymous')}</h1>
         <div className="outdoor-wave" aria-hidden="true">{Array.from({length:25}, (_,i) => <i key={i} style={{height: `${20+(i*37)%80}%`}} />)}</div>
-        {playbackFailed ? <button className="secondary-action" onClick={() => setPlaybackRevision(v => v+1)}><RotateCcw />{t('visitor.retryPlayback')}</button> : audioUrl ? <audio className="preview-player" controls aria-label={t('visitor.player')} src={audioUrl} onError={() => setPlaybackFailed(true)} /> : <p role="status">{t('visitor.loadingAudio')}</p>}
+        {playbackFailed ? <button className="secondary-action" onClick={() => setPlaybackRevision(v => v+1)}><RotateCcw />{t('visitor.retryPlayback')}</button> : audioUrl ? <VisitorAudioPlayer src={audioUrl} purpose="recording" onPlaybackError={() => setPlaybackFailed(true)} /> : <p role="status">{t('visitor.loadingAudio')}</p>}
         {tag.recording.location && <a className="secondary-action" href={memoryLocationUrl(tag.recording.location)!} target="_blank" rel="noreferrer">{t('location.view')}<ArrowRight size={22}/></a>}
         {message && <p role="status" className="visitor-message"><Check size={22}/>{t(message)}</p>}
         {tag.recording.transcript?.trim() && <details className="visitor-transcript"><summary>{t('transcription.show')}</summary><p>{tag.recording.transcript}</p><small>{t('transcription.accuracy')}</small></details>}
-        <p className="visitor-serial" data-testid="visitor-serial">{tag.serialNumber ?? tag.label}</p>
       </section> : <>
         <div className="outdoor-progress"><span className="step-number">{String(step).padStart(2,'0')}<small> / 05</small></span><span>{stepLabel[step-1]}</span>{stage !== 'intro' && <button title={t('flow.back')} aria-label={t('flow.back')} disabled={submitting || recorder.starting || recorder.state === 'recording'} onClick={back}><ArrowLeft size={25}/></button>}</div>
-        {stage === 'intro' && <section className="outdoor-step intro-step"><p className="step-kicker">FUKUOKA VOICE MEMORIES</p><h1>{t('flow.slogan')}</h1><p>{t('flow.introBody')}</p><button className="primary-action" onClick={() => setStage('theme')}>{t('flow.begin')}<ArrowRight size={25}/></button></section>}
-        {stage === 'theme' && <section className="outdoor-step"><h1>{t('flow.themeTitle')}</h1><div className="theme-options">{[
-          ['A',t('flow.food'),Utensils],
-          ['B',t('flow.travel'),Compass],
-          ['C',t('flow.encounter'),HeartHandshake],
-          ['D',t('flow.other'),Sparkles],
-        ].map(([id,label,Icon]) => { const Symbol = Icon as typeof Mic; return <button key={String(id)} aria-pressed={theme===id} onClick={() => { setTheme(id as MemoryCategoryCode); setMapVisited(true); setStage('map'); }}><Symbol size={30}/><span>{String(label)}</span><ArrowRight size={22}/></button>; })}</div></section>}
+        {stage === 'intro' && <section className="outdoor-step intro-step"><p className="step-kicker">{t('app.title')}</p><h1>{t('flow.slogan')}</h1><p>{t('flow.introBody')}</p><button className="primary-action" onClick={() => setStage('theme')}>{t('flow.begin')}<ArrowRight size={25}/></button></section>}
+        {stage === 'theme' && <section className="outdoor-step"><h1>{t('flow.themeTitle')}</h1><div className="theme-options">{categories.map(({ code, label, Icon }) => <button key={code} aria-pressed={theme === code} onClick={() => { setTheme(code); setMapVisited(true); setStage('map'); }}><Icon size={30}/><span>{label}</span><ArrowRight size={22}/></button>)}</div></section>}
         {mapVisited && <div hidden={stage !== 'map'}><LocationPicker key={token} onDone={value => { setLocation(value); setStage('record'); }} /></div>}
         {stage === 'record' && <section className="outdoor-step recording-view">
           <h1>{recorder.state === 'ready' ? t('flow.preview') : t('visitor.promptTitle')}</h1>
           {recorder.state !== 'ready' && <div className={`outdoor-recorder ${recorder.state}`}><Mic size={52} strokeWidth={1.7}/><p className="record-time">{formatDuration(recorder.duration)}</p><p>{recorder.state === 'recording' ? t('visitor.recordingNow') : t('visitor.recordHint')}</p></div>}
           {recorder.error && <p className="inline-error" role="alert">{recorder.error}</p>}
-          {recorder.state === 'ready' && recorder.previewUrl && <><div className="outdoor-wave" aria-hidden="true">{Array.from({length:25},(_,i)=><i key={i} style={{height:`${20+(i*37)%80}%`}}/>)}</div><audio className="preview-player" controls aria-label={t('visitor.preview')} src={recorder.previewUrl}/></>}
+          {recorder.state === 'ready' && recorder.previewUrl && <><div className="outdoor-wave" aria-hidden="true">{Array.from({length:25},(_,i)=><i key={i} style={{height:`${20+(i*37)%80}%`}}/>)}</div><VisitorAudioPlayer src={recorder.previewUrl} purpose="preview" /></>}
+          {recorder.state === 'ready' && <div className="review-confirmations">
+            <section className="review-confirmation review-category" data-testid="review-category">
+              <div className="review-confirmation-copy"><p>{t('flow.categoryConfirm', { category: selectedCategory?.label ?? '' })}</p></div>
+              <button ref={categoryButtonRef} className="review-edit-button" type="button" onClick={() => setCategoryDialogOpen(true)}><Pencil size={16}/>{t('flow.changeCategory')}</button>
+            </section>
+            {location && <section className="review-confirmation review-location" data-testid="review-location">
+              <div className="review-location-heading"><p>{t('flow.locationConfirm')}</p><button className="review-edit-button" type="button" onClick={() => setStage('map')}><Pencil size={16}/>{t('flow.changeLocation')}</button></div>
+              <MemoryLocationMap location={location} />
+            </section>}
+          </div>}
+          {categoryDialogOpen && recorder.state === 'ready' && <div className="category-dialog-backdrop" onClick={event => { if (event.target === event.currentTarget) setCategoryDialogOpen(false); }}>
+            <div ref={categoryDialogRef} className="category-dialog" role="dialog" aria-modal="true" aria-labelledby="category-dialog-title" onKeyDown={event => {
+              if (event.key === 'Escape') setCategoryDialogOpen(false);
+              if (event.key === 'Tab') {
+                const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+                const first = buttons[0];
+                const last = buttons.at(-1);
+                if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+                else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+              }
+            }}>
+              <div className="category-dialog-heading"><h2 id="category-dialog-title">{t('flow.changeCategory')}</h2><button className="category-dialog-close" type="button" aria-label={t('flow.cancel')} onClick={() => setCategoryDialogOpen(false)}><X size={22}/></button></div>
+              <div className="category-dialog-options">{categories.map(({ code, label, Icon }) => <button key={code} type="button" aria-pressed={theme === code} onClick={() => { setTheme(code); setCategoryDialogOpen(false); }}><Icon size={20}/><span>{label}</span></button>)}</div>
+            </div>
+          </div>}
           {recorder.state === 'ready' && <div className="transcription-choice"><label><input type="checkbox" checked={transcriptionConsent} disabled={submitting} onChange={event => setTranscriptionConsent(event.target.checked)} aria-describedby="transcription-notice"/><span>{t('transcription.consent')}</span></label><p id="transcription-notice">{t('transcription.notice')}</p></div>}
           <div className="outdoor-actions">{recorder.state === 'recording' ? <button className="primary-action stop-action" onClick={recorder.stop}><span className="stop-square"/>{t('visitor.stop')}</button> : recorder.state === 'ready' ? <><button className="primary-action" disabled={submitting} onClick={submitRecording}><Send size={24}/>{submitting ? t('visitor.submitting') : t('visitor.submit')}</button><button className="secondary-action" disabled={submitting} onClick={recorder.discard}><RotateCcw size={23}/>{t('visitor.retake')}</button></> : <button className="primary-action" onClick={recorder.start} disabled={recorder.starting || submitting}><Mic size={26}/>{t('visitor.start')}</button>}</div>
           <p className="outdoor-notice">{t('flow.publicNotice')}</p>

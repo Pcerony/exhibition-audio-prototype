@@ -1,14 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { createMemoryRepository } from '../../storage/repository';
 import { VisitorPage } from './VisitorPage';
 import { I18nProvider } from '../../i18n/I18nProvider';
 import { visitorMessages } from '../../i18n/visitorMessages';
+import type { MemoryLocation } from '../../domain/location';
+
+const mapsMock = vi.hoisted(() => ({
+  mountLocationMap: vi.fn(),
+  mountMemoryLocationMap: vi.fn(),
+}));
+
+vi.mock('./googleMaps', () => mapsMock);
 
 const repository = createMemoryRepository();
 
 beforeEach(async () => {
   vi.restoreAllMocks();
+  mapsMock.mountLocationMap.mockReset().mockImplementation((options: unknown) => {
+    (options as { onSelect: (location: MemoryLocation) => void }).onSelect({ source: 'pin', lat: 33.59, lng: 130.4 });
+    return Promise.resolve(() => {});
+  });
+  mapsMock.mountMemoryLocationMap.mockReset().mockImplementation((options: unknown) => {
+    (options as { onReady: () => void }).onReady();
+    return Promise.resolve(() => {});
+  });
   localStorage.setItem('exhibition-audio-language-v2', 'zh-CN');
   for (const tag of await repository.listTags()) await repository.resetTag(tag.token);
   if (!(await repository.getTag('visitor-token'))) {
@@ -43,22 +59,25 @@ describe('visitor page', () => {
     fireEvent.click(screen.getByRole('button', { name: copy['visitor.start'] }));
     fireEvent.click(await screen.findByRole('button', { name: copy['visitor.stop'] }));
     expect(screen.getByRole('heading', { name: copy['flow.preview'] })).toBeVisible();
-    const audio = screen.getByLabelText(copy['visitor.preview']);
+    expect(screen.getByTestId('review-category')).toHaveTextContent(copy['flow.food']);
+    const audio = document.querySelector('.visitor-audio-player audio')!;
     expect(screen.getByRole('checkbox')).not.toBeChecked();
     fireEvent.click(screen.getByRole('checkbox'));
     const url = audio.getAttribute('src');
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'ja-JP' } });
-    expect(screen.getByLabelText('録音を試聴')).toHaveAttribute('src', url);
+    expect(document.querySelector('.visitor-audio-player audio')).toHaveAttribute('src', url);
+    expect(screen.getByRole('button', { name: '録音を試聴' })).toBeInTheDocument();
     expect(screen.getByRole('checkbox')).toBeChecked();
     expect(screen.getByRole('button', { name: 'この声を残す' })).toBeEnabled();
     const claim = vi.spyOn(repository, 'claim');
     fireEvent.click(screen.getByRole('button', { name: 'この声を残す' }));
     expect(claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({ transcriptionConsent: true }));
-    await screen.findByRole('heading', { name: visitorMessages['ja-JP']['visitor.recordedAnonymous'] });
+    await screen.findByRole('heading', { name: visitorMessages['ja-JP']['visitor.placementTitle'] });
   });
   it('keeps maps out of the introduction and numbers the theme step', async () => {
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
     expect(await screen.findByRole('button', { name: '开始' })).toBeVisible();
+    expect(screen.getByTestId('visitor-tag-number')).toHaveTextContent('展签 01');
     expect(screen.queryByLabelText('福冈市地图')).not.toBeInTheDocument();
     expect(screen.getByAltText('SoDesLab')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '开始' }));
@@ -102,8 +121,8 @@ describe('visitor page', () => {
 
     expect(await screen.findByRole('heading', { name: '小林留下的福冈回忆' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /开始录音/ })).not.toBeInTheDocument();
-    expect(await screen.findByLabelText('播放录音')).toBeInTheDocument();
-    expect(screen.getByTestId('visitor-serial').textContent).toMatch(/^\d{6}-B001$/);
+    expect(await screen.findByRole('button', { name: '播放录音' })).toBeInTheDocument();
+    expect(screen.getByTestId('visitor-tag-number').textContent).toMatch(/\d{6}-B001$/);
   });
 
   it('shows an unavailable state for an unknown token', async () => {
@@ -117,7 +136,8 @@ describe('visitor page', () => {
     vi.spyOn(repository, 'getVisitorPlaybackUrl').mockRejectedValueOnce(new Error('NETWORK_ERROR')).mockResolvedValueOnce('https://example.invalid/signed-audio');
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
     fireEvent.click(await screen.findByRole('button', { name: '重新加载录音' }));
-    expect(await screen.findByLabelText('播放录音')).toHaveAttribute('src', 'https://example.invalid/signed-audio');
+    expect(await screen.findByRole('button', { name: '播放录音' })).toBeInTheDocument();
+    expect(document.querySelector('.visitor-audio-player audio')).toHaveAttribute('src', 'https://example.invalid/signed-audio');
   });
 
   it('does not show the previous tag while a new NFC token is loading', async () => {
@@ -137,7 +157,7 @@ describe('visitor page', () => {
     view.rerender(<I18nProvider><VisitorPage repository={repository} token="next-token" /></I18nProvider>);
 
     expect(screen.queryByRole('heading', { name: '旧标签留下的福冈回忆' })).not.toBeInTheDocument();
-    expect(screen.getByText(/正在打开声音档案/)).toBeInTheDocument();
+    expect(screen.getByText(/正在打开 WakuWaku Map/)).toBeInTheDocument();
   });
 
   it('translates recording controls on the visitor page', async () => {
@@ -208,6 +228,132 @@ describe('visitor page', () => {
     const { act } = await import('@testing-library/react');
     await act(async () => failUpload(new Error('offline')));
     expect(await screen.findByText('Could not save. Keep your recording and try again.')).toBeVisible();
+  });
+
+  it('lets visitors review and change the category and selected location before submitting', async () => {
+    vi.stubGlobal('MediaRecorder', class {
+      state = 'inactive'; mimeType = 'audio/webm';
+      ondataavailable?: (event: { data: Blob }) => void;
+      onstop?: () => void;
+      start() { this.state = 'recording'; }
+      stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['fixture']) }); this.onstop?.(); }
+    });
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
+      getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+    } });
+    const claim = vi.spyOn(repository, 'claim');
+    render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    await enterMap();
+    fireEvent.click(await screen.findByRole('button', { name: '确认地点' }));
+    fireEvent.click(await screen.findByRole('button', { name: '开始录音' }));
+    fireEvent.click(await screen.findByRole('button', { name: '完成录音' }));
+
+    expect(screen.getByTestId('review-category')).toHaveTextContent('美食');
+    expect(screen.getByTestId('review-location')).toBeVisible();
+    expect(screen.getByRole('region', { name: '福冈市地图' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: '修改分类' }));
+    expect(screen.getByRole('dialog', { name: '修改分类' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '旅行' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByTestId('review-category')).toHaveTextContent('旅行');
+
+    fireEvent.click(screen.getByRole('button', { name: '重新选择地点' }));
+    expect(screen.getByRole('heading', { name: '这段回忆，发生在哪里？' })).toBeVisible();
+    const mapOptions = mapsMock.mountLocationMap.mock.calls[0][0] as { onSelect: (value: MemoryLocation) => void };
+    await act(async () => mapOptions.onSelect({ source: 'pin', lat: 33.61, lng: 130.42 }));
+    fireEvent.click(screen.getByRole('button', { name: '确认地点' }));
+    expect(screen.getByRole('heading', { name: '听听你的声音。' })).toBeVisible();
+    expect(mapsMock.mountMemoryLocationMap).toHaveBeenLastCalledWith(expect.objectContaining({
+      location: { source: 'pin', lat: 33.61, lng: 130.42 },
+    }));
+    fireEvent.click(screen.getByRole('button', { name: '把声音留在这里' }));
+    await screen.findByRole('heading', { name: '现在可以去实体地图上放置立牌了。' });
+    expect(claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({
+      categoryCode: 'B', location: { source: 'pin', lat: 33.61, lng: 130.42 },
+    }));
+  });
+
+  it('omits the location confirmation when the visitor skipped the map', async () => {
+    mapsMock.mountLocationMap.mockImplementation(() => Promise.resolve(() => {}));
+    vi.stubGlobal('MediaRecorder', class {
+      state = 'inactive'; mimeType = 'audio/webm';
+      ondataavailable?: (event: { data: Blob }) => void;
+      onstop?: () => void;
+      start() { this.state = 'recording'; }
+      stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['fixture']) }); this.onstop?.(); }
+    });
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
+      getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+    } });
+    render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    await enterMap();
+    fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
+    fireEvent.click(await screen.findByRole('button', { name: '开始录音' }));
+    fireEvent.click(await screen.findByRole('button', { name: '完成录音' }));
+
+    expect(screen.getByTestId('review-category')).toHaveTextContent('美食');
+    expect(screen.queryByTestId('review-location')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '福冈市地图' })).not.toBeInTheDocument();
+  });
+
+  it('shows the placement page after saving, with the updated tag number and selected map', async () => {
+    vi.stubGlobal('MediaRecorder', class {
+      state = 'inactive'; mimeType = 'audio/webm';
+      ondataavailable?: (event: { data: Blob }) => void;
+      onstop?: () => void;
+      start() { this.state = 'recording'; }
+      stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['fixture']) }); this.onstop?.(); }
+    });
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
+      getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+    } });
+    const getPlayback = vi.spyOn(repository, 'getVisitorPlaybackUrl');
+    render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+
+    expect(await screen.findByTestId('visitor-tag-number')).toHaveTextContent('展签 01');
+    await enterMap();
+    fireEvent.click(await screen.findByRole('button', { name: '确认地点' }));
+    fireEvent.click(await screen.findByRole('button', { name: '开始录音' }));
+    fireEvent.click(await screen.findByRole('button', { name: '完成录音' }));
+    fireEvent.click(screen.getByRole('button', { name: '把声音留在这里' }));
+
+    expect(await screen.findByRole('heading', { name: '现在可以去实体地图上放置立牌了。' })).toBeVisible();
+    const tag = await repository.getTag('visitor-token');
+    expect(tag?.serialNumber).toBeTruthy();
+    expect(screen.getByTestId('visitor-tag-number')).toHaveTextContent(tag!.serialNumber!);
+    expect(screen.getByText('你可以自己放置，也可以向工作人员寻求帮助。')).toBeVisible();
+    expect(screen.getByRole('region', { name: '福冈市地图' })).toBeVisible();
+    expect(screen.getByRole('link', { name: '在地图中打开' })).toHaveAttribute('href', expect.stringContaining('google.com/maps'));
+    expect(screen.queryByLabelText('试听录音')).not.toBeInTheDocument();
+    expect(getPlayback).not.toHaveBeenCalled();
+    expect(mapsMock.mountMemoryLocationMap).toHaveBeenCalledWith(expect.objectContaining({
+      location: { source: 'pin', lat: 33.59, lng: 130.4 },
+    }));
+  });
+
+  it('omits the placement map when no location was selected', async () => {
+    vi.stubGlobal('MediaRecorder', class {
+      state = 'inactive'; mimeType = 'audio/webm';
+      ondataavailable?: (event: { data: Blob }) => void;
+      onstop?: () => void;
+      start() { this.state = 'recording'; }
+      stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['fixture']) }); this.onstop?.(); }
+    });
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
+      getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+    } });
+    render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    await enterMap();
+    fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
+    fireEvent.click(await screen.findByRole('button', { name: '开始录音' }));
+    fireEvent.click(await screen.findByRole('button', { name: '完成录音' }));
+    fireEvent.click(screen.getByRole('button', { name: '把声音留在这里' }));
+
+    expect(await screen.findByRole('heading', { name: '现在可以去实体地图上放置立牌了。' })).toBeVisible();
+    expect(screen.queryByRole('region', { name: '福冈市地图' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '在地图中打开' })).not.toBeInTheDocument();
+    expect(mapsMock.mountMemoryLocationMap).not.toHaveBeenCalled();
   });
 
   it('explains how to recover when the browser blocks microphone permission', async () => {

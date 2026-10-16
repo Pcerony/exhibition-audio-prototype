@@ -37,6 +37,13 @@ describe('language preference', () => {
     }
   });
 
+  it('uses WakuWaku Map as the exhibition title in each visitor language', () => {
+    expect(visitorMessages['ja-JP']['app.title']).toBe('ワクワクマップ');
+    for (const locale of ['zh-CN', 'zh-TW', 'en', 'ko'] as const) {
+      expect(visitorMessages[locale]['app.title']).toBe('WakuWaku Map');
+    }
+  });
+
   it.each([
     ['en', 'Start recording'], ['ko', '녹음 시작'], ['zh-TW', '開始錄音'],
   ])('selects and restores visitor language %s', (locale, text) => {
@@ -59,11 +66,11 @@ describe('language preference', () => {
 
   it('starts in Japanese and persists Chinese when selected', () => {
     render(<I18nProvider><TestCopy /></I18nProvider>);
-    expect(screen.getByText('音声アーカイブ')).toBeInTheDocument();
+    expect(screen.getByText('ワクワクマップ')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '中文' }));
 
-    expect(screen.getByText('声音档案')).toBeInTheDocument();
+    expect(screen.getByText('WakuWaku Map')).toBeInTheDocument();
     expect(localStorage.getItem('exhibition-audio-language-v2')).toBe('zh-CN');
   });
 
@@ -71,13 +78,13 @@ describe('language preference', () => {
     localStorage.setItem('exhibition-audio-language-v2', 'ja-JP');
     render(<I18nProvider><TestCopy /></I18nProvider>);
 
-    expect(screen.getByText('音声アーカイブ')).toBeInTheDocument();
+    expect(screen.getByText('ワクワクマップ')).toBeInTheDocument();
   });
 
   it('defaults existing installations with an older Chinese preference to Japanese', () => {
     localStorage.setItem('exhibition-audio-language', 'zh-CN');
     render(<I18nProvider><TestCopy /></I18nProvider>);
 
-    expect(screen.getByText('音声アーカイブ')).toBeInTheDocument();
+    expect(screen.getByText('ワクワクマップ')).toBeInTheDocument();
   });
 });
