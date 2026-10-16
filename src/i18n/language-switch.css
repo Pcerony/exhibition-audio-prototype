@@ -1,1 +1,5 @@
 .language-switch{display:inline-flex;align-items:center;padding:2px;border:1px solid #d8dbd3;border-radius:4px;background:#fff;flex:0 0 auto}.language-switch button{min-height:27px;padding:0 8px;border:0;border-radius:2px;background:transparent;color:#687064;font:inherit;font-size:10px;cursor:pointer}.language-switch button[aria-pressed="true"]{background:#e9eee5;color:#394f38;font-weight:620}.language-switch button:focus-visible{outline:2px solid #b87445;outline-offset:1px}
+.visitor-language-menu { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: #283022; }
+.visitor-language-menu select { width: 132px; min-height: 44px; padding: 8px 5px; border: 1px solid #89937d; border-radius: 4px; background: #fff; color: inherit; font: inherit; font-size: 16px; }
+.visitor-language-menu select:focus-visible { outline: 3px solid #273820; outline-offset: 3px; }
+@media(max-width:360px) { .visitor-language-menu { gap: 3px; } .visitor-language-menu select { width: 113px; } }

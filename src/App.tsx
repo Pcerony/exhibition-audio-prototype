@@ -7,7 +7,7 @@ import { createBrowserRepository, type TagRepository } from './storage/repositor
 import { createSupabaseVisitorRepository, hasSupabaseConfig } from './storage/supabaseVisitorRepository';
 import { createConfiguredCloudAdminRepository } from './storage/cloudAdminRepository';
 import { LanguageSwitch } from './i18n/LanguageSwitch';
-import { useI18n } from './i18n/I18nProvider';
+import { operatorLocale, useI18n } from './i18n/I18nProvider';
 import './styles.css';
 import { PolicyLinks, PolicyPage } from './features/visitor/PolicyPage';
 
@@ -48,9 +48,9 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.lang = locale;
+    document.documentElement.lang = resolveAppRoute(route.pathname, route.hash).type === 'admin' ? operatorLocale(locale) : locale;
     document.title = t('app.title');
-  }, [locale, t]);
+  }, [locale, t, route.pathname, route.hash]);
 
   if (!ready) return <main className="outdoor-loading" role="status"><span className="loading-ring" aria-hidden="true" /><p>{t('app.loading')}</p></main>;
   const resolvedRoute = resolveAppRoute(route.pathname, route.hash);
@@ -66,7 +66,7 @@ export function App() {
     return <AdminPage repository={repository} baseUrl={baseUrl} />;
   }
   return <main className="visitor-shell welcome-shell outdoor-shell">
-    <header className="outdoor-header"><LanguageSwitch /><img src={`${import.meta.env.BASE_URL}sodeslab-logo.png`} alt="SoDesLab" width="150" height="48" /></header>
+    <header className="outdoor-header"><LanguageSwitch visitor /><img src={`${import.meta.env.BASE_URL}sodeslab-logo.png`} alt="SoDesLab" width="150" height="48" /></header>
     <section className="welcome-content">
       <p className="eyebrow">{t('welcome.kicker')}</p>
       <h1>{t('welcome.title')}</h1>

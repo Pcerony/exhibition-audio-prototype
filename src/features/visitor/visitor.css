@@ -56,3 +56,5 @@
 @media(prefers-reduced-motion:reduce) { .loading-ring,.outdoor-recorder.recording > svg { animation: none; } }
 @media(max-width:600px) { .outdoor-shell .location-actions { grid-template-columns: 1fr; } }
 .outdoor-shell h1:focus { outline: none; }
+.outdoor-shell h1 { text-wrap: balance; }
+html[lang="ko"] .outdoor-shell h1,html[lang="ko"] .outdoor-shell p { word-break: keep-all; overflow-wrap: break-word; }

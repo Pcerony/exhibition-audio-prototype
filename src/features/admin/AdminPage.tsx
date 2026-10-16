@@ -3,7 +3,7 @@ import { AudioLines, Check, Download, ExternalLink, FileUp, Plus, RotateCcw, Sea
 import type { Tag } from '../../domain/tags';
 import type { TagRepository } from '../../storage/repository';
 import { parseTagCsv, serializeTags } from './csv';
-import { useI18n } from '../../i18n/I18nProvider';
+import { useOperatorI18n as useI18n } from '../../i18n/I18nProvider';
 import { LanguageSwitch } from '../../i18n/LanguageSwitch';
 import './admin.css';
 

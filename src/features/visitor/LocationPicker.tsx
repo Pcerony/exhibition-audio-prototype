@@ -4,6 +4,7 @@ import type { MemoryLocation } from '../../domain/location';
 import { useI18n } from '../../i18n/I18nProvider';
 import { mountLocationMap } from './googleMaps';
 import { PolicyLinks } from './PolicyPage';
+import { mapLanguages } from '../../i18n/visitorMessages';
 
 export function LocationPicker({ onDone }: { onDone: (location: MemoryLocation | null) => void }) {
   const { locale, t } = useI18n();
@@ -16,7 +17,7 @@ export function LocationPicker({ onDone }: { onDone: (location: MemoryLocation |
     let active = true;
     let dispose: (() => void) | undefined;
     mountLocationMap({
-      mapElement: map.current!, searchElement: search.current!, language: locale === 'ja-JP' ? 'ja' : 'zh-CN',
+      mapElement: map.current!, searchElement: search.current!, language: mapLanguages[locale],
       onSelect: (location) => { if (active) setSelected(location); },
       onError: () => { if (active) setFailed(true); },
     }).then((cleanup) => { if (active) { dispose = cleanup; setReady(true); } else cleanup(); })

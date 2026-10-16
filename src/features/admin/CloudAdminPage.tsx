@@ -30,7 +30,7 @@ import type {
   BulkOperation,
   BulkApply,
 } from "../../storage/adminRepository";
-import { useI18n } from "../../i18n/I18nProvider";
+import { useOperatorI18n as useI18n } from "../../i18n/I18nProvider";
 import { LanguageSwitch } from "../../i18n/LanguageSwitch";
 import { cloudAdminMessages } from "./cloudAdminMessages";
 import { operatorMessages } from "./operatorMessages";

@@ -82,6 +82,13 @@ beforeEach(() => {
     vi.fn(() => true),
   );
 });
+it('opens management when a visitor previously selected English', async () => {
+  localStorage.setItem('exhibition-audio-language-v2', 'en');
+  show(repository());
+  expect(await screen.findByText('A001')).toBeVisible();
+  expect(screen.getByRole('button', { name: '分類を追加' })).toBeVisible();
+  expect(localStorage.getItem('exhibition-audio-language-v2')).toBe('en');
+});
 it("shows invalid login safely and never loads protected data", async () => {
   const r = repository();
   vi.mocked(r.getSession).mockResolvedValue(null);
