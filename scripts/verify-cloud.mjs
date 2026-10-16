@@ -21,6 +21,7 @@ const batch = `AUTOTEST-${randomUUID()}`;
 const users = []; const paths = new Set(); const requestKey = randomUUID();
 let operatorJwt;
 let categoryId;
+const fixtureCategoryIds = [];
 let fixtureTagIds = [];
 function check(error, message) { if (error) throw new Error(message); }
 async function endpoint(name, body, extra = {}) {
@@ -86,6 +87,7 @@ try {
   const category = await admin('createCategory', { name: batch, requestKey: randomUUID() });
   assert.equal(category.status, 200, 'Fixture category creation failed');
   categoryId = category.body.category.id;
+  fixtureCategoryIds.push(categoryId);
   const created = await admin('createCards', { categoryId, count: 4, requestKey });
   assert.equal(created.status, 200, 'Batch creation failed');
   const tags = created.body.tags;
@@ -109,6 +111,26 @@ try {
   assert.equal((await admin('provision', report)).status, 200, 'Fixture provision report failed');
   assert.equal((await admin('provision', { jobId: job.id, version: job.version, visitorUrl: job.visitorUrl, status: 'verified' })).status, 426, 'Old writer was not blocked');
   console.log('PASS: atomic/idempotent cloud provisioning and exact URL checks (synthetic jobs only)');
+
+  const target = await admin('createCategory', { name: `${batch}-Moved`, requestKey: randomUUID() });
+  assert.equal(target.status, 200, 'Move category creation failed');
+  const targetId = target.body.category.id;
+  fixtureCategoryIds.push(targetId);
+  const preview = await admin('bulkPreview', { tagIds: [tags[3].id], operation: 'move', targetCategoryId: targetId });
+  assert.equal(preview.status, 200, 'Move preview failed');
+  assert.equal((await admin('bulkApply', { operation: 'move', cards: preview.body.groups[0].cards, kind: 'empty', targetCategoryId: targetId, requestKey: randomUUID() })).status, 200, 'Move failed');
+  const moved = (await admin('list', { categoryId: targetId })).body.tags.find((tag) => tag.id === tags[3].id);
+  assert.equal(moved.token, tags[3].token, 'Move changed public identity');
+  assert.equal(moved.provisioning.visitorUrl, tags[3].provisioning.visitorUrl, 'Move changed written URL');
+  assert.notEqual(moved.label, tags[3].label, 'Move did not allocate a new number');
+  const extra = await admin('createCards', { categoryId: targetId, count: 1, requestKey: randomUUID() });
+  assert.equal(extra.status, 200);
+  const deleted = extra.body.tags[0]; fixtureTagIds.push(deleted.id);
+  const deletion = await admin('bulkPreview', { tagIds: [deleted.id], operation: 'delete' });
+  assert.equal((await admin('bulkApply', { operation: 'delete', kind: 'empty', cards: deletion.body.groups[0].cards, requestKey: randomUUID() })).status, 200);
+  const gone = await fetch(`${url}/functions/v1/public-tag?token=${deleted.token}`, { headers: { apikey: publicKey } });
+  assert.equal(gone.status, 404, 'Deleted card remains public');
+  console.log('PASS: authenticated bulk move preserves URL, new numbering and deletion invalidates the public card');
 
   const grants = await Promise.all([init(tags[0]), init(tags[0])]);
   await Promise.all(grants.map(upload));
@@ -160,7 +182,7 @@ try {
   console.log('PASS: atomic rate limiting and failed/expired upload cleanup');
 } finally {
   let failed = false;
-  const { data: fixtures, error } = categoryId ? await privileged.from('tags').select('id').eq('category_id', categoryId) : { data: [], error: null };
+  const { data: fixtures, error } = fixtureCategoryIds.length ? await privileged.from('tags').select('id').in('category_id', fixtureCategoryIds) : { data: [], error: null };
   if (error) failed = true;
   if (paths.size && (await privileged.storage.from('recordings').remove([...paths])).error) failed = true;
   if ((await privileged.from('storage_cleanup_queue').delete().in('object_path', [...paths])).error) failed = true;
@@ -169,7 +191,7 @@ try {
     if ((await privileged.from('label_history').delete().in('tag_id', fixtureTagIds)).error) failed = true;
     if ((await privileged.from('tags').delete().in('id', fixtureTagIds)).error) failed = true;
   }
-  if (categoryId && (await privileged.from('categories').delete().eq('id', categoryId)).error) failed = true;
+  if (fixtureCategoryIds.length && (await privileged.from('categories').delete().in('id', fixtureCategoryIds)).error) failed = true;
   for (const id of users) {
     if ((await privileged.from('batch_requests').delete().eq('operator_id', id)).error) failed = true;
     if ((await privileged.from('management_requests').delete().eq('operator_id', id)).error) failed = true;
