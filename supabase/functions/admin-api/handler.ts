@@ -39,6 +39,12 @@ export function createHandler(getClient: () => SupabaseClient) {
           ?? (['22P02', '22003', '22023', '23502'].includes(error.code) ? 'REQUEST_INVALID' : 'SERVICE_UNAVAILABLE');
         return json({ code }, errors[code] ?? 503);
       }
+      if (['leaseJob', 'nextJob'].includes(body.action) && data?.job) {
+        const expiresAt = typeof data.expiresAt === 'string' ? Date.parse(data.expiresAt) : NaN;
+        if (!Number.isFinite(expiresAt)) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);
+        // Older Android Instant.parse requires Z, not PostgreSQL's +00:00 offset.
+        return json({ ...data, expiresAt: new Date(expiresAt).toISOString() });
+      }
       if (body.action === 'playback') {
         const { data: signed, error: signError } = await client.storage.from('recordings').createSignedUrl(data.objectPath, 120);
         if (signError || !signed) return json({ code: 'PLAYBACK_UNAVAILABLE' }, 503);

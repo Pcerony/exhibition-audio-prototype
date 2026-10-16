@@ -4,6 +4,28 @@ function equal(actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${JSON.stringify(actual)} != ${JSON.stringify(expected)}`);
 }
 const id = '00000000-0000-4000-8000-000000000001';
+Deno.test('lease responses use UTC Z timestamps compatible with older Android Instant.parse', async () => {
+  for (const action of ['leaseJob', 'nextJob']) {
+    for (const expiresAt of ['2026-10-16T01:11:25.65647+00:00', '2026-10-16T10:11:25.65647+09:00', '2026-10-16T01:11:25.656Z']) {
+      const data = { job: { id }, leaseToken: 'synthetic-token', expiresAt };
+      const response = await fixture('operator', true, data).handler(request({ action }));
+      equal(response.status, 200);
+      equal(await response.json(), { ...data, expiresAt: '2026-10-16T01:11:25.656Z' });
+    }
+  }
+});
+Deno.test('invalid lease expiry fails closed and empty queues stay empty', async () => {
+  for (const action of ['leaseJob', 'nextJob']) {
+    for (const expiresAt of [null, undefined, '', 'invalid', 123]) {
+      const response = await fixture('operator', true, { job: { id }, expiresAt }).handler(request({ action }));
+      equal(response.status, 503);
+      equal(await response.json(), { code: 'SERVICE_UNAVAILABLE' });
+    }
+    const response = await fixture('operator', true, { job: null }).handler(request({ action }));
+    equal(response.status, 200);
+    equal(await response.json(), { job: null });
+  }
+});
 Deno.test('v2 management actions pass through and version conflicts are stable', async () => {
   for (const action of ['categories','createCategory','renameCategory','createCards','bulkPreview','bulkApply','leaseJob','nextJob','releaseJob']) {
     equal((await fixture().handler(request({ action }))).status, 200);

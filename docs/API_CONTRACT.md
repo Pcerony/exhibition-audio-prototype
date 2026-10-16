@@ -14,6 +14,8 @@
 
 所有新请求仍由运营JWT及allowlist授权。设备ID是随机安装标识，不是NFC UID。租约token不得进入日志/CSV。账号退出或切后台停止NFC；物理读回不能由网络响应代替。
 
+兼容性要求：`leaseJob` / `nextJob` 的 `expiresAt` 统一为毫秒精度、以 `Z` 结尾的UTC ISO字符串，例如 `2026-10-16T01:11:25.656Z`。不要直接透传PostgreSQL的 `+00:00` 时间格式，旧Android的 `Instant.parse` 无法解析。转换不能延长服务端租约；缺失或不可解析时返回503，不能放行写卡。
+
 V2补充：job还有tagVersion、leased、leaseExpiresAt、writtenAt（核验成功的写卡时间，可空）。租约10分钟，同设备模糊响应重试返回当前租约；列表绝不返回leaseToken。同租约verified只接受原请求重放，不接受failed改写；显式单张重写取得新手动租约后可记录本次失败。稳定错误为CATEGORY_NOT_FOUND、CATEGORY_NAME_EXISTS、VERSION_CONFLICT、GROUP_CONFLICT、LEASE_CONFLICT、LEASE_EXPIRED、JOB_INELIGIBLE及HTTP426 CLIENT_UPGRADE_REQUIRED。
 
 实际端点为 Supabase `/functions/v1/<name>`。UTF-8 JSON、UTC ISO 时间。错误以稳定 `code` 本地化，不显示内部异常。访客 token 是服务端随机不透明身份，不能用 NFC UID 或序号代替。

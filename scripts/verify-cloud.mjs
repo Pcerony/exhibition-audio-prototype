@@ -106,9 +106,18 @@ try {
   assert.equal((await admin('jobs', { batch })).status, 426, 'Old writer received jobs before physical write');
   const lease = await admin('leaseJob', { jobId: job.id, deviceId: 'synthetic-integration', protocolVersion: 2 });
   assert.equal(lease.status, 200, 'Lease failed');
+  assert.match(lease.body.expiresAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/, 'Lease expiry incompatible with older Android');
   const report = { jobId: job.id, version: job.version, visitorUrl: job.visitorUrl, status: 'verified', protocolVersion: 2, leaseToken: lease.body.leaseToken };
   assert.equal((await admin('provision', { ...report, visitorUrl: `${job.visitorUrl}-wrong` })).status, 409, 'Wrong readback accepted');
   assert.equal((await admin('provision', report)).status, 200, 'Fixture provision report failed');
+  assert.equal((await admin('releaseJob', { jobId: job.id, leaseToken: lease.body.leaseToken })).status, 200);
+  const rewrite = await admin('leaseJob', { jobId: job.id, deviceId: 'synthetic-integration', protocolVersion: 2 });
+  assert.equal(rewrite.status, 200, 'Verified card rewrite lease failed');
+  assert.match(rewrite.body.expiresAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/, 'Rewrite expiry incompatible with older Android');
+  const retry = await admin('leaseJob', { jobId: job.id, deviceId: 'synthetic-integration', protocolVersion: 2 });
+  assert.deepEqual(retry.body, rewrite.body, 'Rewrite retry did not preserve the lease');
+  assert.equal((await admin('provision', { ...report, leaseToken: rewrite.body.leaseToken })).status, 200, 'Rewrite report failed');
+  assert.equal((await admin('releaseJob', { jobId: job.id, leaseToken: rewrite.body.leaseToken })).status, 200);
   assert.equal((await admin('provision', { jobId: job.id, version: job.version, visitorUrl: job.visitorUrl, status: 'verified' })).status, 426, 'Old writer was not blocked');
   console.log('PASS: atomic/idempotent cloud provisioning and exact URL checks (synthetic jobs only)');
 
