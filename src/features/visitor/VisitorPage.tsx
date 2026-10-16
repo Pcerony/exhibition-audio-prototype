@@ -9,13 +9,14 @@ import './visitor.css';
 import { memoryLocationUrl, type MemoryLocation } from '../../domain/location';
 import { LocationPicker } from './LocationPicker';
 import type { MessageKey } from '../../i18n/messages';
+import { isMemoryCategoryCode, type MemoryCategoryCode } from '../../domain/classification';
 
 type Props = { repository: VisitorRepository; token: string };
 
 export function VisitorPage({ repository, token }: Props) {
   const { t } = useI18n();
   const [stage, setStage] = useState<'intro' | 'theme' | 'map' | 'record'>('intro');
-  const [theme, setTheme] = useState('');
+  const [theme, setTheme] = useState<MemoryCategoryCode | ''>('');
   const [mapVisited, setMapVisited] = useState(false);
   const [tag, setTag] = useState<Tag | null | undefined>(undefined);
   const [loadedToken, setLoadedToken] = useState('');
@@ -81,11 +82,12 @@ export function VisitorPage({ repository, token }: Props) {
 
   async function submitRecording() {
     if (!recorder.blob || submitting) return;
+    if (!isMemoryCategoryCode(theme)) { setStage('theme'); return; }
     setSubmitting(true);
     setMessage('');
     try {
       const result = await repository.claim(token, {
-        id: crypto.randomUUID(), blob: recorder.blob, nickname: '', duration: recorder.duration, location,
+        id: crypto.randomUUID(), blob: recorder.blob, nickname: '', duration: recorder.duration, location, categoryCode: theme,
       });
       if (activeToken.current !== token) return;
       if (result.status === 'claimed' || result.status === 'already-bound') {
@@ -144,15 +146,16 @@ export function VisitorPage({ repository, token }: Props) {
         {playbackFailed ? <button className="secondary-action" onClick={() => setPlaybackRevision(v => v+1)}><RotateCcw />{t('visitor.retryPlayback')}</button> : audioUrl ? <audio className="preview-player" controls aria-label={t('visitor.player')} src={audioUrl} onError={() => setPlaybackFailed(true)} /> : <p role="status">{t('visitor.loadingAudio')}</p>}
         {tag.recording.location && <a className="secondary-action" href={memoryLocationUrl(tag.recording.location)!} target="_blank" rel="noreferrer">{t('location.view')}<ArrowRight size={22}/></a>}
         {message && <p role="status" className="visitor-message"><Check size={22}/>{t(message)}</p>}
+        <p className="visitor-serial" data-testid="visitor-serial">{tag.serialNumber ?? tag.label}</p>
       </section> : <>
         <div className="outdoor-progress"><span className="step-number">{String(step).padStart(2,'0')}<small> / 05</small></span><span>{stepLabel[step-1]}</span>{stage !== 'intro' && <button title={t('flow.back')} aria-label={t('flow.back')} disabled={submitting || recorder.starting || recorder.state === 'recording'} onClick={back}><ArrowLeft size={25}/></button>}</div>
         {stage === 'intro' && <section className="outdoor-step intro-step"><p className="step-kicker">FUKUOKA VOICE MEMORIES</p><h1>{t('flow.slogan')}</h1><p>{t('flow.introBody')}</p><button className="primary-action" onClick={() => setStage('theme')}>{t('flow.begin')}<ArrowRight size={25}/></button></section>}
         {stage === 'theme' && <section className="outdoor-step"><h1>{t('flow.themeTitle')}</h1><div className="theme-options">{[
-          ['food',t('flow.food'),Utensils],
-          ['travel',t('flow.travel'),Compass],
-          ['encounter',t('flow.encounter'),HeartHandshake],
-          ['other',t('flow.other'),Sparkles],
-        ].map(([id,label,Icon]) => { const Symbol = Icon as typeof Mic; return <button key={String(id)} aria-pressed={theme===id} onClick={() => { setTheme(String(id)); setMapVisited(true); setStage('map'); }}><Symbol size={30}/><span>{String(label)}</span><ArrowRight size={22}/></button>; })}</div></section>}
+          ['A',t('flow.food'),Utensils],
+          ['B',t('flow.travel'),Compass],
+          ['C',t('flow.encounter'),HeartHandshake],
+          ['D',t('flow.other'),Sparkles],
+        ].map(([id,label,Icon]) => { const Symbol = Icon as typeof Mic; return <button key={String(id)} aria-pressed={theme===id} onClick={() => { setTheme(id as MemoryCategoryCode); setMapVisited(true); setStage('map'); }}><Symbol size={30}/><span>{String(label)}</span><ArrowRight size={22}/></button>; })}</div></section>}
         {mapVisited && <div hidden={stage !== 'map'}><LocationPicker key={token} onDone={value => { setLocation(value); setStage('record'); }} /></div>}
         {stage === 'record' && <section className="outdoor-step recording-view">
           <h1>{recorder.state === 'ready' ? t('flow.preview') : t('visitor.promptTitle')}</h1>

@@ -13,16 +13,14 @@ function setup(loggedIn = true) {
 }
 
 describe('cloud admin repository', () => {
-  it('uses server categories and automatic card numbering without client-generated labels', async () => {
+  it('creates generic empty cards without preselecting category or generating public labels', async () => {
     const { repository, fetcher } = setup();
     const category = { id: 'category-id', name: 'Food', code: 'A', nextNumber: 1 };
     fetcher.mockResolvedValueOnce(new Response(JSON.stringify({ categories: [category] })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ category })))
       .mockResolvedValueOnce(new Response(JSON.stringify({ tags: [] })));
     expect(await repository.listCategories()).toEqual([category]);
-    expect(await repository.createCategory('Food', 'key-1')).toEqual(category);
-    await repository.createCards(category.id, 30, 'key-2');
-    expect(JSON.parse(fetcher.mock.calls[2][1]?.body as string)).toEqual({ action: 'createCards', categoryId: category.id, count: 30, requestKey: 'key-2' });
+    await repository.createCards(30, 'key-2');
+    expect(JSON.parse(fetcher.mock.calls[1][1]?.body as string)).toEqual({ action: 'createCards', count: 30, requestKey: 'key-2', protocolVersion: 3 });
   });
 
   it('sends server preview versions and distinct group confirmation unchanged', async () => {
@@ -94,6 +92,6 @@ describe('cloud admin repository', () => {
     fetcher.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true })));
     const job = { id: 'job-id', tagId: 'tag-id', label: 'Test 01', batch: '', visitorUrl: 'https://voice.heisei.space/#/t/opaque', version: 1, status: 'pending' as const, errorCode: null };
     await repository.provision(job, 'verified', 'server-lease-token');
-    expect(JSON.parse(fetcher.mock.calls[0][1]?.body as string)).toEqual({ action: 'provision', jobId: job.id, version: 1, visitorUrl: job.visitorUrl, status: 'verified', protocolVersion: 2, leaseToken: 'server-lease-token' });
+    expect(JSON.parse(fetcher.mock.calls[0][1]?.body as string)).toEqual({ action: 'provision', jobId: job.id, version: 1, visitorUrl: job.visitorUrl, status: 'verified', protocolVersion: 3, leaseToken: 'server-lease-token' });
   });
 });

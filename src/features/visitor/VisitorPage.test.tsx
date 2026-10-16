@@ -18,7 +18,7 @@ beforeEach(async () => {
 
 async function enterMap() {
   fireEvent.click(await screen.findByRole('button', { name: '开始' }));
-  fireEvent.click(screen.getByRole('button', { name: /饮食/ }));
+  fireEvent.click(screen.getByRole('button', { name: /美食/ }));
 }
 
 describe('visitor page', () => {
@@ -57,7 +57,7 @@ describe('visitor page', () => {
     fireEvent.click(screen.getByRole('button', { name: '开始' }));
     expect(screen.getByRole('heading', { name: '你想分享哪种回忆？' })).toBeVisible();
     expect(screen.getByRole('heading', { name: '你想分享哪种回忆？' })).toHaveFocus();
-    expect(screen.getByRole('button', { name: '未分类回忆' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '其他回忆' })).toBeVisible();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
   it('lets a visitor return to the location step without losing the recording flow', async () => {
@@ -88,6 +88,7 @@ describe('visitor page', () => {
       blob: new Blob(['audio'], { type: 'audio/webm' }),
       nickname: '小林',
       duration: 12,
+      categoryCode: 'B',
     });
 
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
@@ -95,6 +96,7 @@ describe('visitor page', () => {
     expect(await screen.findByRole('heading', { name: '小林留下的福冈回忆' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /开始录音/ })).not.toBeInTheDocument();
     expect(await screen.findByLabelText('播放录音')).toBeInTheDocument();
+    expect(screen.getByTestId('visitor-serial').textContent).toMatch(/^\d{6}-B001$/);
   });
 
   it('shows an unavailable state for an unknown token', async () => {
@@ -187,6 +189,7 @@ describe('visitor page', () => {
     expect(screen.getByRole('heading', { name: '听听你的声音。' })).toBeVisible();
     expect(screen.queryByRole('button', { name: '开始录音' })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: /把声音留在这里/ }));
+    expect(repository.claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({ categoryCode: 'A', nickname: '' }));
     expect(screen.getByRole('button', { name: /重录/ })).toBeDisabled();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'en' } });

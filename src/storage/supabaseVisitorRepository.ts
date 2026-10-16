@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Tag } from '../domain/tags';
 import { parseMemoryLocation, type MemoryLocation } from '../domain/location';
 import type { ClaimResult, NewRecording, VisitorRepository } from './repository';
+import { isMemoryCategoryCode } from '../domain/classification';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -13,6 +14,7 @@ type CloudTag = {
   batch?: string;
   status: Tag['status'];
   createdAt?: string;
+  inventoryLabel?: string; categoryId?: string | null; categoryCode?: unknown; batchDate?: string | null; serialNumber?: string | null;
   recording: null | { id: string; nickname: string; durationSeconds: number; createdAt: string; location?: MemoryLocation | null };
 };
 
@@ -52,6 +54,11 @@ export function createSupabaseVisitorRepository(): VisitorRepository {
       batch: value.batch ?? '',
       createdAt: value.createdAt ?? new Date().toISOString(),
       status: value.status,
+      inventoryLabel: value.inventoryLabel,
+      categoryId: value.categoryId ?? null,
+      categoryCode: isMemoryCategoryCode(value.categoryCode) ? value.categoryCode : null,
+      batchDate: value.batchDate ?? null,
+      serialNumber: value.serialNumber ?? null,
       recording: value.recording ? {
         id: value.recording.id,
         nickname: value.recording.nickname,
@@ -80,6 +87,7 @@ export function createSupabaseVisitorRepository(): VisitorRepository {
       return result.url;
     },
     async claim(token, recording: NewRecording): Promise<ClaimResult> {
+      if (!isMemoryCategoryCode(recording.categoryCode)) throw new Error('CATEGORY_REQUIRED');
       const mimeType = recording.blob.type.split(';')[0].trim().toLowerCase();
       let grant: UploadGrant;
       try {
@@ -104,7 +112,7 @@ export function createSupabaseVisitorRepository(): VisitorRepository {
       try {
         await request('public-upload-claim', {
           method: 'POST',
-          body: { uploadId: grant.uploadId, nickname: recording.nickname, durationSeconds: recording.duration, location: parseMemoryLocation(recording.location) },
+          body: { uploadId: grant.uploadId, nickname: recording.nickname, durationSeconds: recording.duration, location: parseMemoryLocation(recording.location), categoryCode: recording.categoryCode },
           headers: { 'x-upload-token': grant.claimToken },
         });
         return { status: 'claimed', tag: await getTag(token) };
