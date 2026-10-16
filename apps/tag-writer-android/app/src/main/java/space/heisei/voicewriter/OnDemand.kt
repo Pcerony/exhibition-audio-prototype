@@ -3,6 +3,13 @@ package space.heisei.voicewriter
 import org.json.JSONObject
 import java.util.UUID
 
+class WriterSessionState {
+    var preparationBlocked = false
+    var retryJobId: String? = null
+    var completed = 0
+    fun reset() { preparationBlocked = false; retryJobId = null; completed = 0 }
+}
+
 /** One durable record atomically replaces the request key with the accepted job. */
 class PreparationMemory(private val read: () -> String?, private val write: (String) -> Boolean) {
     private fun record() = read()?.let(::JSONObject) ?: JSONObject()

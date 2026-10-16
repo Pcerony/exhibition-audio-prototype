@@ -62,13 +62,11 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private var sort = "recorded_desc"
     private var statusFilter = ""
     private var batchDate = ""
-    private var completed = 0
+    private val writeSession = WriterSessionState()
     private var statusMessage = ""
     private val checked = linkedSetOf<String>()
     private val queue = mutableListOf<Report>()
     private var pendingBulk: JSONObject? = null
-    private var retryJobId: String? = null
-    private var preparationBlocked = false
     private var player: MediaPlayer? = null
     private val ink = Color.rgb(25, 40, 35)
     private val green = Color.rgb(21, 110, 78)
@@ -93,7 +91,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         copy = Copy(prefs().getString("language", "ja").orEmpty())
         feedback = WriteFeedbackDialog(this, { prefs().getBoolean("sound", true) }, { prefs().edit().putBoolean("sound", it).apply() })
         api = Api(SecureSession(this))
-        api.onRevoked = { overwritePermission.clear(); flow.pause(); epoch++; runOnUiThread { feedback.close(); successGate.cancel(); scanArmed = false; inspectedTag = null; inspectedCards = emptyList(); reader(); stopPlayback(); cards = emptyList(); jobs = emptyList(); checked.clear(); pendingBulk = null; queue.clear(); loginScreen() } }
+        api.onRevoked = { overwritePermission.clear(); flow.pause(); epoch++; runOnUiThread { writeSession.reset(); lease = null; statusMessage = ""; feedback.close(); successGate.cancel(); scanArmed = false; inspectedTag = null; inspectedCards = emptyList(); reader(); stopPlayback(); cards = emptyList(); jobs = emptyList(); checked.clear(); pendingBulk = null; queue.clear(); loginScreen() } }
         adapter = NfcAdapter.getDefaultAdapter(this)
         shell = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(245, 248, 246)) }
         shell.setOnApplyWindowInsetsListener { view, insets ->
@@ -179,7 +177,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 3 -> {
                     pauseWriting()
                     lease = null
-                    retryJobId = null
+                    writeSession.retryJobId = null
                     api.logout()
                     statusMessage = ""
                     loginScreen()
@@ -188,7 +186,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         }.show()
     }
     private fun navigate(destination: Screen) {
-        pauseWriting(); stopPlayback(); checked.clear(); retryJobId = null; offset = 0; screen = destination
+        pauseWriting(); stopPlayback(); checked.clear(); writeSession.retryJobId = null; offset = 0; screen = destination
         flow.choose(destination == Screen.AUTO)
         if (destination == Screen.READ) {
             inspectedTag = null; inspectedCards = emptyList(); scanArmed = true; statusMessage = ""
@@ -230,7 +228,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         header(t("app"), true)
         if (screen == Screen.READ) { renderReader(); reader(); return }
         if (screen == Screen.CARDS || screen == Screen.EDIT) categoryPicker(content) { value ->
-            pauseWriting(); categoryId = value; checked.clear(); retryJobId = null; offset = 0
+            pauseWriting(); categoryId = value; checked.clear(); writeSession.retryJobId = null; offset = 0
             work { releaseCurrent(); load(); ui { render() } }
         }
         if (queue.isNotEmpty()) {
@@ -420,20 +418,20 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     }
     private fun renderAuto() {
         text(content, t("auto"), 25f, true)
-        text(content, "${t("completed")}: $completed", 16f, true)
+        text(content, "${t("completed")}: ${writeSession.completed}", 16f, true)
         renderWriteState()
-        if (preparationBlocked) action(content, t("reviewPreparation")) {
+        if (writeSession.preparationBlocked) action(content, t("reviewPreparation")) {
             AlertDialog.Builder(this).setTitle(t("reviewPreparation")).setMessage(t("stale"))
                 .setNegativeButton(t("cancel"), null).setPositiveButton(t("confirm")) { _, _ ->
-                    runCatching { preparation().resetReviewed() }.onSuccess { preparationBlocked = false; retryJobId = null; render() }.onFailure { message(t("saveFailed")) }
+                    runCatching { preparation().resetReviewed() }.onSuccess { writeSession.preparationBlocked = false; writeSession.retryJobId = null; render() }.onFailure { message(t("saveFailed")) }
                 }.show()
         }
-        retryJobId?.let { retry ->
+        writeSession.retryJobId?.let { retry ->
             action(content, t("retryCurrent"), true) { arm(retry) }
         }
         action(content, t(if (flow.stage == WriterFlow.Stage.PAUSED) "continue" else "start"), true) {
             arm(null)
-        }.isEnabled = !preparationBlocked && retryJobId == null && flow.stage !in listOf(WriterFlow.Stage.WRITING, WriterFlow.Stage.REMOVAL, WriterFlow.Stage.READY)
+        }.isEnabled = !writeSession.preparationBlocked && writeSession.retryJobId == null && flow.stage !in listOf(WriterFlow.Stage.WRITING, WriterFlow.Stage.REMOVAL, WriterFlow.Stage.READY)
         action(content, t("pause")) { pauseWriting(); work { releaseCurrent(); ui { render() } } }
     }
     private fun renderWriteState() {
@@ -468,7 +466,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             if (!resumed || startEpoch != epoch) { api.release(acquired); return@work }
             lease = acquired
             if (overwriteConfirmed && screen == Screen.SINGLE && jobId == acquired.job.id) overwritePermission.approve(acquired.job.id, acquired.token)
-            retryJobId = null
+            writeSession.retryJobId = null
             flow.choose(automatic)
             flow.start(acquired.job.id, acquired.token, acquired.expiresAt)
             ui { if (resumed && startEpoch == epoch) { statusMessage = ""; render(); showFeedback(WriteFeedback.READY, startEpoch) } }
@@ -531,7 +529,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 if (queue.contains(report)) throw WriterException("JOB_CONFLICT")
                 if (report.status != "verified") throw WriterException(report.errorCode ?: "NFC_IO")
                 preparation(writeOwner).completed(current.job.id)
-                completed++
+                writeSession.completed++
                 if (resumed && epoch == writeEpoch) {
                     flow.verified()
                     ui {
@@ -551,7 +549,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 } else flow.pause()
             } catch (e: Exception) {
                 flow.pause()
-                retryJobId = if (report.status == "verified") null else current.job.id
+                writeSession.retryJobId = if (report.status == "verified") null else current.job.id
                 ui { if (resumed && epoch == writeEpoch) { reader(); message(if (queue.isNotEmpty()) t("unsynced") else error(e)); render(); showFeedback(if (report.status == "verified") WriteFeedback.PENDING else WriteFeedback.ERROR, writeEpoch, error(e)) } }
             } finally { busy.set(false) }
         }
@@ -569,6 +567,8 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         check(prefs().edit().putString(accountKey("reports"), JSONArray(queue.map { reportJson(it) }).toString()).commit()) { "LOCAL_SAVE_FAILED" }
     }
     private fun restoreQueue() {
+        writeSession.reset()
+        lease = null
         queue.clear()
         val array = JSONArray(prefs().getString(accountKey("reports"), "[]"))
         for (i in 0 until array.length()) {
@@ -704,7 +704,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         message(t("loading"))
         executor.execute {
             try { action() }
-            catch (e: Exception) { if (epoch == expected) { flow.pause(); ui { if (epoch == expected && resumed) { reader(); message(error(e)); if (screen == Screen.AUTO && e.message in listOf("JOB_INELIGIBLE", "JOB_CONFLICT")) { preparationBlocked = true; render() }; if (screen in listOf(Screen.AUTO, Screen.SINGLE)) showFeedback(WriteFeedback.ERROR, expected, error(e)) } } } }
+            catch (e: Exception) { if (epoch == expected) { flow.pause(); ui { if (epoch == expected && resumed) { reader(); message(error(e)); if (screen == Screen.AUTO && e.message in listOf("JOB_INELIGIBLE", "JOB_CONFLICT")) { writeSession.preparationBlocked = true; render() }; if (screen in listOf(Screen.AUTO, Screen.SINGLE)) showFeedback(WriteFeedback.ERROR, expected, error(e)) } } } }
             finally { busy.set(false) }
         }
     }

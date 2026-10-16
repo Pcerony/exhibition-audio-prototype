@@ -4,6 +4,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OnDemandTest {
+    @Test fun revocationResetsTransientWriteStateWithoutChangingDurablePreparation() {
+        var disk: String? = null
+        val memory = PreparationMemory({ disk }, { disk = it; true })
+        val key = memory.requestKey()
+        val session = WriterSessionState()
+        session.preparationBlocked = true
+        session.retryJobId = "operator-a-job"
+        session.completed = 12
+        session.reset()
+        assertFalse(session.preparationBlocked)
+        assertNull(session.retryJobId)
+        assertEquals(0, session.completed)
+        assertEquals(key, memory.requestKey())
+    }
     @Test fun requestIsV3AndUsesStableUuid() {
         val body = prepareWriteRequest("device", "12345678-1234-4234-8234-123456789012")
         assertEquals("prepareWrite", body.getString("action"))
