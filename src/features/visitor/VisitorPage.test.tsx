@@ -44,10 +44,17 @@ describe('visitor page', () => {
     fireEvent.click(await screen.findByRole('button', { name: copy['visitor.stop'] }));
     expect(screen.getByRole('heading', { name: copy['flow.preview'] })).toBeVisible();
     const audio = screen.getByLabelText(copy['visitor.preview']);
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    fireEvent.click(screen.getByRole('checkbox'));
     const url = audio.getAttribute('src');
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'ja-JP' } });
     expect(screen.getByLabelText('録音を試聴')).toHaveAttribute('src', url);
+    expect(screen.getByRole('checkbox')).toBeChecked();
     expect(screen.getByRole('button', { name: 'この声を残す' })).toBeEnabled();
+    const claim = vi.spyOn(repository, 'claim');
+    fireEvent.click(screen.getByRole('button', { name: 'この声を残す' }));
+    expect(claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({ transcriptionConsent: true }));
+    await screen.findByRole('heading', { name: visitorMessages['ja-JP']['visitor.recordedAnonymous'] });
   });
   it('keeps maps out of the introduction and numbers the theme step', async () => {
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
@@ -161,11 +168,15 @@ describe('visitor page', () => {
     fireEvent.click(await screen.findByRole('button', { name: /开始录音/ }));
     fireEvent.click(await screen.findByRole('button', { name: /完成录音/ }));
     expect(await screen.findByRole('button', { name: /重录/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox'));
     view.rerender(<I18nProvider><VisitorPage repository={repository} token="new-recording-token" /></I18nProvider>);
     await enterMap();
     fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
     expect(await screen.findByRole('button', { name: /开始录音/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /重录/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /开始录音/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /完成录音/ }));
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
   });
 
   it('shows separate confirmation without nickname and locks the take while uploading', async () => {
@@ -189,7 +200,8 @@ describe('visitor page', () => {
     expect(screen.getByRole('heading', { name: '听听你的声音。' })).toBeVisible();
     expect(screen.queryByRole('button', { name: '开始录音' })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: /把声音留在这里/ }));
-    expect(repository.claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({ categoryCode: 'A', nickname: '' }));
+    expect(repository.claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({ categoryCode: 'A', nickname: '', transcriptionConsent: false }));
+    expect(screen.getByRole('checkbox')).toBeDisabled();
     expect(screen.getByRole('button', { name: /重录/ })).toBeDisabled();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'en' } });
@@ -211,5 +223,19 @@ describe('visitor page', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/iPhone「设置 > Chrome > 麦克风」/);
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'en' } });
     expect(screen.getByRole('alert')).toHaveTextContent('Microphone access is blocked.');
+  });
+
+  it('shows only server-published transcript as plain text in a collapsed disclosure', async () => {
+    const tag = await repository.getTag('visitor-token');
+    vi.spyOn(repository, 'getTag').mockResolvedValue({ ...tag!, status: 'bound', recording: {
+      id: 'text-fixture', nickname: '', duration: 2, mimeType: 'audio/webm', createdAt: new Date().toISOString(),
+      transcript: '<img src=x onerror=alert(1)> 福冈回忆',
+    } });
+    vi.spyOn(repository, 'getVisitorPlaybackUrl').mockResolvedValue('https://example.invalid/audio');
+    render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    const summary = await screen.findByText('查看文字');
+    expect(summary.closest('details')).not.toHaveAttribute('open');
+    expect(screen.getByText('<img src=x onerror=alert(1)> 福冈回忆')).toBeInTheDocument();
+    expect(document.querySelector('img[src="x"]')).toBeNull();
   });
 });

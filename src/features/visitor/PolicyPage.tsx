@@ -17,6 +17,7 @@ export function PolicyPage({ kind }: { kind: 'privacy' | 'terms' }) {
     <h1>{t(privacy ? 'policy.privacy' : 'policy.terms')}</h1>
     {privacy ? <>
       <p>{t('policy.data')}</p><p>{t('policy.optional')}</p><p>{t('policy.services')}</p>
+      <p>{t('policy.transcription')} <a href="https://groq.com/privacy-policy/" target="_blank" rel="noreferrer">{t('policy.groqPrivacy')}</a></p>
       <p><a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">{t('policy.googlePrivacy')}</a></p>
       <p>{t('policy.retention')}</p>
     </> : <>

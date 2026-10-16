@@ -10,6 +10,11 @@ export const mapLanguages: Record<VisitorLocale, string> = {
 };
 
 const flowZh = {
+  'policy.groqPrivacy': 'Groq 隐私政策',
+  'transcription.consent': '允许将录音交给 Groq AI 转成文字（可选）',
+  'transcription.notice': '不选也能提交。文字经工作人员确认后可能公开。',
+  'transcription.show': '查看文字', 'transcription.accuracy': 'AI 转写，经人工确认，仍可能有误。请以录音为准。',
+  'policy.transcription': '仅当你主动勾选同意时，录音才会发送给 Groq 进行 AI 语音转文字。转写先供工作人员审核，确认后可随录音公开；不选择不影响录音提交。',
   'flow.intro': '说明', 'flow.theme': '主题', 'flow.map': '地点', 'flow.record': '录音', 'flow.confirm': '确认',
   'flow.back': '返回', 'flow.retry': '重试', 'flow.thanks': '谢谢你的分享', 'flow.memory': '福冈回忆',
   'flow.slogan': '用你的声音，留下福冈的回忆。', 'flow.introBody': '分享一段属于你与这座城市的记忆。',
@@ -32,6 +37,11 @@ type VisitorDictionary = Record<CoreKey | FlowKey, string>;
 export type VisitorMessageKey = CoreKey | FlowKey;
 
 const flowJa: Record<FlowKey, string> = {
+  'policy.groqPrivacy': 'Groq プライバシーポリシー',
+  'transcription.consent': 'Groq AI で音声を文字にすることに同意する（任意）',
+  'transcription.notice': '選ばなくても送信できます。確認後、文字も公開される場合があります。',
+  'transcription.show': '文字を見る', 'transcription.accuracy': 'AI による文字起こしをスタッフが確認しています。誤りがある場合は音声を優先してください。',
+  'policy.transcription': '同意にチェックした場合のみ、音声を Groq に送信し AI で文字起こしします。文字はスタッフが確認した後、音声とともに公開される場合があります。同意しなくても音声を送信できます。',
   'flow.intro': 'はじめに', 'flow.theme': 'テーマ', 'flow.map': '場所', 'flow.record': '録音', 'flow.confirm': '確認',
   'flow.back': '戻る', 'flow.retry': 'もう一度', 'flow.thanks': 'ありがとう', 'flow.memory': '福岡の思い出',
   'flow.slogan': 'あなたの声で、福岡を残そう。', 'flow.introBody': 'この街の思い出を、ひとつ。',
@@ -50,6 +60,11 @@ const flowJa: Record<FlowKey, string> = {
 };
 
 const en: VisitorDictionary = {
+  'policy.groqPrivacy': 'Groq Privacy Policy',
+  'transcription.consent': 'Allow Groq AI to transcribe my recording (optional)',
+  'transcription.notice': 'You can submit without this. Reviewed text may be published.',
+  'transcription.show': 'Read transcript', 'transcription.accuracy': 'AI transcription reviewed by staff. Errors may remain; refer to the audio.',
+  'policy.transcription': 'Only if you opt in, your audio is sent to Groq for AI transcription. Text is private until staff review it and may then be published alongside the audio. Declining does not prevent submission.',
   'app.title': 'Voice memories', 'app.operator': 'Exhibition management', 'app.openVisitor': 'Open visitor page',
   'app.localDemo': 'Local prototype', 'app.loading': 'Opening voice memories…', 'app.localOnly': 'Prototype data stays in this browser and is not synced to the cloud.',
   'app.cloudMissing': 'Cloud service is not configured. Please contact exhibition staff.', 'app.adminLater': 'Cloud management is not ready yet.',
@@ -96,6 +111,11 @@ const en: VisitorDictionary = {
 };
 
 const ko: VisitorDictionary = {
+  'policy.groqPrivacy': 'Groq 개인정보 처리방침',
+  'transcription.consent': 'Groq AI의 녹음 텍스트 변환에 동의합니다 (선택)',
+  'transcription.notice': '동의하지 않아도 제출할 수 있습니다. 검토 후 텍스트가 공개될 수 있습니다.',
+  'transcription.show': '텍스트 보기', 'transcription.accuracy': '직원이 검토한 AI 변환 텍스트입니다. 오류가 있을 수 있으니 음성을 기준으로 확인해 주세요.',
+  'policy.transcription': '직접 동의한 경우에만 녹음이 Groq에 전송되어 AI로 텍스트로 변환됩니다. 텍스트는 직원 검토 전까지 비공개이며 검토 후 음성과 함께 공개될 수 있습니다. 동의하지 않아도 녹음을 제출할 수 있습니다.',
   'app.title': '목소리 기억', 'app.operator': '전시 운영 관리', 'app.openVisitor': '방문자 페이지 열기',
   'app.localDemo': '로컬 프로토타입', 'app.loading': '목소리 기억을 여는 중…', 'app.localOnly': '테스트 데이터는 이 브라우저에만 저장되며 클라우드에 동기화되지 않습니다.',
   'app.cloudMissing': '클라우드가 설정되지 않았습니다. 전시 운영자에게 문의해 주세요.', 'app.adminLater': '클라우드 관리 화면을 준비 중입니다.',
@@ -142,6 +162,11 @@ const ko: VisitorDictionary = {
 };
 
 const zhTW: VisitorDictionary = {
+  'policy.groqPrivacy': 'Groq 隱私權政策',
+  'transcription.consent': '允許將錄音交給 Groq AI 轉成文字（選填）',
+  'transcription.notice': '不選也能提交。文字經工作人員確認後可能公開。',
+  'transcription.show': '查看文字', 'transcription.accuracy': 'AI 轉寫，經人工確認，仍可能有誤。請以錄音為準。',
+  'policy.transcription': '只有你主動勾選同意時，錄音才會傳送給 Groq 進行 AI 語音轉文字。轉寫先供工作人員審核，確認後可隨錄音公開；不選擇不影響錄音提交。',
   'app.title': '聲音檔案', 'app.operator': '展覽營運後台', 'app.openVisitor': '開啟參觀者頁面',
   'app.localDemo': '本機原型', 'app.loading': '正在開啟聲音檔案…', 'app.localOnly': '原型資料僅儲存在目前瀏覽器，不會同步至雲端。',
   'app.cloudMissing': '尚未設定雲端服務，請聯絡展覽工作人員。', 'app.adminLater': '雲端管理後台準備中。',

@@ -4,7 +4,7 @@ import { parseMemoryLocation, type MemoryLocation } from '../domain/location';
 import { MEMORY_CATEGORIES, formatMemorySerial, isMemoryCategoryCode, memoryBatchDate, type MemoryCategoryCode } from '../domain/classification';
 
 type NewTag = { id: string; token: string; label: string; batch?: string };
-export type NewRecording = { id: string; blob: Blob; nickname: string; duration: number; location?: MemoryLocation | null; categoryCode?: MemoryCategoryCode };
+export type NewRecording = { id: string; blob: Blob; nickname: string; duration: number; location?: MemoryLocation | null; categoryCode?: MemoryCategoryCode; transcriptionConsent?: boolean };
 export type ClaimResult = { status: 'claimed' | 'already-bound' | 'not-found'; tag: Tag | null };
 
 export interface TagRepository {
@@ -91,6 +91,8 @@ function buildRepository(metadata: MetadataStore, audio: AudioStore): TagReposit
             mimeType: candidate.blob.type,
             createdAt: new Date().toISOString(),
             location: parseMemoryLocation(candidate.location),
+            transcriptionConsent: candidate.transcriptionConsent === true,
+            transcript: null,
           };
           await audio.set(candidate.id, candidate.blob);
           tags[index] = claimTag(tags[index], recording);

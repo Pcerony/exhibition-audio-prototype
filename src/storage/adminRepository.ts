@@ -1,4 +1,5 @@
 import type { Tag } from '../domain/tags';
+import type { TranscriptionResult } from '../domain/transcription';
 
 export type ProvisioningJob = {
   id: string; tagId: string; label: string; batch: string; visitorUrl: string;
@@ -17,6 +18,9 @@ export type OperatorSession = { userId: string; email?: string; role: 'operator'
 export type TagQuery = { search?: string; status?: 'unbound' | 'bound' | 'disabled'; offset?: number; limit?: number; categoryId?: string; batchDate?: string; uncategorized?: boolean; sort?: 'recorded_desc' | 'recorded_asc' | 'number' };
 export type AuditEntry = { id: string | number; operatorId: string; action: string; tagId: string | null; createdAt: string; details?: Record<string, unknown> | null };
 export interface AdminRepository {
+  getTranscription(recordingId: string): Promise<TranscriptionResult>;
+  retryTranscription(recordingId: string, version: number): Promise<void>;
+  saveTranscription(recordingId: string, version: number, text: string, published: boolean): Promise<void>;
   listCategories(): Promise<Category[]>;
   createCategory(name: string, requestKey: string): Promise<Category>;
   renameCategory(categoryId: string, name: string): Promise<void>;

@@ -8,6 +8,8 @@ export type RecordingInfo = {
   mimeType: string;
   createdAt: string;
   location?: MemoryLocation | null;
+  transcriptionConsent?: boolean;
+  transcript?: string | null;
 };
 
 export type Tag = {
