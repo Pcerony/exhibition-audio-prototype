@@ -1,6 +1,17 @@
 # 跨端 API 契约
 
-## 分类管理 V2（本轮实现契约）
+## 录音后分类 V3（当前契约）
+
+- 固定分类A/B/C/D，固定UUID依次`00000000-0000-4000-8000-000000000001`至`...0004`，名称美食/旅行/相遇/其他回忆。`categories`只返回这四项，nextNumber兼容字段不用于预分配；createCategory/renameCategory拒绝CATEGORIES_FIXED。
+- `createCards`请求`{count,requestKey,protocolVersion:3}`，不传categoryId。全批幂等创建未分类空卡及稳定随机网址。内部库存号U000001全局不复用。
+- tag/job DTO保留旧字段并增加`inventoryLabel:string,categoryCode:'A'|'B'|'C'|'D'|null,batchDate:'YYYY-MM-DD'|null,serialNumber:string|null`，categoryId为固定分类UUID或null。label优先正式serialNumber，否则历史label/库存号。batch兼容为日期字符串或历史批次，不能再当分类名。历史录音保留旧编号与元数据，不强制分入四类。空卡categoryId/categoryCode/batchDate/serialNumber均null。
+- `list`在已有查询上增加`batchDate?:'YYYY-MM-DD',uncategorized?:boolean`；categoryId仅四固定UUID。搜索包括正式号、库存号、旧编号历史；空类不得因inner join丢失。批次取成功录音时间的Asia/Tokyo日期，非开卡/写卡日期。
+- `public-upload-claim`新增必填`categoryCode:'A'|'B'|'C'|'D'`，无效/缺失为CATEGORY_REQUIRED或CATEGORY_INVALID，400。与location/录音绑定同事务分配日期和日内分类序号，只有claimed才分号。日内分类从001起，超过999自然扩展。重复请求/并发输家不多分配、不改赢家。公开public-tag返回上述编号/分类字段，不返回存储路径。
+- reset/bulk reset清空当前分类/批次/正式号、恢复库存标识，永久保留旧号供检索且不复用。move仅用于已录音卡纠正分类，targetCategoryId取四固定UUID，沿原batchDate分配目标类新号；空卡move返回CATEGORY_UNASSIGNED。旧录音未有batchDate则由原recording.createdAt的Tokyo日期确定。删除/重置/移动仍版本检查、分组确认与审计。
+- jobs/leaseJob/nextJob/provision均protocolVersion:3；旧协议HTTP426 CLIENT_UPGRADE_REQUIRED。jobs不按创建分类过滤；nextJob只需要deviceId，不带categoryId，从统一可写空卡池领取，幂等/租约/人工重写规则与V2一致。releaseJob仍按租约身份执行。
+- 前端`NewRecording.categoryCode`可选以兼容本地旧测试，但生产claim必须提供。`AdminRepository.createCards(count,requestKey)`改签名，createCategory/renameCategory保留兼容类型但UI不再提供入口；date filter和DTO新增为可选字段，读取null容错。公开网址/token/音频私有/原子一对一不变。
+
+## 分类管理 V2（历史契约，被V3同名规则取代）
 
 以下扩展与旧接口分开发布：后端、网页和Android同时完成回归前不得将本节视为生产已部署。完整字段及操作参见 [冻结实施计划](superpowers/plans/2026-10-15-operator-experience.md)。访客URL与音频授权规则不变。
 

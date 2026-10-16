@@ -1,7 +1,37 @@
-import { describe, expect, it } from 'vitest';
-import { createMemoryRepository } from './repository';
+import { describe, expect, it, vi } from 'vitest';
+import { createBrowserRepository, createMemoryRepository } from './repository';
+import { indexedDbAudioStore } from './indexedDb';
 
 describe('memory repository', () => {
+  it('does not reuse local browser serials after reset and repository recreation', async () => {
+    localStorage.clear();
+    vi.spyOn(indexedDbAudioStore, 'set').mockResolvedValue();
+    vi.spyOn(indexedDbAudioStore, 'delete').mockResolvedValue();
+    try {
+      const repo = createBrowserRepository();
+      await repo.createTag({ id: 'persistent', token: 'persistent', label: 'U000001' });
+      const candidate = { id: 'a1', blob: new Blob(['test']), duration: 1, nickname: '', categoryCode: 'A' as const };
+      await repo.claim('persistent', candidate);
+      await repo.resetTag('persistent');
+      const recreated = createBrowserRepository();
+      expect((await recreated.claim('persistent', { ...candidate, id: 'a2' })).tag?.serialNumber).toMatch(/-A002$/);
+    } finally { localStorage.clear(); vi.restoreAllMocks(); }
+  });
+  it('assigns a category and date serial only on claim, retaining consumed numbers after reset', async () => {
+    const repo = createMemoryRepository();
+    await repo.createTag({ id: 'serial-tag', token: 'serial-token', label: 'U000001' });
+    expect((await repo.getTag('serial-token'))?.serialNumber).toBeNull();
+    const candidate = { id: 'serial-audio', blob: new Blob(['audio']), nickname: '', duration: 2, categoryCode: 'A' as const };
+    const first = await repo.claim('serial-token', candidate);
+    expect(first.tag?.serialNumber).toMatch(/^\d{6}-A001$/);
+    expect(first.tag?.categoryCode).toBe('A');
+    expect(first.tag?.batchDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    await repo.resetTag('serial-token');
+    expect((await repo.getTag('serial-token'))?.categoryCode).toBeNull();
+    expect((await repo.getTag('serial-token'))?.label).toBe('U000001');
+    const second = await repo.claim('serial-token', { ...candidate, id: 'serial-new' });
+    expect(second.tag?.serialNumber).toMatch(/^\d{6}-A002$/);
+  });
   it('preserves the winning location and clears it on reset', async () => {
     const repo = createMemoryRepository();
     await repo.createTag({ id: 'location-tag', token: 'location-token', label: 'L001' });

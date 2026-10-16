@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { memoryLocationUrl } from '../../domain/location';
+import { MEMORY_CATEGORIES } from '../../domain/classification';
 import {
   Download,
   FileUp,
@@ -11,7 +12,6 @@ import {
   Power,
   Wrench,
   History,
-  Pencil,
   Trash2,
   ArrowRightLeft,
   RotateCcw,
@@ -25,7 +25,6 @@ import type {
   OperatorSession,
   ProvisioningJob,
   TagQuery,
-  Category,
   BulkGroup,
   BulkOperation,
   BulkApply,
@@ -38,7 +37,7 @@ import { OperatorDialog } from "./OperatorDialog";
 import "./admin.css";
 import "./cloud-admin.css";
 type Props = { repository: AdminRepository; baseUrl: string };
-type CreateRequest = { categoryId: string; count: number; key: string };
+type CreateRequest = { count: number; key: string };
 type BulkDialog = {
   operation: BulkOperation;
   targetCategoryId?: string;
@@ -78,16 +77,15 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
   const [roleError, setRoleError] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [categories, setCategories] = useState<Category[]>([]);
+  const categories = MEMORY_CATEGORIES.map((category) => ({
+    ...category,
+    name: n.categoryNames[category.code],
+  }));
   const [categoryId, setCategoryId] = useState("");
-  const [createCategoryId, setCreateCategoryId] = useState("");
+  const [batchDate, setBatchDate] = useState("");
+  const [uncategorized, setUncategorized] = useState(false);
   const [count, setCount] = useState(1);
   const [pending, setPending] = useState<CreateRequest | null>(null);
-  const [categoryEditor, setCategoryEditor] = useState<{
-    id?: string;
-    name: string;
-    key: string;
-  } | null>(null);
   const [tags, setTags] = useState<ManagedTag[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
@@ -113,13 +111,11 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
     `${baseUrl.replace(/\/$/, "")}/#/t/${tag.token}`;
   function clear() {
     setSession(null);
-    setCategories([]);
     setTags([]);
     setTotal(0);
     setSelected([]);
     setPending(null);
     setBulk(null);
-    setCategoryEditor(null);
     setJobs(null);
     setAudit(null);
     setAudio(null);
@@ -185,21 +181,6 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
   useEffect(() => {
     if (!session) return;
     let active = true;
-    repository
-      .listCategories()
-      .then((value) => {
-        if (active) setCategories(value);
-      })
-      .catch((cause) => {
-        if (active) failure(cause);
-      });
-    return () => {
-      active = false;
-    };
-  }, [repository, session, revision]);
-  useEffect(() => {
-    if (!session) return;
-    let active = true;
     setLoading(true);
     setTags([]);
     setAudio(null);
@@ -209,6 +190,8 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
         search,
         status,
         categoryId: categoryId || undefined,
+        batchDate: batchDate || undefined,
+        uncategorized: uncategorized || undefined,
         sort,
         offset,
         limit: PAGE_SIZE,
@@ -232,12 +215,11 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
     return () => {
       active = false;
     };
-  }, [repository, session, search, status, categoryId, sort, offset, revision]);
+  }, [repository, session, search, status, categoryId, batchDate, uncategorized, sort, offset, revision]);
   const refresh = () => setRevision((v) => v + 1);
   async function create(request: CreateRequest) {
     setPending(request);
     await repository.createCards(
-      request.categoryId,
       request.count,
       request.key,
     );
@@ -250,6 +232,11 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
     ids = selected,
     targetCategoryId = operation === "move" ? target : undefined,
   ) {
+    if (
+      operation === "move" &&
+      (!categories.some((category) => category.id === targetCategoryId) ||
+        ids.some((id) => !tags.find((tag) => tag.id === id)?.recording))
+    ) return;
     const result = await repository.previewBulk(
       ids,
       operation,
@@ -324,10 +311,13 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
     }
     download(
       [
-        [m.label, n.categories, m.url, m.recording, m.write, n.recordedAt],
+        [m.label, n.inventory, n.categories, n.batchDate, n.legacyBatch, m.url, m.recording, m.write, n.recordedAt],
         ...all.map((tag) => [
-          tag.label,
-          tag.batch,
+          tag.serialNumber ?? tag.label,
+          tag.inventoryLabel ?? "",
+          categories.find((category) => category.id === tag.categoryId)?.name ?? n.uncategorized,
+          tag.batchDate ?? "",
+          tag.batchDate ? "" : tag.batch,
           visitorUrl(tag),
           tag.status ?? (tag.recording ? "bound" : "unbound"),
           tag.provisioning?.status ?? "pending",
@@ -375,7 +365,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
             )}
         </div>
       </header>
-      {error && !bulk && !categoryEditor && (
+      {error && !bulk && (
         <p className="admin-message error" role="alert">
           {error}
         </p>
@@ -431,21 +421,31 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
           <aside className="category-nav">
             <div className="category-heading">
               <h2>{n.categories}</h2>
-              {icon(n.newCategory, <Plus size={17} />, () =>
-                setCategoryEditor({ name: "", key: crypto.randomUUID() }),
-              )}
             </div>
             <nav aria-label={n.categories}>
               <button
-                className={!categoryId ? "active" : ""}
+                className={!categoryId && !uncategorized ? "active" : ""}
                 disabled={busy || !!bulk}
                 onClick={() => {
                   setCategoryId("");
+                  setUncategorized(false);
                   setOffset(0);
                 }}
               >
                 <Folder size={16} />
                 {m.all}
+              </button>
+              <button
+                className={uncategorized ? "active" : ""}
+                disabled={busy || !!bulk}
+                onClick={() => {
+                  setCategoryId("");
+                  setUncategorized(true);
+                  setOffset(0);
+                }}
+              >
+                <Folder size={16} />
+                {n.uncategorized}
               </button>
               {categories.map((category) => (
                 <button
@@ -454,7 +454,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                   disabled={busy || !!bulk}
                   onClick={() => {
                     setCategoryId(category.id);
-                    setCreateCategoryId(category.id);
+                    setUncategorized(false);
                     setOffset(0);
                   }}
                 >
@@ -466,17 +466,9 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
           </aside>
           <div className="admin-content">
             <div className="admin-title-row">
-              <h1>{current ? `${current.code} · ${current.name}` : m.title}</h1>
+              <h1>{current ? `${current.code} · ${current.name}` : uncategorized ? n.uncategorized : m.title}</h1>
               <span>{total}</span>
               <div className="row-actions">
-                {current &&
-                  icon(n.rename, <Pencil size={17} />, () =>
-                    setCategoryEditor({
-                      id: current.id,
-                      name: current.name,
-                      key: crypto.randomUUID(),
-                    }),
-                  )}
                 {icon(
                   m.export,
                   <Download size={18} />,
@@ -509,32 +501,11 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (createCategoryId)
-                    void run(() =>
-                      create({
-                        categoryId: createCategoryId,
-                        count,
-                        key: crypto.randomUUID(),
-                      }),
-                    );
+                  void run(() =>
+                    create({ count, key: crypto.randomUUID() }),
+                  );
                 }}
               >
-                <label>
-                  {n.createCategory}
-                  <select
-                    value={createCategoryId}
-                    required
-                    disabled={busy || !!pending}
-                    onChange={(e) => setCreateCategoryId(e.target.value)}
-                  >
-                    <option value="">{n.choose}</option>
-                    {categories.map((c) => (
-                      <option value={c.id} key={c.id}>
-                        {c.code} · {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
                 <label className="card-count">
                   {n.count}
                   <input
@@ -549,7 +520,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                 </label>
                 <button
                   className="toolbar-primary"
-                  disabled={busy || !!pending || !createCategoryId}
+                  disabled={busy || !!pending}
                 >
                   <Plus size={17} />
                   {n.create}
@@ -579,6 +550,18 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
               )}
             </section>
             <div className="table-controls">
+              <label className="batch-date-filter">
+                {n.batchDate}
+                <input
+                  type="date"
+                  value={batchDate}
+                  disabled={!!bulk}
+                  onChange={(e) => {
+                    setBatchDate(e.target.value);
+                    setOffset(0);
+                  }}
+                />
+              </label>
               <div className="search-field">
                 <Search size={16} />
                 <input
@@ -641,7 +624,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                 ))}
               </select>
               <button
-                disabled={!selected.length || !target || busy || !!bulk}
+                disabled={!selected.length || !target || busy || !!bulk || selected.some((id) => !tags.find((tag) => tag.id === id)?.recording)}
                 onClick={() => void run(() => preview("move"))}
               >
                 <ArrowRightLeft size={16} />
@@ -710,8 +693,10 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                         />
                       </td>
                       <td>
-                        <strong>{tag.label}</strong>
-                        <small>{tag.batch}</small>
+                        <strong>{tag.serialNumber ?? tag.label}</strong>
+                        {tag.inventoryLabel && tag.inventoryLabel !== tag.label && <small title={n.inventory}>{tag.inventoryLabel}</small>}
+                        <small>{categories.find((category) => category.id === tag.categoryId)?.name ?? n.uncategorized}</small>
+                        {tag.batchDate ? <small title={n.batchDate}>{tag.batchDate}</small> : tag.batch && <small>{n.legacyBatch}: {tag.batch}</small>}
                       </td>
                       <td>
                         <span
@@ -838,6 +823,10 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                           "id",
                           "tagId",
                           "label",
+                          "inventoryLabel",
+                          "serialNumber",
+                          "categoryCode",
+                          "batchDate",
                           "batch",
                           "visitorUrl",
                           "version",
@@ -848,6 +837,10 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                           j.id,
                           j.tagId,
                           j.label,
+                          j.inventoryLabel ?? "",
+                          j.serialNumber ?? "",
+                          j.categoryCode ?? "",
+                          j.batchDate ?? "",
                           j.batch,
                           j.visitorUrl,
                           j.version,
@@ -866,7 +859,10 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                 <ul>
                   {jobs.map((j) => (
                     <li key={j.id}>
-                      {j.label} · {j.batch} · {m[j.status]}
+                      {j.serialNumber ?? j.label}
+                      {j.inventoryLabel && j.inventoryLabel !== j.label && ` · ${j.inventoryLabel}`}
+                      {j.batchDate ? ` · ${j.batchDate}` : j.batch && ` · ${n.legacyBatch}: ${j.batch}`}
+                      {` · ${m[j.status]}`}
                     </li>
                   ))}
                 </ul>
@@ -888,73 +884,6 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
             )}
           </div>
         </div>
-      )}
-      {categoryEditor && (
-        <OperatorDialog
-          titleId="category-title"
-          locked={busy}
-          onClose={() => setCategoryEditor(null)}
-        >
-          <h2 id="category-title">
-            {categoryEditor.id ? n.rename : n.newCategory}
-          </h2>
-          {error && (
-            <p role="alert" className="admin-message error">
-              {error}
-            </p>
-          )}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void run(async () => {
-                if (categoryEditor.id)
-                  await repository.renameCategory(
-                    categoryEditor.id,
-                    categoryEditor.name.trim(),
-                  );
-                else
-                  await repository.createCategory(
-                    categoryEditor.name.trim(),
-                    categoryEditor.key,
-                  );
-                setCategoryEditor(null);
-                refresh();
-              });
-            }}
-          >
-            <label>
-              {n.categoryName}
-              <input
-                autoFocus
-                required
-                maxLength={80}
-                value={categoryEditor.name}
-                disabled={busy}
-                onChange={(e) =>
-                  setCategoryEditor({
-                    ...categoryEditor,
-                    name: e.target.value,
-                  })
-                }
-              />
-            </label>
-            <footer>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setCategoryEditor(null)}
-              >
-                {n.cancel}
-              </button>
-              <button
-                className="toolbar-primary"
-                disabled={busy || !categoryEditor.name.trim()}
-              >
-                {n.save}
-              </button>
-            </footer>
-          </form>
-        </OperatorDialog>
       )}
       {bulk && group && (
         <OperatorDialog

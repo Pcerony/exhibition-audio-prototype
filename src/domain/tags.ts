@@ -1,4 +1,5 @@
 import type { MemoryLocation } from './location';
+import type { MemoryCategoryCode } from './classification';
 
 export type RecordingInfo = {
   id: string;
@@ -17,10 +18,15 @@ export type Tag = {
   createdAt: string;
   status?: 'unbound' | 'bound' | 'disabled';
   recording: RecordingInfo | null;
+  inventoryLabel?: string;
+  categoryId?: string | null;
+  categoryCode?: MemoryCategoryCode | null;
+  batchDate?: string | null;
+  serialNumber?: string | null;
 };
 
 export function createTag(id: string, label: string, token = id, batch = ''): Tag {
-  return { id, token, label, batch, createdAt: new Date().toISOString(), status: 'unbound', recording: null };
+  return { id, token, label, inventoryLabel: label, batch, createdAt: new Date().toISOString(), status: 'unbound', recording: null, categoryId: null, categoryCode: null, batchDate: null, serialNumber: null };
 }
 
 export function claimTag(tag: Tag, recording: RecordingInfo): Tag {
@@ -29,5 +35,5 @@ export function claimTag(tag: Tag, recording: RecordingInfo): Tag {
 }
 
 export function resetTag(tag: Tag): Tag {
-  return { ...tag, status: 'unbound', recording: null };
+  return { ...tag, status: 'unbound', recording: null, label: tag.inventoryLabel ?? tag.label, batch: '', categoryId: null, categoryCode: null, batchDate: null, serialNumber: null };
 }

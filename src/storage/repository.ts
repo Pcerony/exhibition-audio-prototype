@@ -1,9 +1,10 @@
 import { claimTag, createTag, resetTag, type RecordingInfo, type Tag } from '../domain/tags';
 import { indexedDbAudioStore, type AudioStore } from './indexedDb';
 import { parseMemoryLocation, type MemoryLocation } from '../domain/location';
+import { MEMORY_CATEGORIES, formatMemorySerial, isMemoryCategoryCode, memoryBatchDate, type MemoryCategoryCode } from '../domain/classification';
 
 type NewTag = { id: string; token: string; label: string; batch?: string };
-export type NewRecording = { id: string; blob: Blob; nickname: string; duration: number; location?: MemoryLocation | null };
+export type NewRecording = { id: string; blob: Blob; nickname: string; duration: number; location?: MemoryLocation | null; categoryCode?: MemoryCategoryCode };
 export type ClaimResult = { status: 'claimed' | 'already-bound' | 'not-found'; tag: Tag | null };
 
 export interface TagRepository {
@@ -21,9 +22,11 @@ export type VisitorRepository = Pick<TagRepository, 'getTag' | 'claim' | 'getVis
 interface MetadataStore {
   read(): Tag[];
   write(tags: Tag[]): void;
+  nextSerial(key: string): number;
 }
 
 const STORAGE_KEY = 'exhibition-audio-tags-v1';
+const SERIAL_KEY = 'exhibition-audio-serial-counters-v3';
 
 function localMetadataStore(): MetadataStore {
   return {
@@ -36,6 +39,14 @@ function localMetadataStore(): MetadataStore {
     },
     write(tags) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tags));
+    },
+    nextSerial(key) {
+      const saved = JSON.parse(localStorage.getItem(SERIAL_KEY) ?? '{}');
+      const previous = saved[key] ?? 0;
+      if (!Number.isSafeInteger(previous) || previous < 0 || previous >= Number.MAX_SAFE_INTEGER) throw new Error('LOCAL_SEQUENCE_INVALID');
+      const next = previous + 1;
+      localStorage.setItem(SERIAL_KEY, JSON.stringify({ ...saved, [key]: next }));
+      return next;
     },
   };
 }
@@ -83,6 +94,15 @@ function buildRepository(metadata: MetadataStore, audio: AudioStore): TagReposit
           };
           await audio.set(candidate.id, candidate.blob);
           tags[index] = claimTag(tags[index], recording);
+          if (isMemoryCategoryCode(candidate.categoryCode)) {
+            const batchDate = memoryBatchDate(recording.createdAt);
+            const key = `${batchDate}:${candidate.categoryCode}`;
+            const number = metadata.nextSerial(key);
+            const serialNumber = formatMemorySerial(batchDate, candidate.categoryCode, number);
+            tags[index] = { ...tags[index], categoryCode: candidate.categoryCode,
+              categoryId: MEMORY_CATEGORIES.find(category => category.code === candidate.categoryCode)!.id,
+              batchDate, batch: batchDate, serialNumber, label: serialNumber };
+          }
           metadata.write(tags);
           resolveResult({ status: 'claimed', tag: tags[index] });
         } catch (error) {
@@ -119,7 +139,9 @@ export function createBrowserRepository(): TagRepository {
 export function createMemoryRepository(): TagRepository {
   const tags: Tag[] = [];
   const blobs = new Map<string, Blob>();
-  const metadata: MetadataStore = { read: () => tags.map((tag) => ({ ...tag })), write: (next) => { tags.splice(0, tags.length, ...next); } };
+  const serials = new Map<string, number>();
+  const metadata: MetadataStore = { read: () => tags.map((tag) => ({ ...tag })), write: (next) => { tags.splice(0, tags.length, ...next); },
+    nextSerial(key) { const next = (serials.get(key) ?? 0) + 1; serials.set(key, next); return next; } };
   const audio: AudioStore = {
     async set(id, blob) { blobs.set(id, blob); },
     async get(id) { return blobs.get(id) ?? null; },

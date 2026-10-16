@@ -17,12 +17,12 @@ assert.ok(publicKey && serviceKey, 'CLI credentials unavailable');
 const url = `https://${projectRef}.supabase.co`;
 const client = (key) => createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 const privileged = client(serviceKey);
-const batch = `AUTOTEST-${randomUUID()}`;
 const users = []; const paths = new Set(); const requestKey = randomUUID();
+const creationRequestKeys = [requestKey];
 let operatorJwt;
-let categoryId;
-const fixtureCategoryIds = [];
 let fixtureTagIds = [];
+const categoryId = '00000000-0000-4000-8000-000000000001';
+const targetId = '00000000-0000-4000-8000-000000000002';
 function check(error, message) { if (error) throw new Error(message); }
 async function endpoint(name, body, extra = {}) {
   const response = await fetch(`${url}/functions/v1/${name}`, {
@@ -54,7 +54,7 @@ async function upload(grant) {
   check(error, 'Synthetic upload failed');
 }
 const claim = (grant, durationSeconds = 1, token = grant.claimToken, location = null) => endpoint('public-upload-claim', {
-  uploadId: grant.uploadId, nickname: 'Synthetic fixture', durationSeconds, location,
+  uploadId: grant.uploadId, nickname: 'Synthetic fixture', durationSeconds, location, categoryCode: 'A',
 }, { 'x-upload-token': token });
 async function makeUser(operator) {
   const password = randomBytes(24).toString('base64url');
@@ -72,7 +72,7 @@ try {
   assert.equal((await admin('list', {}, outsiderJwt)).status, 403, 'Non-operator admin accepted');
   operatorJwt = await makeUser(true);
   assert.equal((await admin('session')).body.role, 'operator', 'Operator membership failed');
-  for (const table of ['tags', 'recordings', 'upload_sessions', 'operator_profiles', 'audit_log', 'provisioning_jobs', 'storage_cleanup_queue', 'batch_requests', 'categories', 'label_history', 'management_requests']) {
+  for (const table of ['tags', 'recordings', 'upload_sessions', 'operator_profiles', 'audit_log', 'provisioning_jobs', 'storage_cleanup_queue', 'batch_requests', 'categories', 'label_history', 'management_requests', 'memory_topics', 'daily_topic_counters']) {
     const result = await client(publicKey).from(table).select('*').limit(1);
     assert.ok(result.error || !result.data?.length, `Anonymous table exposed: ${table}`);
     const outsider = client(publicKey);
@@ -84,62 +84,54 @@ try {
   }
   console.log('PASS: anonymous/non-operator authorization and table isolation');
 
-  const category = await admin('createCategory', { name: batch, requestKey: randomUUID() });
-  assert.equal(category.status, 200, 'Fixture category creation failed');
-  categoryId = category.body.category.id;
-  fixtureCategoryIds.push(categoryId);
-  const created = await admin('createCards', { categoryId, count: 4, requestKey });
+  const categories = await admin('categories');
+  assert.deepEqual(categories.body.categories.map((category) => category.code), ['A', 'B', 'C', 'D']);
+  assert.equal((await admin('createCategory', { name: 'Synthetic fixture', requestKey: randomUUID() })).body.code, 'CATEGORIES_FIXED');
+  const created = await admin('createCards', { count: 4, requestKey, protocolVersion: 3 });
   assert.equal(created.status, 200, 'Batch creation failed');
   const tags = created.body.tags;
   fixtureTagIds = tags.map((tag) => tag.id);
   assert.equal(tags.length, 4, 'Incorrect batch size');
   assert.equal(new Set(tags.map((tag) => tag.token)).size, 4, 'Public tokens duplicated');
   assert.ok(tags.every((tag) => /^[a-f0-9]{48}$/.test(tag.token)), 'Public tokens not opaque');
-  const replay = await admin('createCards', { categoryId, count: 4, requestKey });
+  assert.ok(tags.every((tag) => tag.categoryId === null && tag.serialNumber === null && /^U[0-9]{6,}$/.test(tag.inventoryLabel)), 'Empty cards preclassified');
+  const replay = await admin('createCards', { count: 4, requestKey, protocolVersion: 3 });
   assert.ok(replay.body.tags.every((tag, i) => tag.id === tags[i].id), 'Batch retry created duplicate tags');
-  const conflict = await admin('createCards', { categoryId, count: 1, requestKey });
+  const conflict = await admin('createCards', { count: 1, requestKey, protocolVersion: 3 });
   assert.equal(conflict.status, 409, 'Idempotency conflict accepted');
-  const jobs = await admin('jobs', { categoryId, offset: 0, limit: 2, protocolVersion: 2 });
-  assert.equal(jobs.body.total, 4, 'Jobs pagination total incorrect');
+  const jobs = await admin('jobs', { offset: 0, limit: 2, protocolVersion: 3 });
+  assert.ok(jobs.body.total >= 4, 'Jobs pagination total incorrect');
   assert.equal(jobs.body.jobs.length, 2, 'Jobs pagination failed');
   const job = tags[0].provisioning;
-  assert.equal((await admin('jobs', { batch })).status, 426, 'Old writer received jobs before physical write');
-  const lease = await admin('leaseJob', { jobId: job.id, deviceId: 'synthetic-integration', protocolVersion: 2 });
+  assert.equal((await admin('jobs', { protocolVersion: 2 })).status, 426, 'Old writer received jobs before physical write');
+  const lease = await admin('leaseJob', { jobId: job.id, deviceId: 'synthetic-integration', protocolVersion: 3 });
   assert.equal(lease.status, 200, 'Lease failed');
   assert.match(lease.body.expiresAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/, 'Lease expiry incompatible with older Android');
-  const report = { jobId: job.id, version: job.version, visitorUrl: job.visitorUrl, status: 'verified', protocolVersion: 2, leaseToken: lease.body.leaseToken };
+  const report = { jobId: job.id, version: job.version, visitorUrl: job.visitorUrl, status: 'verified', protocolVersion: 3, leaseToken: lease.body.leaseToken };
   assert.equal((await admin('provision', { ...report, visitorUrl: `${job.visitorUrl}-wrong` })).status, 409, 'Wrong readback accepted');
   assert.equal((await admin('provision', report)).status, 200, 'Fixture provision report failed');
   assert.equal((await admin('releaseJob', { jobId: job.id, leaseToken: lease.body.leaseToken })).status, 200);
-  const rewrite = await admin('leaseJob', { jobId: job.id, deviceId: 'synthetic-integration', protocolVersion: 2 });
+  const rewrite = await admin('leaseJob', { jobId: job.id, deviceId: 'synthetic-integration', protocolVersion: 3 });
   assert.equal(rewrite.status, 200, 'Verified card rewrite lease failed');
   assert.match(rewrite.body.expiresAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/, 'Rewrite expiry incompatible with older Android');
-  const retry = await admin('leaseJob', { jobId: job.id, deviceId: 'synthetic-integration', protocolVersion: 2 });
+  const retry = await admin('leaseJob', { jobId: job.id, deviceId: 'synthetic-integration', protocolVersion: 3 });
   assert.deepEqual(retry.body, rewrite.body, 'Rewrite retry did not preserve the lease');
   assert.equal((await admin('provision', { ...report, leaseToken: rewrite.body.leaseToken })).status, 200, 'Rewrite report failed');
   assert.equal((await admin('releaseJob', { jobId: job.id, leaseToken: rewrite.body.leaseToken })).status, 200);
   assert.equal((await admin('provision', { jobId: job.id, version: job.version, visitorUrl: job.visitorUrl, status: 'verified' })).status, 426, 'Old writer was not blocked');
   console.log('PASS: atomic/idempotent cloud provisioning and exact URL checks (synthetic jobs only)');
 
-  const target = await admin('createCategory', { name: `${batch}-Moved`, requestKey: randomUUID() });
-  assert.equal(target.status, 200, 'Move category creation failed');
-  const targetId = target.body.category.id;
-  fixtureCategoryIds.push(targetId);
   const preview = await admin('bulkPreview', { tagIds: [tags[3].id], operation: 'move', targetCategoryId: targetId });
-  assert.equal(preview.status, 200, 'Move preview failed');
-  assert.equal((await admin('bulkApply', { operation: 'move', cards: preview.body.groups[0].cards, kind: 'empty', targetCategoryId: targetId, requestKey: randomUUID() })).status, 200, 'Move failed');
-  const moved = (await admin('list', { categoryId: targetId })).body.tags.find((tag) => tag.id === tags[3].id);
-  assert.equal(moved.token, tags[3].token, 'Move changed public identity');
-  assert.equal(moved.provisioning.visitorUrl, tags[3].provisioning.visitorUrl, 'Move changed written URL');
-  assert.notEqual(moved.label, tags[3].label, 'Move did not allocate a new number');
-  const extra = await admin('createCards', { categoryId: targetId, count: 1, requestKey: randomUUID() });
+  assert.equal(preview.body.code, 'CATEGORY_UNASSIGNED', 'Empty card move accepted');
+  const extraRequestKey = randomUUID(); creationRequestKeys.push(extraRequestKey);
+  const extra = await admin('createCards', { count: 1, requestKey: extraRequestKey, protocolVersion: 3 });
   assert.equal(extra.status, 200);
   const deleted = extra.body.tags[0]; fixtureTagIds.push(deleted.id);
   const deletion = await admin('bulkPreview', { tagIds: [deleted.id], operation: 'delete' });
   assert.equal((await admin('bulkApply', { operation: 'delete', kind: 'empty', cards: deletion.body.groups[0].cards, requestKey: randomUUID() })).status, 200);
   const gone = await fetch(`${url}/functions/v1/public-tag?token=${deleted.token}`, { headers: { apikey: publicKey } });
   assert.equal(gone.status, 404, 'Deleted card remains public');
-  console.log('PASS: authenticated bulk move preserves URL, new numbering and deletion invalidates the public card');
+  console.log('PASS: empty card classification prohibited and deletion invalidates the public card');
 
   const grants = await Promise.all([init(tags[0]), init(tags[0])]);
   await Promise.all(grants.map(upload));
@@ -149,9 +141,19 @@ try {
   const winner = results.findIndex((result) => result.status === 200);
   const publicTag = await fetch(`${url}/functions/v1/public-tag?token=${tags[0].token}`, { headers: { apikey: publicKey } });
   assert.equal(publicTag.status, 200, 'Public location lookup failed');
-  assert.deepEqual((await publicTag.json()).recording.location, locations[winner], 'Winning location not preserved');
-  const managed = await admin('list', { search: batch });
+  const publicBody = await publicTag.json();
+  assert.deepEqual(publicBody.recording.location, locations[winner], 'Winning location not preserved');
+  assert.equal(publicBody.categoryCode, 'A');
+  assert.match(publicBody.serialNumber, /^\d{6}-A\d{3,}$/);
+  const managed = await admin('list', { search: tags[0].inventoryLabel, categoryId });
   assert.deepEqual(managed.body.tags.find((tag) => tag.id === tags[0].id).recording.location, locations[winner], 'Admin location missing');
+  const move = await admin('bulkPreview', { tagIds: [tags[0].id], operation: 'move', targetCategoryId: targetId });
+  assert.equal((await admin('bulkApply', { operation: 'move', cards: move.body.groups[0].cards, kind: 'recorded', targetCategoryId: targetId, requestKey: randomUUID() })).status, 200, 'Bound move failed');
+  const moved = (await admin('list', { search: tags[0].inventoryLabel })).body.tags.find((tag) => tag.id === tags[0].id);
+  assert.equal(moved.token, tags[0].token, 'Move changed public identity');
+  assert.equal(moved.provisioning.visitorUrl, tags[0].provisioning.visitorUrl, 'Move changed written URL');
+  assert.equal(moved.batchDate, publicBody.batchDate, 'Move changed recording date');
+  assert.match(moved.serialNumber, /^\d{6}-B\d{3,}$/);
   assert.equal((await claim(grants[winner])).status, 410, 'Claim token reused');
   const playback = await endpoint('public-playback-url', { token: tags[0].token });
   assert.equal(playback.status, 200, 'Independent visitor playback failed');
@@ -185,22 +187,31 @@ try {
   // Advance only synthetic session timestamps; never alter a real visitor upload.
   check((await privileged.from('upload_sessions').update({ expires_at: new Date(Date.now() - 1000).toISOString() }).in('tag_id', tags.map((tag) => tag.id))).error, 'Fixture expiry update failed');
   check((await privileged.from('storage_cleanup_queue').update({ not_before: new Date(Date.now() - 1000).toISOString() }).in('object_path', [...paths])).error, 'Fixture cleanup expiry failed');
-  const cleaned = await admin('maintenance');
-  assert.equal(cleaned.status, 200, 'Cleanup worker failed');
-  for (const path of paths) assert.ok((await privileged.storage.from('recordings').info(path)).error, 'Unbound object cleanup failed');
-  console.log('PASS: atomic rate limiting and failed/expired upload cleanup');
+  // Never invoke the global maintenance worker in a production fixture run.
+  // Its deletion/retry contract is covered by isolated backend tests.
+  const queued = await privileged.from('storage_cleanup_queue').select('object_path').in('object_path', [...paths]);
+  check(queued.error, 'Fixture cleanup lookup failed');
+  assert.ok(queued.data.length > 0, 'Failed uploads were not durably queued');
+  console.log('PASS: atomic rate limiting and durable failed-upload cleanup queue');
 } finally {
   let failed = false;
-  const { data: fixtures, error } = fixtureCategoryIds.length ? await privileged.from('tags').select('id').in('category_id', fixtureCategoryIds) : { data: [], error: null };
-  if (error) failed = true;
+  // Recover fixture IDs even when a create response was lost after commit.
+  if (users.length) {
+    const requests = await privileged.from('management_requests').select('response').in('request_key', creationRequestKeys).in('operator_id', users);
+    if (requests.error) failed = true;
+    fixtureTagIds = [...new Set([...fixtureTagIds, ...(requests.data ?? []).flatMap((request) => request.response?.tags?.map((tag) => tag.id) ?? [])])];
+  }
+  if (fixtureTagIds.length) {
+    const uploads = await privileged.from('upload_sessions').select('object_path').in('tag_id', fixtureTagIds);
+    if (uploads.error) failed = true;
+    for (const upload of uploads.data ?? []) paths.add(upload.object_path);
+  }
   if (paths.size && (await privileged.storage.from('recordings').remove([...paths])).error) failed = true;
   if ((await privileged.from('storage_cleanup_queue').delete().in('object_path', [...paths])).error) failed = true;
-  fixtureTagIds = [...new Set([...fixtureTagIds, ...(fixtures ?? []).map((tag) => tag.id)])];
   if (fixtureTagIds.length) {
     if ((await privileged.from('label_history').delete().in('tag_id', fixtureTagIds)).error) failed = true;
     if ((await privileged.from('tags').delete().in('id', fixtureTagIds)).error) failed = true;
   }
-  if (fixtureCategoryIds.length && (await privileged.from('categories').delete().in('id', fixtureCategoryIds)).error) failed = true;
   for (const id of users) {
     if ((await privileged.from('batch_requests').delete().eq('operator_id', id)).error) failed = true;
     if ((await privileged.from('management_requests').delete().eq('operator_id', id)).error) failed = true;

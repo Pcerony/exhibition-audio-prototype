@@ -7,7 +7,7 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const errors: Record<string, number> = {
   REQUEST_INVALID: 400, OPERATOR_REQUIRED: 403, TAG_NOT_FOUND: 404,
   JOB_NOT_FOUND: 404, RECORDING_NOT_FOUND: 404, REQUEST_KEY_CONFLICT: 409, JOB_CONFLICT: 409, TAG_LABEL_EXISTS: 409,
-  CATEGORY_NOT_FOUND: 404, CATEGORY_NAME_EXISTS: 409, VERSION_CONFLICT: 409, GROUP_CONFLICT: 409,
+  CATEGORY_NOT_FOUND: 404, CATEGORY_NAME_EXISTS: 409, CATEGORIES_FIXED: 409, CATEGORY_UNASSIGNED: 409, VERSION_CONFLICT: 409, GROUP_CONFLICT: 409,
   LEASE_CONFLICT: 409, LEASE_EXPIRED: 409, CLIENT_UPGRADE_REQUIRED: 426, JOB_INELIGIBLE: 409,
 };
 
@@ -36,7 +36,7 @@ export function createHandler(getClient: () => SupabaseClient) {
       const { data, error } = await client.rpc('admin_action', { p_operator: identity.user.id, p_body: body });
       if (error) {
         const code = Object.keys(errors).find((value) => error.message.includes(value))
-          ?? (['22P02', '22003', '22023', '23502'].includes(error.code) ? 'REQUEST_INVALID' : 'SERVICE_UNAVAILABLE');
+          ?? (['22P02', '22003', '22007', '22008', '22023', '23502'].includes(error.code) ? 'REQUEST_INVALID' : 'SERVICE_UNAVAILABLE');
         return json({ code }, errors[code] ?? 503);
       }
       if (['leaseJob', 'nextJob'].includes(body.action) && data?.job) {

@@ -8,7 +8,7 @@ android {
     buildToolsVersion = "36.0.0"
     defaultConfig {
         applicationId = "space.heisei.voicewriter"; minSdk = 26; targetSdk = 36
-        versionCode = 4; versionName = "2.1.1"
+        versionCode = 5; versionName = "3.0.0"
         buildConfigField("String", "SUPABASE_URL", "\"${config("SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"${config("SUPABASE_PUBLISHABLE_KEY")}\"")
     }
@@ -16,4 +16,4 @@ android {
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
 }
-dependencies { testImplementation("junit:junit:4.13.2") }
+dependencies { testImplementation("junit:junit:4.13.2"); testImplementation("org.json:json:20240303") }

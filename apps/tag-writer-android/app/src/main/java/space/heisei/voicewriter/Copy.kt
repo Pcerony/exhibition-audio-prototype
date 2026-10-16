@@ -4,8 +4,21 @@ class Copy(requested: String = "ja") {
     val language = requested.takeIf { it in listOf("ja", "zh", "en") } ?: "ja"
     val availableKeys get() = entries.keys
     operator fun get(key: String): String = entries[key]?.get(when(language) { "zh" -> 1; "en" -> 2; else -> 0 }) ?: entries.getValue("error")[when(language) { "zh" -> 1; "en" -> 2; else -> 0 }]
+    fun category(category: Category) = if (category.code in listOf("A", "B", "C", "D")) "${category.code} · ${get("category${category.code}")}" else category.name
     companion object {
         private val entries = mapOf(
+            "categoryA" to listOf("食べ物", "美食", "Food"),
+            "categoryB" to listOf("旅行", "旅行", "Travel"),
+            "categoryC" to listOf("出会い", "相遇", "Encounters"),
+            "categoryD" to listOf("その他の思い出", "其他回忆", "Other Memories"),
+            "uncategorized" to listOf("未分類", "待分类", "Uncategorized"),
+            "unifiedPool" to listOf("未録音カード", "统一未录音卡池", "Unrecorded Cards"),
+            "batchDate" to listOf("録音日 YYYY-MM-DD", "录音日期 YYYY-MM-DD", "Recording Date YYYY-MM-DD"),
+            "filterDate" to listOf("日付を適用", "应用日期筛选", "Apply Date Filter"),
+            "invalidDate" to listOf("YYYY-MM-DDで正しい日付を入力してください", "请输入有效的 YYYY-MM-DD 日期", "Enter a Valid YYYY-MM-DD Date"),
+            "emptyMove" to listOf("分類の修正は録音済みカードのみです。未録音カードは移動できません。", "只能纠正已有录音的分类，不能移动未录音卡片。", "Only Recorded Cards Can Change Category. Unrecorded Cards Cannot Be Moved."),
+            "legacyPending" to listOf("旧V2の未送信結果です。V3として送信しません。元のURLと実物タグを確認してから破棄し、必要なら1枚書き込みで再検証してください。", "这是旧 V2 待同步结果，不会改为 V3 自动发送。请核对原网址和实体芯片后明确丢弃，必要时使用单张写卡重新核验。", "This Is a Legacy V2 Result. It Will Not Be Resent as V3. Check the Original URL and Physical Tag Before Discarding; Use Single Write to Verify Again When Needed."),
+            "legacyPendingSummary" to listOf("旧V2結果は自動送信しません。実物タグの確認が必要です。", "旧 V2 结果不会自动同步，需核对实体芯片。", "Legacy V2 Results Will Not Auto-sync. Review Physical Tags."),
             "readNfc" to listOf("NFC読取", "读取 NFC", "Read NFC"),
             "readReady" to listOf("タグをかざしてください", "请靠近芯片", "Hold a Tag Near the Phone"),
             "readAgain" to listOf("別のタグを読む", "重新读取", "Read Another Tag"),
@@ -81,7 +94,7 @@ class Copy(requested: String = "ja") {
             "reset" to listOf("録音をリセット", "重置录音", "Reset Recording"), "selected" to listOf("選択中", "已选择", "Selected"),
             "emptyConfirm" to listOf("未録音カードを処理します。", "将处理未录音卡片。", "Process Cards Without Recordings."),
             "recordedConfirm" to listOf("録音ありカードを処理します。削除すると元のNFC URLは無効になり、録音は聴けなくなります。", "将处理已有录音卡片。删除后原 NFC 网址失效，录音无法再播放。", "Process Recorded Cards. Deletion Disables the Original NFC URL and Playback."),
-            "resetConfirm" to listOf("録音を解除します。番号とURLは変わりません。", "解除录音绑定，编号和网址不变。", "Remove Recordings. Card Numbers and URLs Stay Unchanged."),
+            "resetConfirm" to listOf("録音・分類・録音日・現在の番号を解除し、在庫番号に戻します。旧番号は再利用せず、URLは変わりません。", "解除录音及当前分类、日期、正式编号，恢复库存号。旧编号不复用，网址不变。", "Remove Recording, Category, Date and Current Number. Restore Inventory Label. Old Numbers Are Retired; URLs Stay Unchanged."),
             "moveConfirm" to listOf("移動先で新しい番号になります。元の番号は再利用せず、URLと録音は変わりません。", "移动后分配新编号，旧编号不复用；网址与录音不变。", "New Numbers Will Be Assigned. Old Numbers Are Retired; URLs and Recordings Stay Unchanged."),
             "success" to listOf("完了しました", "操作成功", "Completed"), "noCards" to listOf("カードはありません", "暂无卡片", "No Cards"),
             "retryOperation" to listOf("前回の操作を再試行", "重试上次操作", "Retry Last Operation"),

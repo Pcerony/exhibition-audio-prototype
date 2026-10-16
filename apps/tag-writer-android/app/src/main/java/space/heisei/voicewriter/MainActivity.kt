@@ -59,6 +59,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private var search = ""
     private var sort = "recorded_desc"
     private var statusFilter = ""
+    private var batchDate = ""
     private var completed = 0
     private var statusMessage = ""
     private val checked = linkedSetOf<String>()
@@ -169,7 +170,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     }
     private fun navigate(destination: Screen) {
         pauseWriting(); stopPlayback(); checked.clear(); retryJobId = null; offset = 0; screen = destination
-        flow.choose(categoryId, destination == Screen.AUTO)
+        flow.choose(destination == Screen.AUTO)
         if (destination == Screen.READ) {
             inspectedTag = null; inspectedCards = emptyList(); scanArmed = true; statusMessage = ""
             executor.execute { releaseCurrent() }
@@ -180,16 +181,19 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     }
     private fun load() {
         api.verify(); sync()
-        categories = api.categories()
-        if (categoryId.isNotEmpty() && categories.none { it.id == categoryId }) categoryId = ""
-        val page = api.cards(categoryId, search, sort, offset, statusFilter)
-        cards = page.first; total = page.second; jobs = api.jobs(categoryId)
+        if (screen == Screen.CARDS || screen == Screen.EDIT) {
+            categories = api.categories()
+            if (categoryId.isNotEmpty() && categoryId != "uncategorized" && categories.none { it.id == categoryId }) categoryId = ""
+            val page = api.cards(categoryId, search, sort, offset, statusFilter, batchDate)
+            cards = page.first; total = page.second
+        }
+        jobs = api.jobs()
     }
     private fun categoryPicker(parent: LinearLayout, all: Boolean = true, changed: (String) -> Unit) {
         text(parent, t("category"), 13f, true)
-        val choices = if (all) listOf(Category("", t("all"), "")) + categories else categories
+        val choices = if (all) listOf(Category("", t("all"), ""), Category("uncategorized", t("uncategorized"), "")) + categories else categories
         val picker = Spinner(this)
-        picker.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, choices.map { if (it.id.isEmpty()) it.name else it.toString() })
+        picker.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, choices.map { copy.category(it) })
         picker.setSelection(choices.indexOfFirst { it.id == categoryId }.coerceAtLeast(0))
         parent.addView(picker, LinearLayout.LayoutParams(-1, dp(52)))
         var initial = true
@@ -206,12 +210,13 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         if (api.token.isBlank()) { loginScreen(); return }
         header(t("app"), true)
         if (screen == Screen.READ) { renderReader(); reader(); return }
-        categoryPicker(content) { value ->
-            pauseWriting(); categoryId = value; checked.clear(); retryJobId = null; offset = 0; flow.choose(value, screen == Screen.AUTO)
+        if (screen == Screen.CARDS || screen == Screen.EDIT) categoryPicker(content) { value ->
+            pauseWriting(); categoryId = value; checked.clear(); retryJobId = null; offset = 0
             work { releaseCurrent(); load(); ui { render() } }
         }
         if (queue.isNotEmpty()) {
             text(content, "${queue.size} · ${t("unsynced")}", 14f)
+            if (queue.any { !Provisioning.canSync(it) }) text(content, t("legacyPendingSummary"), 14f, true)
             action(content, t("review")) { reviewQueue() }
         }
         when(screen) {
@@ -244,8 +249,8 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 val card = result.card
                 text(content, t(result.state), 17f, true)
                 if (card != null) {
-                    text(content, card.label, 28f, true)
-                    text(content, card.categoryName, 15f)
+                    text(content, card.displayLabel, 28f, true)
+                    text(content, cardMetadata(card), 15f)
                     text(content, t(if (card.status == "disabled") "disabled" else if (card.recordingId == null) "empty" else "recorded"), 16f, true)
                     card.job?.let { job -> text(content, t(job.status), 14f); job.writtenAt?.let { text(content, "${t("writtenAt")} · ${date(it)}", 13f) } }
                     if (card.nickname.isNotBlank()) text(content, card.nickname, 15f)
@@ -311,6 +316,12 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         }
     }
     private fun renderCards() {
+        val dateQuery = EditText(this).apply { hint = t("batchDate"); setSingleLine(); setText(batchDate); inputType = InputType.TYPE_CLASS_DATETIME or InputType.TYPE_DATETIME_VARIATION_DATE; content.addView(this) }
+        action(content, t("filterDate")) {
+            val value = dateQuery.text.toString().trim()
+            if (value.isNotEmpty() && runCatching { java.time.LocalDate.parse(value) }.isFailure) { message(t("invalidDate")); return@action }
+            batchDate = value; offset = 0; checked.clear(); reload()
+        }
         val query = EditText(this).apply { hint = t("search"); setSingleLine(); setText(search); content.addView(this) }
         action(content, t("search")) { search = query.text.toString().trim(); offset = 0; checked.clear(); reload() }
         val orders = listOf("recorded_desc", "recorded_asc", "number")
@@ -351,11 +362,11 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             (panel.layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(10)
             if (screen == Screen.EDIT) {
                 panel.addView(CheckBox(this).apply {
-                    text = card.label; textSize = 20f; isChecked = card.id in checked
+                    text = card.displayLabel; textSize = 20f; isChecked = card.id in checked
                     setOnCheckedChangeListener { _, selected -> if (selected) checked.add(card.id) else checked.remove(card.id) }
                 })
-            } else text(panel, card.label, 23f, true)
-            text(panel, card.categoryName, 13f)
+            } else text(panel, card.displayLabel, 23f, true)
+            text(panel, cardMetadata(card), 13f)
             val job = jobs.find { it.tagId == card.id }
             text(panel, "${t(if (card.status == "disabled") "disabled" else if (card.recordingId == null) "empty" else "recorded")} · ${t(job?.status ?: "pending")}", 14f, true)
             if (card.nickname.isNotBlank()) text(panel, card.nickname, 14f)
@@ -370,16 +381,16 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         text(content, t("single"), 25f, true)
         renderWriteState()
         jobs.filter { it.recordingStatus != "disabled" }.forEach { job ->
-            action(content, "${job.label} · ${t(job.status)} · ${t(if (job.recordingStatus == "bound") "recorded" else "empty")}") {
+            action(content, "${job.displayLabel} · ${t(job.status)} · ${t(if (job.recordingStatus == "bound") "recorded" else "empty")}") {
                 pauseWriting()
                 val selectionEpoch = epoch
                 val owner = api.userId
                 val allowed = { resumed && screen == Screen.SINGLE && epoch == selectionEpoch && api.userId == owner && owner.isNotBlank() }
-                AlertDialog.Builder(this).setTitle(job.label).setMessage(job.batch)
+                AlertDialog.Builder(this).setTitle(job.displayLabel).setMessage(job.batchDate ?: job.batch)
                     .setNegativeButton(t("cancel"), null)
                     .setPositiveButton(t("write")) { _, _ -> if (allowed()) arm(job.id) }
                     .setNeutralButton(t("overwrite")) { _, _ ->
-                        AlertDialog.Builder(this).setTitle("${t("overwrite")} · ${job.label}")
+                        AlertDialog.Builder(this).setTitle("${t("overwrite")} · ${job.displayLabel}")
                             .setMessage(t("overwriteConfirm"))
                             .setNegativeButton(t("cancel"), null)
                             .setPositiveButton(t("confirm")) { _, _ -> if (allowed()) arm(job.id, true) }.show()
@@ -390,7 +401,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     }
     private fun renderAuto() {
         text(content, t("auto"), 25f, true)
-        val count = jobs.count { it.categoryId == categoryId && it.status == "pending" && it.recordingStatus == "unbound" }
+        val count = jobs.count { it.status == "pending" && it.recordingStatus == "unbound" }
         text(content, "${t("remaining")}: $count · ${t("completed")}: $completed", 16f, true)
         renderWriteState()
         retryJobId?.let { retry ->
@@ -398,17 +409,16 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             action(content, t("skip")) { retryJobId = null; arm(null) }
         }
         action(content, t(if (flow.stage == WriterFlow.Stage.PAUSED) "continue" else "start"), true) {
-            if (categoryId.isEmpty()) { message(t("selectCategory")); return@action }
             arm(null)
-        }.isEnabled = retryJobId == null && categoryId.isNotEmpty() && flow.stage !in listOf(WriterFlow.Stage.WRITING, WriterFlow.Stage.REMOVAL, WriterFlow.Stage.READY)
+        }.isEnabled = retryJobId == null && flow.stage !in listOf(WriterFlow.Stage.WRITING, WriterFlow.Stage.REMOVAL, WriterFlow.Stage.READY)
         action(content, t("pause")) { pauseWriting(); work { releaseCurrent(); ui { render() } } }
     }
     private fun renderWriteState() {
         val current = lease
-        if (current != null) { text(content, current.job.label, 36f, true); text(content, current.job.batch, 16f) }
+        if (current != null) { text(content, current.job.displayLabel, 36f, true); text(content, current.job.batchDate ?: current.job.batch, 16f) }
         val key = when(flow.stage) {
             WriterFlow.Stage.READY -> "ready"; WriterFlow.Stage.WRITING -> "writing"; WriterFlow.Stage.REMOVAL -> "remove"
-            WriterFlow.Stage.PAUSED -> "paused"; else -> if (screen == Screen.AUTO) "selectCategory" else "selectCard"
+            WriterFlow.Stage.PAUSED -> "paused"; else -> if (screen == Screen.AUTO) "unifiedPool" else "selectCard"
         }
         text(content, t(key), 18f, true)
         if (current != null && overwritePermission.pending(current.job.id, current.token) && flow.stage == WriterFlow.Stage.READY) text(content, t("overwriteReady"), 16f, true)
@@ -420,13 +430,13 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         val startEpoch = epoch
         work {
             releaseCurrent(); api.verify()
-            val acquired = api.lease(categoryId, jobId, deviceId())
+            val acquired = api.lease(jobId, deviceId())
             if (acquired == null) { ui { message(t("done")) }; return@work }
             if (!resumed || startEpoch != epoch) { api.release(acquired); return@work }
             lease = acquired
             if (overwriteConfirmed && screen == Screen.SINGLE && jobId == acquired.job.id) overwritePermission.approve(acquired.job.id, acquired.token)
             retryJobId = null
-            flow.choose(categoryId, screen == Screen.AUTO)
+            flow.choose(screen == Screen.AUTO)
             flow.start(acquired.job.id, acquired.token, acquired.expiresAt)
             ui { statusMessage = ""; render() }
         }
@@ -458,7 +468,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         executor.execute {
             try {
                 api.verify()
-                val fresh = api.jobs(current.job.categoryId).find { it.id == current.job.id }
+                val fresh = api.jobs().find { it.id == current.job.id }
                 if (fresh == null || !WriterSafety.sameAssignment(current.job, fresh)) throw WriterException("JOB_CONFLICT")
                 if (!resumed || epoch != writeEpoch) throw WriterException("JOB_CONFLICT")
             } catch (e: Exception) {
@@ -514,14 +524,15 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         val array = JSONArray(prefs().getString(accountKey("reports"), "[]"))
         for (i in 0 until array.length()) {
             val r = array.getJSONObject(i)
-            queue.add(Report(r.getString("jobId"), r.getInt("version"), r.getString("visitorUrl"), r.getString("status"), r.optString("errorCode").takeUnless { it.isBlank() || it == "null" }, r.optString("leaseToken")))
+            queue.add(parseReport(r))
         }
         pendingBulk = prefs().getString(accountKey("bulk"), null)?.let { JSONObject(it) }
     }
     private fun sync() {
-        if (queue.isEmpty()) return
+        if (queue.none { Provisioning.canSync(it) }) return
         val authoritative = api.jobs()
         for (report in queue.toList()) {
+            if (!Provisioning.canSync(report)) continue
             val job = authoritative.find { it.id == report.jobId }
             if (job == null || !Provisioning.matches(report, job) || Provisioning.superseded(report, job)) continue
             try { api.report(report); queue.remove(report); persistQueue() }
@@ -551,7 +562,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     }
     private fun reviewQueue() {
         val report = queue.firstOrNull() ?: return
-        AlertDialog.Builder(this).setTitle(t("review")).setMessage("${t("stale")}\n\n${report.visitorUrl}\n${t("version")}: ${report.version}")
+        AlertDialog.Builder(this).setTitle(t("review")).setMessage("${t(if (Provisioning.canSync(report)) "stale" else "legacyPending")}\n\n${report.visitorUrl}\n${t("version")}: ${report.version} · Protocol ${report.protocolVersion}")
             .setNegativeButton(t("cancel"), null).setNeutralButton(t("retry")) { _, _ -> work { sync(); ui { render() } } }
             .setPositiveButton(t("discard")) { _, _ -> work {
                 queue.remove(report); persistQueue(); ui { render() }
@@ -559,10 +570,12 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     }
     private fun selectMoveTarget() {
         if (checked.isEmpty()) { message(t("selectCard")); return }
-        AlertDialog.Builder(this).setTitle(t("move")).setItems(categories.map { it.toString() }.toTypedArray()) { _, index -> bulkPreview("move", categories[index].id) }.show()
+        if (!Provisioning.canMove(cards.filter { it.id in checked })) { message(t("emptyMove")); return }
+        AlertDialog.Builder(this).setTitle(t("move")).setItems(categories.map { copy.category(it) }.toTypedArray()) { _, index -> bulkPreview("move", categories[index].id) }.show()
     }
     private fun bulkPreview(operation: String, target: String? = null) {
         if (checked.isEmpty()) { message(t("selectCard")); return }
+        if (operation == "move" && !Provisioning.canMove(cards.filter { it.id in checked })) { message(t("emptyMove")); return }
         if (pendingBulk != null) { message(t("retryOperation")); return }
         val ids = checked.toList()
         work {
@@ -577,6 +590,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         val group = groups.getJSONObject(index); val rows = group.getJSONArray("cards")
         if (rows.length() == 0) { confirmGroup(groups, index + 1, operation, target); return }
         val kind = group.getString("kind")
+        if (operation == "move" && kind != "recorded") { message(t("emptyMove")); return }
         val description = t(if (kind == "recorded") "recordedConfirm" else "emptyConfirm")
         val detail = if (operation == "reset") t("resetConfirm") else if (operation == "move") t("moveConfirm") else ""
         val names = (0 until rows.length()).take(12).joinToString(", ") { rows.getJSONObject(it).optString("label") }
@@ -593,7 +607,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         work {
             try { api.admin(body) }
             catch (e: ApiException) {
-                if (e.code in listOf("VERSION_CONFLICT", "GROUP_CONFLICT", "TAG_NOT_FOUND")) { pendingBulk = null; prefs().edit().remove(accountKey("bulk")).commit() }
+                if (e.code in listOf("VERSION_CONFLICT", "GROUP_CONFLICT", "TAG_NOT_FOUND", "CATEGORY_UNASSIGNED", "CATEGORY_NOT_FOUND")) { pendingBulk = null; prefs().edit().remove(accountKey("bulk")).commit() }
                 throw e
             }
             pendingBulk = null; prefs().edit().remove(accountKey("bulk")).commit()
@@ -626,6 +640,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private fun date(value: String): String = runCatching {
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(Instant.parse(value))
     }.getOrDefault(value)
+    private fun cardMetadata(card: Card): String = listOfNotNull(card.categoryCode?.let { copy.category(Category(card.categoryId.orEmpty(), "", it)) }, card.batchDate).joinToString(" · ").ifBlank { card.categoryName }
     private fun message(value: String) { statusMessage = value; if (::state.isInitialized) state.text = value }
     private fun ui(action: () -> Unit) { runOnUiThread { if (!isFinishing && !isDestroyed) action() } }
     private fun work(action: () -> Unit) {
@@ -642,6 +657,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         "CAPACITY" -> "capacity"; "READ_ONLY" -> "readOnly"; "FOREIGN_TAG" -> "foreign"
         "UNSUPPORTED" -> "unsupported"; "TAG_LOST" -> "lost"; "READBACK_MISMATCH", "INVALID_URL" -> "mismatch"
         "FORMATTED_RETRY" -> "formatted"; "LEASE_CONFLICT" -> "leased"; "CLIENT_UPGRADE_REQUIRED" -> "upgrade"
+        "CATEGORY_UNASSIGNED" -> "emptyMove"
         "JOB_CONFLICT", "VERSION_CONFLICT", "GROUP_CONFLICT", "JOB_INELIGIBLE", "LEASE_EXPIRED" -> "conflict"
         "LOCAL_SAVE_FAILED" -> "saveFailed"; else -> "error"
     })

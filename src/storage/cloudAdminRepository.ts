@@ -31,7 +31,7 @@ export function createCloudAdminRepository(config: { url: string; key: string; a
     async listCategories() { return (await request<{ categories: Category[] }>('categories')).categories; },
     async createCategory(name, requestKey) { return (await request<{ category: Category }>('createCategory', { name, requestKey })).category; },
     async renameCategory(categoryId, name) { await request('renameCategory', { categoryId, name }); },
-    createCards: (categoryId, count, requestKey) => request('createCards', { categoryId, count, requestKey }),
+    createCards: (count, requestKey) => request('createCards', { count, requestKey, protocolVersion: 3 }),
     previewBulk: (tagIds, operation, targetCategoryId) => request('bulkPreview', { tagIds, operation, ...(targetCategoryId ? { targetCategoryId } : {}) }),
     async applyBulk(input) { await request('bulkApply', input); },
     getSession,
@@ -50,14 +50,14 @@ export function createCloudAdminRepository(config: { url: string; key: string; a
     async listJobs(query = {}) {
       const jobs: ProvisioningJob[] = [];
       while (true) {
-        const page = await request<{ jobs: ProvisioningJob[]; total: number }>('jobs', { ...query, offset: jobs.length, limit: 500, protocolVersion: 2 });
+        const page = await request<{ jobs: ProvisioningJob[]; total: number }>('jobs', { ...query, offset: jobs.length, limit: 500, protocolVersion: 3 });
         jobs.push(...page.jobs);
         if (jobs.length >= page.total) return jobs;
         if (!page.jobs.length) throw new Error('INCOMPLETE_EXPORT');
       }
     },
     async provision(job, status, leaseToken, errorCode) {
-      await request('provision', { jobId: job.id, version: job.version, visitorUrl: job.visitorUrl, status, protocolVersion: 2, leaseToken, ...(errorCode ? { errorCode } : {}) });
+      await request('provision', { jobId: job.id, version: job.version, visitorUrl: job.visitorUrl, status, protocolVersion: 3, leaseToken, ...(errorCode ? { errorCode } : {}) });
     },
     async getAudit() { return (await request<{ entries: AuditEntry[] }>('audit')).entries; },
     maintenance: () => request<{ removed: number; pending: number }>('maintenance'),

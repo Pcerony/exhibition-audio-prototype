@@ -77,6 +77,15 @@
 .card-count {
   width: 90px;
 }
+.cloud-admin .table-controls {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.batch-date-filter {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+}
 .operator-create button,
 .bulk-toolbar button,
 .pending-actions button,
@@ -284,6 +293,9 @@
 }
 .cloud-admin .tag-table {
   min-width: 760px;
+}
+.cloud-admin .tag-table td {
+  padding-block: 10px;
 }
 .cloud-admin .tag-table-wrap {
   overflow-x: auto;

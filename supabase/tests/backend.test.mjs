@@ -11,7 +11,7 @@ test('admin migration protects privileged RPC and atomically invalidates reset s
   assert.match(sql, /for update/);
 });
 test('claim endpoint never deletes a candidate object based on a stale lookup', () => {
-  const source = readFileSync('supabase/functions/public-upload-claim/index.ts', 'utf8');
+  const source = readFileSync('supabase/functions/public-upload-claim/handler.ts', 'utf8');
   assert.doesNotMatch(source, /\.remove\(/);
   assert.doesNotMatch(source, /removeUnclaimedObject/);
 });

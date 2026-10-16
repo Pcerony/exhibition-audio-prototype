@@ -12,12 +12,14 @@ import type {
 } from "../../storage/adminRepository";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import { CloudAdminPage } from "./CloudAdminPage";
+const categoryA = '00000000-0000-4000-8000-000000000001';
+const categoryB = '00000000-0000-4000-8000-000000000002';
 const tag: ManagedTag = {
   id: "t1",
   token: "opaque",
   label: "A001",
   batch: "食品",
-  categoryId: "c1",
+  categoryId: categoryA,
   version: 2,
   createdAt: "2026-01-01",
   status: "bound",
@@ -45,8 +47,9 @@ function repository(): AdminRepository {
     getAudit: vi.fn().mockResolvedValue([]),
     maintenance: vi.fn(),
     listCategories: vi.fn().mockResolvedValue([
-      { id: "c1", name: "食品", code: "A", nextNumber: 2 },
-      { id: "c2", name: "景点", code: "B", nextNumber: 1 },
+      { id: categoryA, name: "美食", code: "A", nextNumber: 2 },
+      { id: categoryB, name: "旅行", code: "B", nextNumber: 1 },
+      { id: 'legacy', name: "旧分類", code: "E", nextNumber: 1 },
     ]),
     createCategory: vi.fn(),
     renameCategory: vi.fn(),
@@ -86,7 +89,7 @@ it('opens management when a visitor previously selected English', async () => {
   localStorage.setItem('exhibition-audio-language-v2', 'en');
   show(repository());
   expect(await screen.findByText('A001')).toBeVisible();
-  expect(screen.getByRole('button', { name: '分類を追加' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: '分類を追加' })).not.toBeInTheDocument();
   expect(localStorage.getItem('exhibition-audio-language-v2')).toBe('en');
 });
 it("shows invalid login safely and never loads protected data", async () => {
@@ -138,9 +141,6 @@ it("can cancel uncertain creation after warning to correct next request", async 
   vi.mocked(r.createCards).mockRejectedValue(new Error("NETWORK"));
   show(r);
   await screen.findByText("A001");
-  fireEvent.change(screen.getByLabelText("作成する分類"), {
-    target: { value: "c1" },
-  });
   fireEvent.click(screen.getByRole("button", { name: "空カードを作成" }));
   await screen.findByRole("alert");
   expect(screen.getByLabelText("枚数")).toBeDisabled();
@@ -175,9 +175,6 @@ it("creates automatic cards and preserves uncertain request key", async () => {
     .mockResolvedValue({ tags: [] });
   show(r);
   await screen.findByText("A001");
-  fireEvent.change(screen.getByLabelText("作成する分類"), {
-    target: { value: "c1" },
-  });
   fireEvent.change(screen.getByLabelText("枚数"), { target: { value: "30" } });
   fireEvent.click(screen.getByRole("button", { name: "空カードを作成" }));
   await screen.findByRole("alert");
@@ -186,16 +183,17 @@ it("creates automatic cards and preserves uncertain request key", async () => {
   expect(vi.mocked(r.createCards).mock.calls[0]).toEqual(
     vi.mocked(r.createCards).mock.calls[1],
   );
-  expect(r.createCards).toHaveBeenCalledWith("c1", 30, expect.any(String));
+  expect(r.createCards).toHaveBeenCalledWith(30, expect.any(String));
+  expect(screen.queryByLabelText("作成する分類")).not.toBeInTheDocument();
 });
 it("filters classification and clears selected cards", async () => {
   const r = repository();
   show(r);
   fireEvent.click(await screen.findByLabelText("選択 A001"));
-  fireEvent.click(screen.getByRole("button", { name: "A 食品" }));
+  fireEvent.click(screen.getByRole("button", { name: "A 食べ物" }));
   await waitFor(() =>
     expect(r.listTags).toHaveBeenCalledWith(
-      expect.objectContaining({ categoryId: "c1" }),
+      expect.objectContaining({ categoryId: categoryA }),
     ),
   );
   expect(screen.getByLabelText("選択 A001")).not.toBeChecked();
@@ -250,11 +248,11 @@ it("moves selected cards to explicit destination and preserves retry key", async
   show(r);
   fireEvent.click(await screen.findByLabelText("選択 A001"));
   fireEvent.change(screen.getByLabelText("移動先の分類"), {
-    target: { value: "c2" },
+    target: { value: categoryB },
   });
   fireEvent.click(screen.getByRole("button", { name: "一括移動" }));
   const d = await screen.findByRole("dialog");
-  expect(r.previewBulk).toHaveBeenCalledWith(["t1"], "move", "c2");
+  expect(r.previewBulk).toHaveBeenCalledWith(["t1"], "move", categoryB);
   fireEvent.click(within(d).getByRole("checkbox"));
   fireEvent.click(within(d).getByRole("button", { name: "移動を確定" }));
   await screen.findByRole("alert");
@@ -309,27 +307,58 @@ it("rechecks only remaining groups after an earlier delete succeeded", async () 
   fireEvent.click(within(dialog).getByRole("button", { name: "再確認" }));
   await waitFor(() => expect(r.previewBulk).toHaveBeenLastCalledWith(["t1"], "delete", undefined));
 });
-it("creates and renames category without changing its code", async () => {
+it("offers only the four fixed categories without management actions", async () => {
   const r = repository();
   show(r);
   await screen.findByText("A001");
-  fireEvent.click(screen.getByRole("button", { name: "分類を追加" }));
-  fireEvent.change(screen.getByLabelText("分類名"), {
-    target: { value: "其他" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "保存" }));
-  await waitFor(() =>
-    expect(r.createCategory).toHaveBeenCalledWith("其他", expect.any(String)),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "A 食品" }));
-  fireEvent.click(screen.getByRole("button", { name: "分類名を変更" }));
-  fireEvent.change(screen.getByLabelText("分類名"), {
-    target: { value: "食べ物" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "保存" }));
-  await waitFor(() =>
-    expect(r.renameCategory).toHaveBeenCalledWith("c1", "食べ物"),
-  );
+  for (const name of ['A 食べ物', 'B 旅行', 'C 出会い', 'D その他の思い出'])
+    expect(screen.getByRole('button', { name })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'A 食べ物' }));
+  expect(screen.queryByRole('button', { name: '分類を追加' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '分類名を変更' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: /旧分類/ })).not.toBeInTheDocument();
+  expect(r.createCategory).not.toHaveBeenCalled();
+  expect(r.renameCategory).not.toHaveBeenCalled();
+});
+it('filters recording dates and unclassified cards independently of creation date', async () => {
+  const r = repository();
+  show(r);
+  await screen.findByText('A001');
+  fireEvent.change(screen.getByLabelText('録音日バッチ'), { target: { value: '2026-10-17' } });
+  await waitFor(() => expect(r.listTags).toHaveBeenLastCalledWith(expect.objectContaining({ batchDate: '2026-10-17' })));
+  fireEvent.click(screen.getByRole('button', { name: '未分類' }));
+  await waitFor(() => expect(r.listTags).toHaveBeenLastCalledWith(expect.objectContaining({ uncategorized: true, categoryId: undefined, batchDate: '2026-10-17' })));
+  fireEvent.click(screen.getByRole('button', { name: 'B 旅行' }));
+  await waitFor(() => expect(r.listTags).toHaveBeenLastCalledWith(expect.objectContaining({ uncategorized: undefined, categoryId: categoryB })));
+});
+it('prevents correction when an empty card is included in selection', async () => {
+  const r = repository();
+  vi.mocked(r.listTags).mockResolvedValue({ tags: [tag, { ...tag, id: 'empty', label: 'U000002', categoryId: null, recording: null }], total: 2 });
+  show(r);
+  fireEvent.click(await screen.findByLabelText('選択 A001'));
+  fireEvent.change(screen.getByLabelText('移動先の分類'), { target: { value: categoryB } });
+  expect(screen.getByRole('button', { name: '一括移動' })).toBeEnabled();
+  fireEvent.click(screen.getByLabelText('選択 U000002'));
+  expect(screen.getByRole('button', { name: '一括移動' })).toBeDisabled();
+  expect(r.previewBulk).not.toHaveBeenCalled();
+});
+it('shows current serial, stable inventory, recording date and legacy labels separately', async () => {
+  const r = repository();
+  vi.mocked(r.listTags).mockResolvedValue({ tags: [{ ...tag, label: '261017-A003', serialNumber: '261017-A003', inventoryLabel: 'U000001', batchDate: '2026-10-17', categoryCode: 'A', batch: '2026-10-17' }, { ...tag, id: 'old', label: 'OLD001', batch: '旧展示' }], total: 2 });
+  show(r);
+  expect(await screen.findByText('261017-A003')).toBeVisible();
+  expect(screen.getByText('U000001')).toBeVisible();
+  expect(screen.getByText('2026-10-17')).toBeVisible();
+  expect(screen.getByText('旧バッチ: 旧展示')).toBeVisible();
+});
+it('keeps recording date and inventory visible in writing jobs', async () => {
+  const r = repository();
+  vi.mocked(r.listJobs).mockResolvedValue([{ id: 'job', tagId: 't1', label: '261017-A003', batch: '2026-10-17', visitorUrl: 'https://example.test/#/t/opaque', version: 1, status: 'pending', errorCode: null, inventoryLabel: 'U000001', serialNumber: '261017-A003', batchDate: '2026-10-17', categoryCode: 'A' }]);
+  show(r);
+  fireEvent.click(await screen.findByRole('button', { name: '書き込み作業' }));
+  const job = await screen.findByText(/261017-A003/, { selector: 'li' });
+  expect(job).toHaveTextContent('U000001');
+  expect(job).toHaveTextContent('2026-10-17');
 });
 it("clears protected data after revoked authentication", async () => {
   const r = repository();

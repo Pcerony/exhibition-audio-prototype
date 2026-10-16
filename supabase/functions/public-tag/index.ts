@@ -11,16 +11,22 @@ Deno.serve(async (request) => {
 
   const client = adminClient();
   const { data: tag, error } = await client.from('tags')
-    .select('id,label,batch,status,created_at,recordings(id,nickname,duration_seconds,created_at,location)')
+    .select('id,label,batch,status,created_at,topic_id,inventory_label,batch_date,serial_number,memory_topics(code),recordings(id,nickname,duration_seconds,created_at,location)')
     .eq('public_token', token).is('deleted_at', null).maybeSingle();
   if (error) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);
   if (!tag) return json({ code: 'TAG_NOT_FOUND' }, 404);
 
   const recording = Array.isArray(tag.recordings) ? tag.recordings[0] ?? null : tag.recordings ?? null;
+  const topic = Array.isArray(tag.memory_topics) ? tag.memory_topics[0] ?? null : tag.memory_topics ?? null;
   return json({
     id: tag.id,
-    label: tag.label,
-    batch: tag.batch,
+    label: tag.serial_number ?? tag.label,
+    batch: tag.batch_date ?? tag.batch,
+    categoryId: tag.topic_id,
+    categoryCode: topic?.code ?? null,
+    inventoryLabel: tag.inventory_label,
+    batchDate: tag.batch_date,
+    serialNumber: tag.serial_number,
     status: tag.status,
     createdAt: tag.created_at,
     recording: recording ? {
