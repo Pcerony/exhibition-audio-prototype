@@ -7,6 +7,10 @@
 - [地图兼容发布](MAPS_COMPATIBLE_RELEASE.md)：地图独立发布与旧安卓写卡协议的兼容边界。
 - [Google 地图接入记录](GOOGLE_MAPS_SETUP.md)：云配置、配额与验证状态。
 
+- [当前进度与交接](STATUS.md)：阶段结论、事实、待办与本地工作目录。
+- [体验优化阶段](EXPERIENCE_PHASE.md)：下一阶段三端目标、范围与待确认事项。
+- [管理体验正式设计](superpowers/specs/2026-10-15-operator-experience-design.md)：已确认的分类、编号、网页管理和安卓独立写卡模式。
+- [V2发布检查](OPERATOR_V2_RELEASE.md)：候选版、迁移顺序与旧安卓升级限制。
 - [项目目标与需求](PROJECT.md)：用户、角色、工作流、范围和验收标准。
 - [系统架构](ARCHITECTURE.md)：客户端边界、云服务、数据流和仓库演进方向。
 - [API 契约](API_CONTRACT.md)：访客、后台、Android 写卡端共用的服务端接口。
@@ -18,6 +22,6 @@
 
 ## 当前开发重点
 
-云端录音、运营后台和 Android 调试端已实现。可选Google地图选点已兼容发布，并通过正式网站双独立浏览器云端录音/地点/播放验证。管理V2仍保留在独立开发分支，未随地图发布。当前剩余为实体iPhone/NFC验收、保存期限及现场运营安排，见地图兼容发布记录。
+可选Google地图已上线并通过正式网站双独立浏览器录音/地点/播放验证。当前进入网页后台、云端分类管理与Android管理V2的成套集成；尚未升级生产管理接口，不以本地构建代替实体NFC验收。
 
 旧的 `docs/superpowers/specs/2026-09-29-exhibition-audio-nfc-design.md` 和早期原型计划记录了单浏览器原型阶段的决定；如与本文档冲突，以本目录核心文档为准。

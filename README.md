@@ -6,6 +6,9 @@
 - 认证运营后台：<https://voice.heisei.space/#/admin>
 - [Android 写卡工程](apps/tag-writer-android/README.md)
 - [系统文档](docs/README.md)、[首次运营](docs/OPERATOR_SETUP.md)、[验证记录](docs/VERIFICATION.md)
+- [当前进度](docs/STATUS.md)、[下一阶段：三端体验优化](docs/EXPERIENCE_PHASE.md)
+
+2026-10-15：用户确认基础功能阶段性成功，现进入体验优化准备。真实运营账号已建立，网页录音与各工具获用户正常反馈；具体设备验收记录和正式开放事项见进度文档。本地开发目录为 `/Users/heisei/Developer/exhibition-audio-prototype`。
 
 ## 开发
 

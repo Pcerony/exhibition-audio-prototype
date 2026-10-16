@@ -11,7 +11,7 @@ Deno.serve(async (request) => {
 
   const client = adminClient();
   const { data: tag, error } = await client.from('tags')
-    .select('status,recordings(object_path)').eq('public_token', token).maybeSingle();
+    .select('status,recordings(object_path)').eq('public_token', token).is('deleted_at', null).maybeSingle();
   if (error) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);
   if (!tag) return json({ code: 'TAG_NOT_FOUND' }, 404);
   if (tag.status === 'disabled') return json({ code: 'TAG_UNAVAILABLE' }, 410);

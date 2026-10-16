@@ -3,12 +3,25 @@ import type { Tag } from '../domain/tags';
 export type ProvisioningJob = {
   id: string; tagId: string; label: string; batch: string; visitorUrl: string;
   version: number; status: 'pending' | 'verified' | 'failed'; errorCode: string | null;
+  categoryId?: string; recordingStatus?: 'unbound' | 'bound' | 'disabled';
+  tagVersion?: number; leased?: boolean; leaseExpiresAt?: string | null;
 };
-export type ManagedTag = Tag & { provisioning: ProvisioningJob | null };
+export type Category = { id: string; name: string; code: string; nextNumber: number };
+export type BulkOperation = 'move' | 'delete' | 'reset';
+export type BulkCard = { id: string; version: number; label: string };
+export type BulkGroup = { kind: 'empty' | 'recorded'; cards: BulkCard[]; recordingCount: number };
+export type BulkApply = { operation: BulkOperation; cards: BulkCard[]; kind: BulkGroup['kind']; targetCategoryId?: string; requestKey: string };
+export type ManagedTag = Tag & { provisioning: ProvisioningJob | null; categoryId?: string; version?: number };
 export type OperatorSession = { userId: string; email?: string; role: 'operator' | 'admin' };
-export type TagQuery = { search?: string; status?: 'unbound' | 'bound' | 'disabled'; offset?: number; limit?: number };
-export type AuditEntry = { id: string | number; operatorId: string; action: string; tagId: string | null; createdAt: string };
+export type TagQuery = { search?: string; status?: 'unbound' | 'bound' | 'disabled'; offset?: number; limit?: number; categoryId?: string; sort?: 'recorded_desc' | 'recorded_asc' | 'number' };
+export type AuditEntry = { id: string | number; operatorId: string; action: string; tagId: string | null; createdAt: string; details?: Record<string, unknown> | null };
 export interface AdminRepository {
+  listCategories(): Promise<Category[]>;
+  createCategory(name: string, requestKey: string): Promise<Category>;
+  renameCategory(categoryId: string, name: string): Promise<void>;
+  createCards(categoryId: string, count: number, requestKey: string): Promise<{ tags: ManagedTag[] }>;
+  previewBulk(tagIds: string[], operation: BulkOperation, targetCategoryId?: string): Promise<{ groups: BulkGroup[] }>;
+  applyBulk(input: BulkApply): Promise<void>;
   getSession(): Promise<OperatorSession | null>;
   signIn(email: string, password: string): Promise<OperatorSession>;
   signOut(): Promise<void>;
@@ -17,8 +30,8 @@ export interface AdminRepository {
   resetTag(tagId: string): Promise<void>;
   setEnabled(tagId: string, enabled: boolean): Promise<void>;
   getPlaybackUrl(recordingId: string): Promise<string>;
-  listJobs(query?: { batch?: string; status?: ProvisioningJob['status'] }): Promise<ProvisioningJob[]>;
-  provision(job: ProvisioningJob, status: 'verified' | 'failed', errorCode?: string): Promise<void>;
+  listJobs(query?: { batch?: string; categoryId?: string; status?: ProvisioningJob['status'] }): Promise<ProvisioningJob[]>;
+  provision(job: ProvisioningJob, status: 'verified' | 'failed', leaseToken: string, errorCode?: string): Promise<void>;
   getAudit(): Promise<AuditEntry[]>;
   maintenance(): Promise<{ removed: number; pending: number }>;
 }
