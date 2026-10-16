@@ -1,5 +1,10 @@
 export const operatorMessages = {
   "ja-JP": {
+    categoryNames: { A: "食べ物", B: "旅行", C: "出会い", D: "その他の思い出" },
+    uncategorized: "未分類",
+    batchDate: "録音日バッチ",
+    inventory: "在庫番号",
+    legacyBatch: "旧バッチ",
     categories: "分類",
     newCategory: "分類を追加",
     rename: "分類名を変更",
@@ -42,6 +47,11 @@ export const operatorMessages = {
     missingCategory: "先に分類を作成してください。",
   },
   "zh-CN": {
+    categoryNames: { A: "美食", B: "旅行", C: "相遇", D: "其他回忆" },
+    uncategorized: "待分类",
+    batchDate: "录音日期批次",
+    inventory: "库存编号",
+    legacyBatch: "历史批次",
     categories: "分类",
     newCategory: "新增分类",
     rename: "修改分类名称",

@@ -77,6 +77,15 @@
 .card-count {
   width: 90px;
 }
+.cloud-admin .table-controls {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.batch-date-filter {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+}
 .operator-create button,
 .bulk-toolbar button,
 .pending-actions button,
