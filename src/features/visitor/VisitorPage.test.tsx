@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { createMemoryRepository } from '../../storage/repository';
 import { VisitorPage } from './VisitorPage';
 import { I18nProvider } from '../../i18n/I18nProvider';
+import { visitorMessages } from '../../i18n/visitorMessages';
 
 const repository = createMemoryRepository();
 
@@ -21,6 +22,33 @@ async function enterMap() {
 }
 
 describe('visitor page', () => {
+  it.each(['en', 'ko', 'zh-TW'] as const)('translates all steps and preserves a take across language changes: %s', async locale => {
+    localStorage.setItem('exhibition-audio-language-v2', locale);
+    const copy = visitorMessages[locale];
+    vi.stubGlobal('MediaRecorder', class {
+      state = 'inactive'; mimeType = 'audio/webm';
+      ondataavailable?: (event: { data: Blob }) => void;
+      onstop?: () => void;
+      start() { this.state = 'recording'; }
+      stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['fixture']) }); this.onstop?.(); }
+    });
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
+      getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+    } });
+    render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    fireEvent.click(await screen.findByRole('button', { name: copy['flow.begin'] }));
+    expect(screen.getByRole('heading', { name: copy['flow.themeTitle'] })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: copy['flow.food'] }));
+    fireEvent.click(await screen.findByRole('button', { name: copy['location.skip'] }));
+    fireEvent.click(screen.getByRole('button', { name: copy['visitor.start'] }));
+    fireEvent.click(await screen.findByRole('button', { name: copy['visitor.stop'] }));
+    expect(screen.getByRole('heading', { name: copy['flow.preview'] })).toBeVisible();
+    const audio = screen.getByLabelText(copy['visitor.preview']);
+    const url = audio.getAttribute('src');
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'ja-JP' } });
+    expect(screen.getByLabelText('録音を試聴')).toHaveAttribute('src', url);
+    expect(screen.getByRole('button', { name: 'この声を残す' })).toBeEnabled();
+  });
   it('keeps maps out of the introduction and numbers the theme step', async () => {
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
     expect(await screen.findByRole('button', { name: '开始' })).toBeVisible();
@@ -108,7 +136,7 @@ describe('visitor page', () => {
     await enterMap();
     fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
     await screen.findByRole('button', { name: /开始录音/ });
-    fireEvent.click(screen.getByRole('button', { name: '日本語' }));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'ja-JP' } });
     expect(await screen.findByRole('heading', { name: '福岡市との思い出を聞かせてください。' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '録音を開始' })).toBeInTheDocument();
   });
@@ -149,7 +177,8 @@ describe('visitor page', () => {
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
       getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
     } });
-    vi.spyOn(repository, 'claim').mockReturnValue(new Promise(() => {}));
+    let failUpload!: (reason: Error) => void;
+    vi.spyOn(repository, 'claim').mockReturnValue(new Promise((_, reject) => { failUpload = reject; }));
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
     await enterMap();
     fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
@@ -160,6 +189,10 @@ describe('visitor page', () => {
     fireEvent.click(await screen.findByRole('button', { name: /把声音留在这里/ }));
     expect(screen.getByRole('button', { name: /重录/ })).toBeDisabled();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'en' } });
+    const { act } = await import('@testing-library/react');
+    await act(async () => failUpload(new Error('offline')));
+    expect(await screen.findByText('Could not save. Keep your recording and try again.')).toBeVisible();
   });
 
   it('explains how to recover when the browser blocks microphone permission', async () => {
@@ -173,5 +206,7 @@ describe('visitor page', () => {
     fireEvent.click(await screen.findByRole('button', { name: /开始录音/ }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/iPhone「设置 > Chrome > 麦克风」/);
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'en' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('Microphone access is blocked.');
   });
 });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/I18nProvider';
+import type { MessageKey } from '../../i18n/messages';
 
 type RecorderState = 'idle' | 'recording' | 'ready' | 'error';
 const MAX_RECORDING_SECONDS = 60;
@@ -9,7 +10,7 @@ export function useRecorder() {
   const [state, setState] = useState<RecorderState>('idle');
   const [blob, setBlob] = useState<Blob | null>(null);
   const [duration, setDuration] = useState(0);
-  const [error, setError] = useState('');
+  const [errorKey, setError] = useState<MessageKey | ''>('');
   const [previewUrl, setPreviewUrl] = useState('');
   const [starting, setStarting] = useState(false);
   const startingRef = useRef(false);
@@ -48,7 +49,7 @@ export function useRecorder() {
     discard();
     const generation = generationRef.current;
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-      setError(t('visitor.browserUnsupported'));
+      setError('visitor.browserUnsupported');
       setState('error');
       return;
     }
@@ -74,7 +75,7 @@ export function useRecorder() {
         streamRef.current = null;
         const recorded = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
         if (!recorded.size) {
-          setError(t('visitor.micError'));
+          setError('visitor.micError');
           setState('error');
           return;
         }
@@ -112,7 +113,7 @@ export function useRecorder() {
           : errorName === 'NotReadableError' || errorName === 'TrackStartError' || errorName === 'AbortError'
             ? 'visitor.micBusy'
             : 'visitor.micError';
-      setError(t(messageKey));
+      setError(messageKey);
       setState('error');
     }
   }, [discard, stop, t]);
@@ -134,5 +135,5 @@ export function useRecorder() {
     };
   }, [stop, discard]);
 
-  return { state, blob, duration, error, previewUrl, starting, start, stop, discard };
+  return { state, blob, duration, error: errorKey ? t(errorKey) : '', previewUrl, starting, start, stop, discard };
 }
