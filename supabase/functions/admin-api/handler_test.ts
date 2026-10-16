@@ -101,3 +101,15 @@ Deno.test('label collisions return stable conflict code without raw database det
   equal(response.status, 409);
   equal(await response.json(), { code: 'TAG_LABEL_EXISTS' });
 });
+Deno.test('V3 fixed and unassigned categories have stable errors', async () => {
+  for (const code of ['CATEGORIES_FIXED','CATEGORY_UNASSIGNED']) {
+    const response = await fixture('operator',true,null,{code:'P0001',message:code+' internal detail'}).handler(request({action:'bulkApply'}));
+    equal(response.status,409);equal(await response.json(),{code});
+  }
+});
+Deno.test('invalid calendar date errors are requests, not service failures', async () => {
+  for (const code of ['22007','22008']) {
+    const response=await fixture('operator',true,null,{code,message:'private invalid date detail'}).handler(request({action:'list',batchDate:'2026-02-30'}));
+    equal(response.status,400);equal(await response.json(),{code:'REQUEST_INVALID'});
+  }
+});

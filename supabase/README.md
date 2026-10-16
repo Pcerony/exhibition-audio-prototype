@@ -10,6 +10,8 @@ Run from the repository root:
 ```sh
 npx -y deno test --no-lock supabase/functions/admin-api/handler_test.ts supabase/functions/_shared/maintenance_test.ts
 npx -y deno test --no-lock --node-modules-dir=auto --allow-read --allow-env supabase/tests/local_database_test.ts
+npx -y deno test --no-lock --node-modules-dir=auto --allow-read supabase/tests/classification_v3_test.ts supabase/functions/public-upload-claim/handler_test.ts
+EMBEDDED_PG_RUNTIME=/tmp/exhibition-pg-runtime node supabase/tests/postgres_classification_v3.mjs
 node --test supabase/tests/backend.test.mjs
 npx -y deno check --no-lock supabase/functions/admin-api/index.ts supabase/functions/maintenance/index.ts supabase/functions/public-upload-init/index.ts supabase/functions/public-upload-claim/index.ts
 ```
@@ -48,3 +50,26 @@ Existing tags are backfilled with pending provisioning jobs. The normalized-labe
 unique index intentionally rejects legacy duplicate labels; check and resolve
 them before applying this migration to a nonempty project. Batch responses are
 persisted snapshots: replay returns identical DTOs even after later tag changes.
+
+## Post-Recording Classification V3
+
+`202610160001_post_recording_classification.sql` retains legacy category rows and
+recorded labels without assigning them a guessed topic. Four canonical UUIDs live
+in `memory_topics`; tag DTO `categoryId` refers to `topic_id`, not the legacy
+`category_id`. Empty legacy cards become unclassified inventory cards, with all
+former labels retained in history. Every tag keeps its original ID, public token,
+and written URL. The internal inventory sequence and daily topic counters are
+never reset or decremented, including during synthetic fixture cleanup.
+
+The V3 claim RPC sets the recording timestamp at successful finalization and uses
+that exact instant's Asia/Tokyo date for numbering. Only the winning claim allocates
+a number. Reset restores the inventory label; correction of a bound card allocates
+a target-topic number on the original recording date. Legacy claim/admin entry
+points are not callable by client roles or service-role REST callers.
+
+The new real PostgreSQL script uses independent sessions in a disposable local
+process. Its runtime prefix must contain `embedded-postgres` and `pg`; it cannot
+accept a remote connection string. The opt-in cloud script uses protocol 3, cleans
+only its fixture IDs/paths, preserves fixed topic rows/counters, and never invokes
+the production-wide maintenance worker. Neither test replaces physical NFC or
+two-phone acceptance.
