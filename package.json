@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "test": "vitest",
-    "test:backend": "node --test supabase/tests/backend.test.mjs && npx --yes deno@2.9.6 test --no-lock supabase/functions/admin-api/handler_test.ts supabase/functions/_shared/maintenance_test.ts"
+    "test:backend": "node --test supabase/tests/backend.test.mjs && npx --yes deno@2.9.6 test --no-lock supabase/functions/admin-api/handler_test.ts supabase/functions/public-upload-claim/handler_test.ts supabase/functions/_shared/maintenance_test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

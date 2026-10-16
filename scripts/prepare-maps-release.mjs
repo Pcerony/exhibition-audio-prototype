@@ -13,6 +13,10 @@ if (!cli || !process.argv.includes('--allow-remote-backup') || !/^[a-z]{20}$/.te
 }
 const directory = resolve('output/private-backups', new Date().toISOString().replaceAll(':', '-'));
 mkdirSync(directory, { recursive: true, mode: 0o700 });
+function query(args) {
+  try { return execFileSync(cli, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 90000, maxBuffer: 10 * 1024 * 1024 }); }
+  catch { throw new Error('Protected release query failed or timed out; no database output is logged.'); }
+}
 const sql = `select jsonb_build_object(
  'tags',(select coalesce(jsonb_agg(to_jsonb(t)),'[]') from public.tags t),
  'recordings',(select coalesce(jsonb_agg(to_jsonb(r)),'[]') from public.recordings r),
@@ -26,7 +30,7 @@ const sql = `select jsonb_build_object(
  'claimDefinition',pg_get_functiondef('public.claim_recording(uuid,text,text,integer,bigint,text)'::regprocedure),
  'recordingColumns',(select jsonb_agg(to_jsonb(c)) from information_schema.columns c where c.table_schema='public' and c.table_name='recordings')
 ) as snapshot;`;
-const result = JSON.parse(execFileSync(cli, ['db', 'query', '--linked', '--project-ref', project, sql, '--output', 'json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+const result = JSON.parse(query(['db', 'query', '--linked', '--project-ref', project, sql, '--output', 'json', '--yes']));
 const snapshot = result.rows?.[0]?.snapshot;
 assert.ok(snapshot && Array.isArray(snapshot.tags) && Array.isArray(snapshot.recordings), 'Backup response invalid');
 const file = resolve(directory, 'metadata.json');
@@ -43,6 +47,6 @@ if exists((select data from release_recordings_before except select to_jsonb(r) 
 if exists(select 1 from release_jobs_before b left join public.provisioning_jobs j using(id) where j.id is null or j.tag_id is distinct from b.tag_id or j.visitor_url is distinct from b.visitor_url) then raise exception 'RELEASE_NFC_URL_CHANGED';end if;
 end $$;`;
 writeFileSync(rehearsal, `begin;\nset local lock_timeout='5s';\nset local statement_timeout='30s';\n${before}\n${migration}\n${protectedData}\nrollback;\n`, { mode: 0o600 });
-execFileSync(cli, ['db', 'query', '--linked', '--project-ref', project, '--file', rehearsal, '--output', 'json'], { stdio: ['ignore', 'pipe', 'pipe'] });
+query(['db', 'query', '--linked', '--project-ref', project, '--file', rehearsal, '--output', 'json', '--yes']);
 console.log(`PASS: protected metadata snapshot verified; remote migration rehearsal rolled back. Cards=${snapshot.tags.length}, recordings=${snapshot.recordings.length}`);
 console.log(`Backup directory: ${directory}`);
