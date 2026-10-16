@@ -4,16 +4,40 @@ function equal(actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${JSON.stringify(actual)} != ${JSON.stringify(expected)}`);
 }
 const id = '00000000-0000-4000-8000-000000000001';
+Deno.test('v2 management actions pass through and version conflicts are stable', async () => {
+  for (const action of ['categories','createCategory','renameCategory','createCards','bulkPreview','bulkApply','leaseJob','nextJob','releaseJob']) {
+    equal((await fixture().handler(request({ action }))).status, 200);
+  }
+  const f = fixture('operator', true, null, { code: 'P0001', message: 'VERSION_CONFLICT private detail' });
+  const response = await f.handler(request({ action: 'bulkApply' }));
+  equal(response.status,409); equal(await response.json(),{code:'VERSION_CONFLICT'});
+});
+Deno.test('v2 errors do not leak database details and category identities are UUIDs', async () => {
+  for (const [code,status] of Object.entries({CATEGORY_NOT_FOUND:404,CATEGORY_NAME_EXISTS:409,VERSION_CONFLICT:409,GROUP_CONFLICT:409,LEASE_CONFLICT:409,LEASE_EXPIRED:409,CLIENT_UPGRADE_REQUIRED:426,JOB_INELIGIBLE:409})) {
+    const response=await fixture('operator',true,null,{code:'P0001',message:code+' internal detail'}).handler(request({action:'nextJob'}));
+    equal(response.status,status);equal(await response.json(),{code});
+  }
+  const f=fixture();equal((await f.handler(request({action:'createCards',categoryId:'not-a-uuid'}))).status,400);equal(f.calls,[]);
+});
 function fixture(role: string | null = 'operator', valid = true, rpcData: unknown = { ok: true }, rpcError: { code: string; message: string } | null = null) {
   const calls: unknown[] = [];
   const client = {
     auth: { getUser: async (token: string) => ({ data: { user: valid && token === 'valid-jwt' ? { id } : null }, error: valid ? null : {} }) },
-    from: (table: string) => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: role ? { role } : null, error: null }) }) }) }),
+    from: (table: string) => ({ select: () => ({
+      eq: () => ({ maybeSingle: async () => ({ data: role ? { role } : null, error: null }) }),
+      in: async (_field: string, ids: string[]) => ({ data: ids.map((id) => ({ id, location: { source: 'place', placeId: 'synthetic-place' } })), error: null }),
+    }) }),
     rpc: async (name: string, args: unknown) => { calls.push({ name, args }); return { data: rpcData, error: rpcError }; },
     storage: { from: () => ({ createSignedUrl: async () => ({ data: { signedUrl: 'https://example.invalid/audio' }, error: null }) }) },
   };
   return { handler: createHandler(() => client as never), calls };
 }
+Deno.test('authenticated list includes recording location without exposing object paths', async () => {
+  const response = await fixture('operator', true, { tags: [{ recording: { id, nickname: '' } }], total: 1 }).handler(request({ action: 'list' }));
+  equal(response.status, 200);
+  const body = await response.json();
+  equal(body.tags[0].recording.location, { source: 'place', placeId: 'synthetic-place' });
+});
 function request(body: unknown, token = 'valid-jwt') {
   return new Request('https://example.invalid/admin-api', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 }

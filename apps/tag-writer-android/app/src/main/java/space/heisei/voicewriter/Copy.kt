@@ -1,0 +1,70 @@
+package space.heisei.voicewriter
+
+class Copy(requested: String = "ja") {
+    val language = requested.takeIf { it in listOf("ja", "zh", "en") } ?: "ja"
+    val availableKeys get() = entries.keys
+    operator fun get(key: String): String = entries[key]?.get(when(language) { "zh" -> 1; "en" -> 2; else -> 0 }) ?: entries.getValue("error")[when(language) { "zh" -> 1; "en" -> 2; else -> 0 }]
+    companion object {
+        private val entries = mapOf(
+            "app" to listOf("福岡の声 · 運営", "福冈之声 · 运营", "Fukuoka Voices · Staff"),
+            "cards" to listOf("カード管理", "卡片管理", "Cards"), "single" to listOf("1枚書き込み", "单张写卡", "Single Write"),
+            "auto" to listOf("連続書き込み", "自动写卡", "Automatic Write"), "edit" to listOf("一括編集", "批量编辑", "Batch Edit"),
+            "menu" to listOf("設定・アカウント", "设置与账号", "Settings & Account"), "login" to listOf("ログイン", "登录", "Sign In"),
+            "logout" to listOf("ログアウト", "退出登录", "Sign Out"), "email" to listOf("メールアドレス", "邮箱", "Email"),
+            "password" to listOf("パスワード", "密码", "Password"), "language" to listOf("言語", "语言", "Language"),
+            "nfc" to listOf("NFC設定", "NFC 设置", "NFC Settings"), "category" to listOf("分類", "分类", "Category"),
+            "all" to listOf("すべて", "全部", "All"), "search" to listOf("番号・ニックネームを検索", "搜索编号、昵称", "Search Number or Nickname"),
+            "refresh" to listOf("更新", "刷新", "Refresh"), "loading" to listOf("接続中…", "连接中…", "Connecting…"),
+            "error" to listOf("処理できません。接続を確認して再試行してください。", "操作未完成，请检查网络后重试。", "Could not complete. Check your connection and retry."),
+            "auth" to listOf("ログインまたは運営権限を確認してください。", "请重新登录并确认运营权限。", "Please sign in again and check staff permissions."),
+            "empty" to listOf("未録音", "未录音", "No Recording"), "recorded" to listOf("録音あり", "已有录音", "Recorded"),
+            "disabled" to listOf("停止中", "已停用", "Disabled"), "pending" to listOf("未書込", "待写卡", "Not Written"),
+            "verified" to listOf("書込確認済み", "已写卡并核验", "Written & Verified"), "failed" to listOf("書込失敗", "写卡失败", "Write Failed"),
+            "recordedAt" to listOf("録音日時", "录音提交时间", "Recording Submitted"), "play" to listOf("試聴", "试听", "Listen"),
+            "stop" to listOf("停止", "停止", "Stop"), "newest" to listOf("録音が新しい順", "录音时间从新到旧", "Newest Recordings"),
+            "oldest" to listOf("録音が古い順", "录音时间从旧到新", "Oldest Recordings"), "number" to listOf("番号順", "按编号", "Card Number"),
+            "previous" to listOf("前へ", "上一页", "Previous"), "next" to listOf("次へ", "下一页", "Next"),
+            "write" to listOf("書き込む", "写卡", "Write"), "rewrite" to listOf("再書き込み", "重新写卡", "Rewrite"),
+            "start" to listOf("開始", "开始", "Start"), "pause" to listOf("一時停止", "暂停", "Pause"),
+            "continue" to listOf("続ける", "继续", "Continue"), "retry" to listOf("再試行", "重试", "Retry"),
+            "retryCurrent" to listOf("このカードを再試行", "重试当前卡", "Retry Current Card"),
+            "skip" to listOf("このカードをスキップ", "跳过当前卡", "Skip Current Card"),
+            "writtenAt" to listOf("NFC書込日時", "芯片写卡时间", "NFC Written At"),
+            "expired" to listOf("書込の有効時間が切れました。再開してください。", "写卡等待已超时，请重新开始。", "Writing Session Expired. Start Again."),
+            "cancel" to listOf("キャンセル", "取消", "Cancel"), "confirm" to listOf("確認して実行", "确认执行", "Confirm"),
+            "ready" to listOf("タグをかざしてください", "请靠近芯片", "Hold a Tag Near the Phone"),
+            "writing" to listOf("書き込み中 · 動かさないでください", "正在写入，请保持静止", "Writing · Keep the Tag Still"),
+            "remove" to listOf("確認できました · タグを離してください", "核验成功，请移开芯片", "Verified · Remove the Tag"),
+            "paused" to listOf("一時停止中 · 続行には操作が必要です", "已暂停，请手动继续", "Paused · Continue Manually"),
+            "done" to listOf("対象の未書込カードはありません", "没有符合条件的待写卡", "No Eligible Cards Remain"),
+            "remaining" to listOf("対象カード", "待写卡", "Eligible Cards"), "completed" to listOf("今回の完了", "本次已完成", "Completed This Session"),
+            "selectCard" to listOf("カードを選択", "请选择卡片", "Select a Card"),
+            "selectCategory" to listOf("分類を選択", "请选择分类", "Select a Category"),
+            "nfcOff" to listOf("NFCが無効、または非対応です", "NFC 未开启或设备不支持", "NFC Is Off or Unavailable"),
+            "foreign" to listOf("別の内容が保存されたタグです。空のタグを使ってください。", "芯片已有其他内容，请换用空芯片。", "This Tag Contains Other Data. Use an Empty Tag."),
+            "readOnly" to listOf("書込禁止のタグです", "芯片为只读", "This Tag Is Read-only"),
+            "capacity" to listOf("タグの容量が足りません", "芯片容量不足", "Tag Capacity Is Too Small"),
+            "lost" to listOf("タグが離れました。再試行してください。", "芯片已移开，请重试。", "Tag Moved Away. Please Retry."),
+            "mismatch" to listOf("読取結果が一致しません。再確認が必要です。", "读回结果不一致，需要检查芯片。", "Readback Does Not Match. Check the Tag."),
+            "formatted" to listOf("初期化済み。タグを離して再試行してください。", "芯片已格式化，请移开后重试。", "Tag Formatted. Remove It and Retry."),
+            "conflict" to listOf("カードが変更されました。更新して再確認してください。", "卡片已发生变化，请刷新后重新确认。", "The Card Changed. Refresh and Review Again."),
+            "leased" to listOf("別の端末がこのカードを使用中です", "其他设备正在写这张卡", "Another Device Is Using This Card"),
+            "upgrade" to listOf("アプリの更新が必要です", "请升级应用后再写卡", "Please Update This App"),
+            "unsynced" to listOf("書込結果が未送信です。接続後に自動再送します。", "写入结果尚未同步，联网后会自动重试。", "Write Results Are Pending. They Will Sync When Connected."),
+            "stale" to listOf("未送信結果のカードが変更されています。元のURLは書込済みの可能性があります。確認後のみ破棄してください。", "待同步结果对应卡片已变更，芯片可能仍保存原网址。请核查后再丢弃结果。", "A Pending Result Refers to a Changed Card. Its Original URL May Be on the Tag. Review Before Discarding."),
+            "review" to listOf("未送信結果を確認", "查看待同步结果", "Review Pending Results"),
+            "discard" to listOf("確認して結果を破棄", "已检查，丢弃结果", "Reviewed: Discard Result"),
+            "saveFailed" to listOf("端末に保存できません。アプリを閉じないでください。", "无法保存结果，请勿关闭应用。", "Could Not Save Locally. Do Not Close the App."),
+            "move" to listOf("分類を移動", "移动分类", "Move Category"), "delete" to listOf("削除", "删除", "Delete"),
+            "reset" to listOf("録音をリセット", "重置录音", "Reset Recording"), "selected" to listOf("選択中", "已选择", "Selected"),
+            "emptyConfirm" to listOf("未録音カードを処理します。", "将处理未录音卡片。", "Process Cards Without Recordings."),
+            "recordedConfirm" to listOf("録音ありカードを処理します。削除すると元のNFC URLは無効になり、録音は聴けなくなります。", "将处理已有录音卡片。删除后原 NFC 网址失效，录音无法再播放。", "Process Recorded Cards. Deletion Disables the Original NFC URL and Playback."),
+            "resetConfirm" to listOf("録音を解除します。番号とURLは変わりません。", "解除录音绑定，编号和网址不变。", "Remove Recordings. Card Numbers and URLs Stay Unchanged."),
+            "moveConfirm" to listOf("移動先で新しい番号になります。元の番号は再利用せず、URLと録音は変わりません。", "移动后分配新编号，旧编号不复用；网址与录音不变。", "New Numbers Will Be Assigned. Old Numbers Are Retired; URLs and Recordings Stay Unchanged."),
+            "success" to listOf("完了しました", "操作成功", "Completed"), "noCards" to listOf("カードはありません", "暂无卡片", "No Cards"),
+            "retryOperation" to listOf("前回の操作を再試行", "重试上次操作", "Retry Last Operation"),
+            "version" to listOf("バージョン", "版本", "Version"), "unsupported" to listOf("非対応のタグです", "不支持此芯片", "Unsupported Tag")
+        )
+        val keys get() = entries.keys
+    }
+}
