@@ -1,5 +1,16 @@
 # 跨端 API 契约
 
+## 可选语音转写（开发契约，尚未启用）
+
+- public-upload-claim新增`transcriptionConsent?:boolean`，缺省false，非boolean拒绝400 REQUEST_INVALID；成功原子claim后只为true同意录音插入pending任务。历史/旧Android/未同意录音不自动传Groq。失败/无密钥不影响录音保存；此功能不改变V3卡号或协议。
+- RecordingInfo新增`transcriptionConsent?:boolean,transcript?:string|null`；public-tag只返回同意标记及已发布且ready的transcript纯文本，未审核/隐藏/处理/失败任务不返回正文。匿名不能直读转写表或编辑/执行任务。disabled/deleted/reset卡不返回文字。
+- `getTranscription`请求recordingId -> `{configured:boolean,consented:boolean,transcription:Transcription|null}`，仅认证运营者。Transcription=`{recordingId,status:'pending'|'processing'|'ready'|'failed',text:string|null,published:boolean,version:number,errorCode:string|null,updatedAt:string}`。无密钥configured=false，不能假装已接通提供商。
+- `retryTranscription`请求`{recordingId,version:number}` -> `{ok:true}`；只允许录音已同意且对应版本，未配置Groq返回503 TRANSCRIPTION_NOT_CONFIGURED，不改状态。任务新代/撤销旧租约、隐藏旧正文、重排队；人工重试最多受服务端频率限制，旧worker不能回写。
+- `saveTranscription`请求`{recordingId,version:number,text:string,published:boolean}` -> `{ok:true}`；纯文字最多10000字符，发布不允许空白文本。乐观版本检查、撤销在途租约，status置ready并增加version，published=false为草稿/隐藏；不得覆盖新录音。保存不向AI发请求。缺录音404 RECORDING_NOT_FOUND，无同意409 TRANSCRIPTION_CONSENT_REQUIRED，无任务404 TRANSCRIPTION_NOT_FOUND，版本冲突409 VERSION_CONFLICT。
+- 现有AdminRepository新增required方法`getTranscription(recordingId)`,`retryTranscription(recordingId,version)`,`saveTranscription(recordingId,version,text,published)`，返回按上述定义。后台list DTO本轮不携带草稿，按需get避免列表泄漏。
+- 私有POST transcription-worker使用x-maintenance-secret=MAINTENANCE_SECRET，缺/错401，无Groq密钥503 TRANSCRIPTION_NOT_CONFIGURED且不领任务。每次最多1条；服务端私有对象下载后调用固定Groq端点及whisper-large-v3-turbo；密钥仅Edge Secrets。worker完成条件包括recording仍为有效tag当前录音、同意、租约token/version匹配。重置/删除级联取消，禁用期间不处理/不公开；编辑/重试撤销旧结果。API错误只返回稳定码，不含供应商原始错误或正文。
+- Groq原语言转写，非翻译；新文本默认不公开。审核发布只影响文本不影响音频。默认不开启自动cron，待GROQ_API_KEY配置后集成负责人执行独立Vault-backed调度脚本，不能在代码中写入密钥或自动开通付费。
+
 ## 录音后分类 V3（当前契约）
 
 - 固定分类A/B/C/D，固定UUID依次`00000000-0000-4000-8000-000000000001`至`...0004`，名称美食/旅行/相遇/其他回忆。`categories`只返回这四项，nextNumber兼容字段不用于预分配；createCategory/renameCategory拒绝CATEGORIES_FIXED。
