@@ -4,6 +4,8 @@
 
 ## 核心文档
 
+- [可重复参观测试入口](superpowers/plans/2026-10-16-visitor-preview.md)：`#/preview`始终可重新体验，不上传正式录音。
+
 - [参观者五语设计](superpowers/specs/2026-10-16-visitor-languages-design.md)：日语默认、中文简繁/英语/韩语、菜单和后台兼容边界。
 
 - [户外参观流程设计](superpowers/specs/2026-10-16-visitor-outdoor-design.md)：五步编号、研究室视觉、无昵称与第一版主题边界。

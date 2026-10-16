@@ -10,6 +10,7 @@ import { LanguageSwitch } from './i18n/LanguageSwitch';
 import { operatorLocale, useI18n } from './i18n/I18nProvider';
 import './styles.css';
 import { PolicyLinks, PolicyPage } from './features/visitor/PolicyPage';
+import { VisitorPreviewPage } from './features/visitor/VisitorPreviewPage';
 
 const repository = createBrowserRepository();
 const cloudConfigured = hasSupabaseConfig();
@@ -54,10 +55,11 @@ export function App() {
 
   if (!ready) return <main className="outdoor-loading" role="status"><span className="loading-ring" aria-hidden="true" /><p>{t('app.loading')}</p></main>;
   const resolvedRoute = resolveAppRoute(route.pathname, route.hash);
+  if (resolvedRoute.type === 'preview') return <VisitorPreviewPage />;
   if (resolvedRoute.type === 'privacy' || resolvedRoute.type === 'terms') return <PolicyPage kind={resolvedRoute.type} />;
   if (resolvedRoute.type === 'tag') {
     if (import.meta.env.PROD && !cloudConfigured) return <main className="visitor-shell"><p className="visitor-intro">{t('app.cloudMissing')}</p></main>;
-    return <VisitorPage repository={visitorRepository} token={decodeURIComponent(resolvedRoute.token)} />;
+    return <VisitorPage key={resolvedRoute.token} repository={visitorRepository} token={decodeURIComponent(resolvedRoute.token)} />;
   }
   const baseUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
   if (resolvedRoute.type === 'admin') {
@@ -84,8 +86,9 @@ export function resolveTagToken(pathname: string, hash: string) {
   return activePath.match(/^\/t\/([^/]+)\/?$/)?.[1] ?? null;
 }
 
-export function resolveAppRoute(pathname: string, hash: string): { type: 'tag'; token: string } | { type: 'admin' } | { type: 'welcome' } | { type: 'privacy' | 'terms' } {
+export function resolveAppRoute(pathname: string, hash: string): { type: 'tag'; token: string } | { type: 'admin' | 'preview' } | { type: 'welcome' } | { type: 'privacy' | 'terms' } {
   const activePath = hash.startsWith('#/') ? hash.slice(1) : pathname;
+  if (activePath === '/preview' || activePath === '/preview/') return { type: 'preview' };
   if (activePath === '/privacy') return { type: 'privacy' };
   if (activePath === '/terms') return { type: 'terms' };
   const token = activePath.match(/^\/t\/([^/]+)\/?$/)?.[1];
