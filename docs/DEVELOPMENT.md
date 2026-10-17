@@ -1,6 +1,13 @@
 # 开发与环境
 
-生产 React/Vite 应用使用 cloud repository 访问 Supabase；本地 adapter 仅供开发/测试。域名为 `https://voice.heisei.space/`，东京项目已部署 migrations 和六个 Edge Functions。正式访客数据尚未开始收集。
+生产 React/Vite 应用使用 cloud repository 访问 Supabase；本地 adapter 仅供开发/测试。域名为 `https://voice.heisei.space/`；正式访客数据与状态以云端 Supabase 为准，本地 adapter 不是生产数据源。
+
+## 可回退的功能开发
+
+- 新功能在独立 worktree/分支中进行；开始前记录基线提交和需求/实施计划，不把主工作目录中已有的未提交文件带入或覆盖。
+- 每个可独立验证的功能阶段先运行对应测试，再单独提交；仅在检查提交内容未包含用户数据、音频、身份信息、密钥或私有备份后推送功能分支并创建带说明的 checkpoint tag。
+- checkpoint tag 指向已验证的 Git commit。恢复时先保留当前工作，再从目标 tag 建立新 worktree，例如：`git worktree add ../exhibition-audio-recovery -b codex/recovery <checkpoint-tag>`；不要通过重置或强制推送覆盖共享历史。
+- 自动部署成功不等于生产数据库/Edge Function 已变更。生产 migration、云端数据、域名和正式发布仍由集成负责人按单独授权、备份和验收流程执行。
 
 ## 前端
 

@@ -1,5 +1,13 @@
 # 项目进度与交接
 
+## 后台转写状态阶段（2026-10-17，未部署）
+
+后台录音列表状态摘要与筛选已在隔离分支 `codex/admin-transcription-status` 实现；仅返回同意/处理/发布状态，不把转写正文加入列表或 CSV。该功能分支本地前端 150 项、后端 34 项测试以及普通/Pages 构建通过。`checkpoint-admin-map-before-implementation-2026-10-17`、`checkpoint-admin-transcription-plan-2026-10-17`、`checkpoint-admin-transcription-contract-2026-10-17`、`checkpoint-admin-list-api-2026-10-17`、`checkpoint-admin-list-handler-2026-10-17` 和 `checkpoint-admin-list-ui-2026-10-17` 是逐阶段的可回退点。
+
+本轮没有查询、导出或修改生产录音数据，没有应用生产 migration、部署 Edge Function 或发布前端。已实现功能仍须经过地图相关设计/实现、代码审查和负责人发布批准后才会进入生产。
+
+73 块预览提供的是本地毫米坐标轮廓；目前没有经验证的地理坐标变换，不能据此自动把参观者选择地点归到某块。自动归属和运营手动修正都还未实现或部署。定位设计与准确性门槛见[后台拼装板定位设计](superpowers/specs/2026-10-17-admin-map-piece-assignment-design.md)。
+
 ## 参观者提交前综合确认（2026-10-17）
 
 录音试听/重录页面新增分类确认：当前分类以小型操作入口修改，四类选择在弹窗中完成；已选地点显示紧凑嵌入地图并可返回地图重选，未选地点则省略地点板块。最终提交使用重新选择后的分类和地点；五种访客语言均有对应文案。

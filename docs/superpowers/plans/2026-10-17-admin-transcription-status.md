@@ -39,29 +39,29 @@
 
 ## Task 3: Enrich authenticated list pages without text
 
-- [ ] Add a failing `handler_test.ts` case whose list RPC returns one recording and whose mocked `recording_transcriptions` row contains `{recording_id:id,status:'ready',published:false,text:'private-sentinel'}`; assert the response's `recording.transcriptionSummary` equals `{consented:true,status:'ready',published:false}`, and that `JSON.stringify(body)` contains neither `private-sentinel` nor `errorCode`.
-- [ ] Run `npx --yes deno@2.9.6 test --node-modules-dir=none --no-lock --allow-read supabase/functions/admin-api/handler_test.ts`; expected: the new test fails because the handler still calls `admin_action` and does not return the summary.
-- [ ] Update `handler.ts` to validate `transcriptionState` against the six exact values, call `admin_list` for list requests with `{p_operator: verifiedUserId, p_body: body}`, retain location enrichment, fetch only `recording_id,status,published` from `recording_transcriptions`, fetch consent from the existing recordings query, and attach the minimal summary by recording ID. Add `REQUEST_INVALID: 400` to the stable RPC error mapping.
-- [ ] Extend the handler fixture to model both batch queries and verify invalid filter values fail before RPC. RPC failures must continue mapping to stable error codes without leaking database details.
-- [ ] Run the focused handler tests; expected: all list, privacy, auth, validation, and existing admin action tests pass.
-- [ ] Commit the handler and tests as `feat: return admin transcription status summaries`.
+- [x] Add a failing `handler_test.ts` case whose list RPC returns one recording and whose mocked `recording_transcriptions` row contains `{recording_id:id,status:'ready',published:false,text:'private-sentinel'}`; assert the response's `recording.transcriptionSummary` equals `{consented:true,status:'ready',published:false}`, and that `JSON.stringify(body)` contains neither `private-sentinel` nor `errorCode`.
+- [x] Run the focused handler test before implementation and confirm the missing summary/RPC behavior fails.
+- [x] Update `handler.ts` to validate `transcriptionState` against the six exact values, call `admin_list` for list requests with `{p_operator: verifiedUserId, p_body: body}`, retain location enrichment, fetch only `recording_id,status,published` from `recording_transcriptions`, fetch consent from the existing recordings query, and attach the minimal summary by recording ID. `REQUEST_INVALID: 400` is included in the stable RPC error mapping.
+- [x] Extend the handler fixture to model both batch queries and verify invalid filter values fail before RPC. RPC failures continue mapping to stable error codes without leaking database details.
+- [x] Run the backend suite; all list, privacy, auth, validation, and existing admin action tests pass.
+- [x] Commit the handler and tests as `feat: return admin transcription status summaries`.
 
 ## Task 4: Render and filter status in the admin list
 
-- [ ] Add a failing `CloudAdminPage.test.tsx` case that renders six fixtures with `{consented:false,status:null,published:false}`, pending, processing, ready unpublished, ready published, and failed summaries; assert the visible Chinese labels, no transcript body, the existing text button still opens the dialog, and selecting `draft` calls `listTags` with `{transcriptionState:'draft'}`.
-- [ ] Run `npm test -- --run src/features/admin/CloudAdminPage.test.tsx`; expected: the new UI assertions fail before implementation.
-- [ ] Add localized Chinese/Japanese labels and a status column/filter to `CloudAdminPage.tsx`; carry the selected filter through the existing list effect, reset offset on change, and leave the CSV field list unchanged.
-- [ ] Add compact status styles in `cloud-admin.css`; do not introduce nested cards or status-only color distinctions without visible text.
-- [ ] Run the focused Vitest suite; expected: all six status cases and existing admin workflows pass.
-- [ ] Commit UI, messages, CSS, and tests as `feat: show transcription progress in admin list`.
+- [x] Add a failing `CloudAdminPage.test.tsx` case that renders six fixtures with `{consented:false,status:null,published:false}`, pending, processing, ready unpublished, ready published, and failed summaries; assert the visible Chinese labels, no transcript body, the existing text button still opens the dialog, and selecting `draft` calls `listTags` with `{transcriptionState:'draft'}`.
+- [x] Run the focused UI test before implementation and confirm the missing status UI fails.
+- [x] Add localized Chinese/Japanese labels and a status column/filter to `CloudAdminPage.tsx`; carry the selected filter through the existing list effect, reset offset on change, and leave the CSV field list unchanged.
+- [x] Add compact status styles in `cloud-admin.css` with visible text for each state.
+- [x] Run the full Vitest suite; all six status cases and existing admin workflows pass.
+- [x] Commit UI, messages, CSS, and tests as `feat: show transcription progress in admin list`.
 
 ## Task 5: Sync docs and verify the checkpoint
 
-- [ ] Update `docs/API_CONTRACT.md` with the actual `admin_list` RPC ownership, filter semantics, and no-text response guarantee; add the spec/plan link in `docs/README.md`.
-- [ ] Run `npm test -- --run`, `npm run test:backend`, `npm run build`, and `GITHUB_PAGES=true npm run build`; expected: all commands exit 0.
-- [ ] Inspect `git diff --check`, the full staged diff, and all files for credentials, audio, PII, exports, `.DS_Store`, or operational backup paths; none may be staged. Stage only the listed feature paths from the clean feature worktree.
-- [ ] Commit the feature-specific docs changes as `docs: document admin transcription status list`.
-- [ ] Push the feature branch and create/push an annotated milestone tag `checkpoint-admin-transcription-status-2026-10-17` only after the preceding verification succeeds; do not merge to `main` or deploy production migrations.
+- [x] Update `docs/API_CONTRACT.md` with the actual `admin_list` RPC ownership, filter semantics, and no-text response guarantee; add the spec/plan link in `docs/README.md`.
+- [x] Run `npm test -- --run`, `npm run test:backend`, `npm run build`, and `GITHUB_PAGES=true npm run build`; all commands exit 0.
+- [x] Inspect `git diff --check`, the full staged diff, and all files for credentials, audio, PII, exports, `.DS_Store`, or operational backup paths; none are staged. Stage only feature documentation from the clean feature worktree.
+- [x] Commit the feature-specific docs changes as `docs: document admin transcription status list`.
+- [x] Push the feature branch and create/push an annotated milestone tag `checkpoint-admin-transcription-status-2026-10-17` only after the preceding verification succeeds; do not merge to `main` or deploy production migrations.
 
 ## Map-piece follow-on gate
 

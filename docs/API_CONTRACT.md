@@ -23,6 +23,7 @@
 
 - 认证`admin-api`的`list`可接收`transcriptionState?:'not_consented'|'pending'|'processing'|'draft'|'published'|'failed'`。筛选在服务端全量集合上先执行，再计数、排序和分页；所有现有搜索、录音状态、日期和排序行为保持不变。筛选只匹配已有录音，不匹配空卡。
 - Admin列表中的录音可包含`transcriptionSummary:{consented:boolean,status:'pending'|'processing'|'ready'|'failed'|null,published:boolean}`。无同意时展示未同意；已同意但任务缺失或pending时筛为待处理；ready且未发布为草稿待审核；ready且published为已发布。列表只取状态字段，不带正文、错误码或供应商错误。
+- `admin-api`认证后将列表请求路由到数据库`admin_list(operator,body)`；该函数先校验运营者与筛选参数，再在服务端筛选、计数和分页，并只授权给Edge Function使用的`service_role`执行。Edge Function按当前页批量补充地点与最小转写摘要，不能把转写正文、对象路径或内部错误带入列表DTO或CSV。
 - 列表摘要仅由认证运营API返回；访客`public-tag`响应不变。既有单条`getTranscription`仍是唯一的运营端正文读取入口；CSV字段不新增转写状态或正文。非法筛选值返回HTTP 400 `REQUEST_INVALID`。
 
 ## 录音后分类 V3（当前契约）
