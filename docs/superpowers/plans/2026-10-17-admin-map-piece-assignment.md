@@ -35,11 +35,11 @@
 
 ## Task 1: Freeze and validate the 73-piece source
 
-- [ ] Write `mapPieces.test.ts` first. Assert map version `fukuoka-road-73-v13`, exactly 73 unique codes, rows A-H with C1-C10 and all other rows 1-9, Polygon geometry with closed rings, and all points finite and within source bounds.
-- [ ] Run `npm test -- --run src/domain/mapPieces.test.ts` and confirm it fails because the pinned piece module/data do not exist.
-- [ ] Add only the selected `station_priority.pieces` geometry from the pinned upstream commit. Keep metadata limited to piece code, polygon coordinates, and source/version; do not copy embedded roads/buildings, visitor data, or the full 8 MB HTML.
-- [ ] Add `docs/MAP_PIECE_DATA.md` with the upstream commit/hash, 73-piece version, units/local origin, model source, PLATEAU/Fukuoka attribution, required modification note, applicable official policy link, and an explicit statement that local-mm geometry is not georeferenced by itself.
-- [ ] Run the focused geometry test, `git diff --check`, inspect the generated file's byte size and top-level fields, then commit only geometry/provenance/tests and tag `checkpoint-admin-map-geometry-2026-10-17`.
+- [x] Write `mapPieces.test.ts` first. Assert map version `fukuoka-road-73-v13`, exactly 73 unique codes, rows A-H with C1-C10 and all other rows 1-9, Polygon geometry with closed rings, and all points finite and within source bounds.
+- [x] Run `npm test -- --run src/domain/mapPieces.test.ts` and confirm it fails because the pinned piece module/data do not exist.
+- [x] Add only the selected `station_priority.pieces` geometry from the pinned upstream commit. Keep metadata limited to piece code, polygon coordinates, and source/version; do not copy embedded roads/buildings, visitor data, or the full 8 MB HTML.
+- [x] Add `docs/MAP_PIECE_DATA.md` with the upstream commit/hash, 73-piece version, units/local origin, model source, PLATEAU/Fukuoka attribution, required modification note, applicable official policy link, and an explicit statement that local-mm geometry is not georeferenced by itself.
+- [x] Run the focused geometry test and production build, `git diff --check`, and inspect the generated file size (438,428 bytes) and fields. Stage only geometry/provenance/tests for the milestone commit.
 
 ## Task 2: Establish a tested geographic transform and piece classifier
 
