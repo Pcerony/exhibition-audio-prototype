@@ -5,10 +5,13 @@ import android.app.AlertDialog
 import android.app.NotificationManager
 import android.content.Context
 import android.media.AudioManager
+import android.media.AudioAttributes
 import android.media.ToneGenerator
 import android.os.Handler
 import android.os.Build
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
@@ -50,7 +53,19 @@ class WriteFeedbackDialog(private val activity: Activity, private val sound: () 
     @Suppress("DEPRECATION")
     private fun feedback(value: WriteFeedback, view: View) {
         if (value !in listOf(WriteFeedback.READY, WriteFeedback.SUCCESS, WriteFeedback.ERROR, WriteFeedback.PENDING)) return
-        if (Settings.System.getInt(activity.contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0) {
+        val audio = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val notifications = activity.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val interruptionsAllowed = notifications.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_ALL
+        val vibration = FeedbackVibration.pattern(value, interruptionsAllowed, audio.ringerMode == AudioManager.RINGER_MODE_SILENT)
+        val vibrated = vibration != null && runCatching {
+            val vibrator = activity.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            if (vibrator?.hasVibrator() != true) false else {
+                vibrator.vibrate(VibrationEffect.createWaveform(vibration, -1), AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                true
+            }
+        }.getOrDefault(false)
+        if (!vibrated && interruptionsAllowed && audio.ringerMode != AudioManager.RINGER_MODE_SILENT && Settings.System.getInt(activity.contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0) {
             val pattern = when (value) {
                 WriteFeedback.ERROR, WriteFeedback.PENDING -> android.view.HapticFeedbackConstants.LONG_PRESS
                 WriteFeedback.SUCCESS -> if (Build.VERSION.SDK_INT >= 30) android.view.HapticFeedbackConstants.CONFIRM else android.view.HapticFeedbackConstants.CONTEXT_CLICK
@@ -58,8 +73,6 @@ class WriteFeedbackDialog(private val activity: Activity, private val sound: () 
             }
             view.performHapticFeedback(pattern)
         }
-        val audio = activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val notifications = activity.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (!sound() || audio.ringerMode != AudioManager.RINGER_MODE_NORMAL || notifications.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL) return
         if (value == WriteFeedback.READY) return
         tone?.release()
