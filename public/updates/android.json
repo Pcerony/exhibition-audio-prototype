@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "packageName": "space.heisei.voicewriter",
-  "versionCode": 10,
-  "versionName": "3.3.0",
+  "versionCode": 11,
+  "versionName": "3.4.0",
   "minSdk": 26,
-  "url": "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.3.0-rc1/voice-writer-v3.3.0-candidate.apk",
-  "size": 2555512,
-  "sha256": "77b483c365526357819df43946844d888afec6cb75988b7a09c41854dd41ff20",
+  "url": "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.4.0-rc1/voice-writer-v3.4.0-candidate.apk",
+  "size": 2567693,
+  "sha256": "c75e5404f2a4af1bd048e603713960fc92e9a3c6afe95164e859ee353dc03e7a",
   "notes": {
-    "ja": "アプリ内更新に対応しました。起動時の新バージョン通知、設定からの更新確認、ダウンロードとインストールが可能です。書き込み中・未送信の結果がある間は更新しません。",
-    "zh": "新增应用内更新：打开应用提醒新版，设置内检查更新，直接下载并交由安卓安装。写卡中或存在未同步结果时不会进入更新。",
-    "en": "Added in-app updates: startup notifications, manual checks in Settings, verified downloads and Android installation. Updates wait until writing is stopped and pending results are synced."
+    "ja": "QRで参加した録音にNFCタグを後から発行できます。「QR補充」で番号・録音日から検索し、試聴後に空タグへ元のURLを書き込みます。同じ録音の二重発行、別タグでの誤再試行、既存内容の上書きを防止します。アプリ内更新も継続対応。",
+    "zh": "新增二维码补卡：按编号和录音日查找、试听后，将原网址写入空白NFC芯片，保留原录音和编号。防止重复补卡、换芯片误重试和覆盖已有内容；支持断网迟到结果同步。继续支持应用内更新。",
+    "en": "Added QR to NFC: find a QR recording by number/date, listen to confirm, then write its original URL to one blank tag. Keeps the recording and number, rejects duplicate cards and different-tag retries, protects existing contents, and supports late offline reports. In-app updates remain available."
   }
 }
