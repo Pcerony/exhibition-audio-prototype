@@ -114,6 +114,7 @@ V2补充：job还有tagVersion、leased、leaseExpiresAt、writtenAt（核验成
 
 - 独立二维码子页面位于`#/staff/qr`（工作人员入口）和`#/admin/qr`（运营入口），不新增网站、账号或角色模型。staff页面只有二维码生成工作流，不需要选择审核署名，也不调用标签列表、试听、审计读取或写卡作业接口。
 - `createQrEntry`请求`{requestKey:UUID}`。staff页面通过现有staff-api会话请求，运营页面继续通过既有admin-api运营会话请求。响应`{id,label,entryChannel:'qr',visitorUrl}`；服务端原子创建一条尚未绑定录音、没有NFC provisioning job的标签身份，并返回现有访客流程使用的稳定不透明token网址。
+- 页面在当前浏览器标签页的`sessionStorage`按用户保存已签发条目；新条目自动选中，工作人员可点历史条目重新显示对应二维码。刷新后仍可回看，staff/operator任一后台退出或认证失效时清除历史及当前/待重试请求key，避免后续登录恢复上个账号的二维码；列表仅属本标签页，不是服务端或跨设备历史，不新增API。
 - requestKey按操作者和请求内容幂等：网络结果不确定时重试必须使用原key并取回原网址；新参与者只能由界面显式开始后生成新key。跨操作者或不同请求体重用返回`REQUEST_KEY_CONFLICT`。`qr_issue`审计与标签创建同事务提交。
 - 标签`entryChannel`为`nfc`（历史/常规标签默认）或`qr`。二维码标签不进入Android的任何自动/手动写卡池；管理列表标记“仅二维码”，不能误示为待写卡。参观者扫码后由普通`#/t/<token>`路由进入原录音/收听流程。
 - 将来是否把该同一网址补写到一枚NFC卡是独立后续流程，本接口不绑定实体卡、不改写既有URL，也不承诺现在可以安全补写。

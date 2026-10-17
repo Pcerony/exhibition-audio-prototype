@@ -98,6 +98,7 @@ describe('QR fallback page', () => {
 
     expect(sessionStorage.getItem('exhibition-qr-history-v1:operator')).toBeNull();
     expect(sessionStorage.getItem('exhibition-qr-current-request-v1:operator')).toBeNull();
+    expect(sessionStorage.getItem('exhibition-qr-pending-request-v1:operator')).toBeNull();
   });
 
   it('retries an uncertain issuance with the same key and restores the current QR after reload', async () => {

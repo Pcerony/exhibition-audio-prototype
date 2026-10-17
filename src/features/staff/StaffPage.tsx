@@ -20,6 +20,7 @@ import type {
   StaffRepository,
   StaffSession,
 } from '../../storage/staffRepository';
+import { clearQrFallbackSession } from '../../storage/qrHistoryStorage';
 import { useI18n } from '../../i18n/I18nProvider';
 import type { MemoryCategoryCode } from '../../domain/classification';
 import { StaffDetail } from './StaffDetail';
@@ -130,6 +131,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
             : m.error,
     );
     if (code === 'AUTH_REQUIRED' || code === 'STAFF_REQUIRED') {
+      clearQrFallbackSession(session?.userId);
       setSession(null);
       setMemberId('');
       setCards([]);
@@ -265,6 +267,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
     setBusy(true);
     try {
       await repository.signOut();
+      clearQrFallbackSession(session?.userId);
       if (alive.current) {
         remember('');
         setSession(null);

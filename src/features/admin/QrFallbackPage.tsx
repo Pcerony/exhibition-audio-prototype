@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, LogOut, QrCode } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { QrEntry } from '../../storage/adminRepository';
+import { clearQrFallbackSession, qrHistoryStorageKey } from '../../storage/qrHistoryStorage';
 import { useOperatorI18n } from '../../i18n/I18nProvider';
 import { LanguageSwitch } from '../../i18n/LanguageSwitch';
 import { qrFallbackMessages } from './qrFallbackMessages';
@@ -19,11 +20,10 @@ type QrRepository = {
 type Props = { repository: QrRepository; loginMode?: 'operator' | 'staff'; backHref?: string };
 const CURRENT_KEY = 'exhibition-qr-current-request-v1';
 const PENDING_KEY = 'exhibition-qr-pending-request-v1';
-const HISTORY_KEY = 'exhibition-qr-history-v1';
 
 function storedQrHistory(userId: string): QrEntry[] {
   try {
-    const raw = sessionStorage.getItem(`${HISTORY_KEY}:${userId}`);
+    const raw = sessionStorage.getItem(qrHistoryStorageKey(userId));
     const values: unknown = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(values)) return [];
     return values.filter((value): value is QrEntry => {
@@ -70,15 +70,7 @@ export function QrFallbackPage({ repository, loginMode = 'operator', backHref = 
     historyRef.current = [];
     setHistory([]);
     setPendingKey(null);
-    if (userId) {
-      try {
-        sessionStorage.removeItem(storageKey(userId, CURRENT_KEY));
-        sessionStorage.removeItem(storageKey(userId, PENDING_KEY));
-        sessionStorage.removeItem(storageKey(userId, HISTORY_KEY));
-      } catch {
-        // Keep logout independent from browser storage availability.
-      }
-    }
+    clearQrFallbackSession(userId);
   }
 
   async function issue(key: string, userId: string) {
@@ -102,7 +94,7 @@ export function QrFallbackPage({ repository, loginMode = 'operator', backHref = 
       historyRef.current = nextHistory;
       setHistory(nextHistory);
       try {
-        sessionStorage.setItem(storageKey(userId, HISTORY_KEY), JSON.stringify(nextHistory));
+        sessionStorage.setItem(qrHistoryStorageKey(userId), JSON.stringify(nextHistory));
       } catch {
         // Keep the in-memory list usable when browser storage is unavailable.
       }

@@ -34,6 +34,7 @@ import type {
   BulkGroup,
   BulkApply,
 } from "../../storage/adminRepository";
+import { clearQrFallbackSession } from "../../storage/qrHistoryStorage";
 import { useOperatorI18n as useI18n } from "../../i18n/I18nProvider";
 import { LanguageSwitch } from "../../i18n/LanguageSwitch";
 import { cloudAdminMessages } from "./cloudAdminMessages";
@@ -150,6 +151,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
   function failure(cause: unknown) {
     const code = cause instanceof Error ? cause.message : "";
     if (code === "AUTH_REQUIRED" || code === "OPERATOR_REQUIRED") {
+      clearQrFallbackSession(session?.userId);
       clear();
       setRoleError(true);
       setError(code === "AUTH_REQUIRED" ? m.authError : m.operatorError);
@@ -413,6 +415,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
               () =>
                 void run(async () => {
                   await repository.signOut();
+                  clearQrFallbackSession(session?.userId);
                   clear();
                   setRoleError(false);
                 }),
