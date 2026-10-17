@@ -1,6 +1,7 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import { json, preflight, readJson, sha256 } from '../_shared/http.ts';
 import { parseMemoryLocation } from '../../../src/domain/location.ts';
+import { classifyMapLocation } from '../../../src/domain/mapPieceAssignment.ts';
 
 export function createHandler(getClient: () => SupabaseClient) { return async (request: Request) => {
   const options = preflight(request);
@@ -18,6 +19,11 @@ export function createHandler(getClient: () => SupabaseClient) { return async (r
   let location;
   try { location = parseMemoryLocation(body?.location); }
   catch { return json({ code: 'INVALID_LOCATION' }, 400); }
+  const mapPoint = body?.mapPoint && typeof body.mapPoint === 'object' && !Array.isArray(body.mapPoint)
+    && typeof body.mapPoint.lat === 'number' && Number.isFinite(body.mapPoint.lat) && Math.abs(body.mapPoint.lat) <= 90
+    && typeof body.mapPoint.lng === 'number' && Number.isFinite(body.mapPoint.lng) && Math.abs(body.mapPoint.lng) <= 180
+    ? { lat: body.mapPoint.lat, lng: body.mapPoint.lng }
+    : null;
   if (!/^[0-9a-f-]{36}$/i.test(uploadId) || !claimToken) {
     return json({ code: 'REQUEST_INVALID' }, 400);
   }
@@ -73,5 +79,16 @@ export function createHandler(getClient: () => SupabaseClient) { return async (r
     return json({ code: 'ALREADY_BOUND', status: 'already-bound' }, 409);
   }
   if (claim?.claim_status !== 'claimed') return json({ code: 'CLAIM_FAILED' }, 500);
+  try {
+    const assignment = mapPoint ? classifyMapLocation(mapPoint) : { state: 'needs_review' as const, pieceCode: null };
+    await client.rpc('save_automatic_piece_assignment', {
+      p_recording_id: claim.recording_id,
+      p_state: assignment.state,
+      p_piece_code: assignment.pieceCode,
+      p_map_version: 'fukuoka-road-73-v13',
+    });
+  } catch {
+    // Assignment is a best-effort follow-up. A successful audio claim stays successful.
+  }
   return json({ status: 'claimed', recordingId: claim.recording_id, createdAt: claim.recording_created_at });
 }; }

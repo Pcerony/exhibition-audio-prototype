@@ -19,13 +19,19 @@ beforeEach(() => {
       }
       getCenter() { return { lat: () => center.lat, lng: () => center.lng }; }
       addListener(name: string, callback: () => void) { listeners[name] = callback; return { remove() {} }; }
-      setCenter(value: typeof center) { center = value; listeners.center_changed?.(); }
+      setCenter(value: typeof center | { lat: () => number; lng: () => number }) {
+        if (typeof (value as { lat: unknown }).lat === 'function') {
+          const point = value as { lat: () => number; lng: () => number };
+          center = { lat: point.lat(), lng: point.lng() };
+        } else center = value as typeof center;
+        listeners.center_changed?.();
+      }
       setZoom() {}
     },
     places: {
       PlaceAutocompleteElement: class { constructor() { return document.createElement('div'); } },
       Place: class {
-        location = { lat: 33.61, lng: 130.43 };
+        location = { lat: () => 33.61, lng: () => 130.43 };
         constructor(_options: { id: string }) {}
         async fetchFields(options: { fields: string[] }) { placeFields = options.fields; }
       },
@@ -50,7 +56,7 @@ it('tracks keyboard/camera center movement without selecting the initial center'
   center = { lat: 33.6, lng: 130.42 };
   listeners.center_changed?.();
   listeners.idle?.();
-  expect(map.onSelect).toHaveBeenLastCalledWith({ source: 'pin', ...center });
+  expect(map.onSelect).toHaveBeenLastCalledWith({ location: { source: 'pin', ...center }, mapPoint: center });
   map.dispose();
 });
 
@@ -67,37 +73,44 @@ it('invalidates the previous point while a search result is loading', async () =
 it('keeps a resolved search result as a place rather than converting it to a pin', async () => {
   const map = await mount();
   const event = Object.assign(new Event('gmp-select'), { placePrediction: { toPlace: () => ({
-    id: 'synthetic-place', location: { lat: 33.61, lng: 130.43 }, fetchFields: async () => {},
+    id: 'synthetic-place', location: { lat: () => 33.61, lng: () => 130.43 }, fetchFields: async () => {},
   }) } });
   map.search.firstElementChild!.dispatchEvent(event);
-  await vi.waitFor(() => expect(map.onSelect).toHaveBeenLastCalledWith({ source: 'place', placeId: 'synthetic-place' }));
+  await vi.waitFor(() => expect(map.onSelect).toHaveBeenLastCalledWith({
+    location: { source: 'place', placeId: 'synthetic-place' }, mapPoint: { lat: 33.61, lng: 130.43 },
+  }));
   map.dispose();
 });
 
 it('centers a read-only memory map on a manually selected point', async () => {
   const { mountMemoryLocationMap } = await import('./googleMaps');
+  const onPoint=vi.fn();
   const result = mountMemoryLocationMap({
     mapElement: document.createElement('div'), language: 'ja',
-    location: { source: 'pin', lat: 33.6, lng: 130.42 }, onReady: vi.fn(), onError: vi.fn(),
+    location: { source: 'pin', lat: 33.6, lng: 130.42 }, onReady: vi.fn(), onError: vi.fn(),onPoint,
   });
   (window as unknown as Record<string, () => void>).__voiceMapsReady();
   const dispose = await result;
 
   expect(mapOptions.center).toEqual({ lat: 33.6, lng: 130.42 });
   expect(mapOptions.gestureHandling).toBe('none');
+  expect(onPoint).toHaveBeenCalledWith({lat:33.6,lng:130.42});
   dispose();
 });
 
 it('resolves a selected place ID to a map center without requesting or storing its name', async () => {
   const { mountMemoryLocationMap } = await import('./googleMaps');
+  const onPoint=vi.fn(),before=JSON.stringify(localStorage);
   const result = mountMemoryLocationMap({
     mapElement: document.createElement('div'), language: 'ja',
-    location: { source: 'place', placeId: 'selected-place' }, onReady: vi.fn(), onError: vi.fn(),
+    location: { source: 'place', placeId: 'selected-place' }, onReady: vi.fn(), onError: vi.fn(),onPoint,
   });
   (window as unknown as Record<string, () => void>).__voiceMapsReady();
   const dispose = await result;
   await vi.waitFor(() => expect(center).toEqual({ lat: 33.61, lng: 130.43 }));
 
   expect(placeFields).toEqual(['location']);
+  expect(onPoint).toHaveBeenCalledWith({lat:33.61,lng:130.43});
+  expect(JSON.stringify(localStorage)).toBe(before);
   dispose();
 });

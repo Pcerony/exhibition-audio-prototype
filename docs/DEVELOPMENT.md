@@ -1,6 +1,20 @@
 # 开发与环境
 
-生产 React/Vite 应用使用 cloud repository 访问 Supabase；本地 adapter 仅供开发/测试。域名为 `https://voice.heisei.space/`，东京项目已部署 migrations 和六个 Edge Functions。正式访客数据尚未开始收集。
+生产 React/Vite 应用使用 cloud repository 访问 Supabase；本地 adapter 仅供开发/测试。域名为 `https://voice.heisei.space/`；正式访客数据与状态以云端 Supabase 为准，本地 adapter 不是生产数据源。
+
+## 可回退的功能开发
+
+- 新功能在独立 worktree/分支中进行；开始前记录基线提交和需求/实施计划，不把主工作目录中已有的未提交文件带入或覆盖。
+- 每个可独立验证的功能阶段先运行对应测试，再单独提交；仅在检查提交内容未包含用户数据、音频、身份信息、密钥或私有备份后推送功能分支并创建带说明的 checkpoint tag。
+- checkpoint tag 指向已验证的 Git commit。恢复时先保留当前工作，再从目标 tag 建立新 worktree，例如：`git worktree add ../exhibition-audio-recovery -b codex/recovery <checkpoint-tag>`；不要通过重置或强制推送覆盖共享历史。
+- 自动部署成功不等于生产数据库/Edge Function 已变更。生产 migration、云端数据、域名和正式发布仍由集成负责人按单独授权、备份和验收流程执行。
+
+## 后台转写摘要与拼装板定位候选
+
+- `codex/admin-transcription-status` 在独立 worktree 实现了运营列表转写状态摘要和73块拼装板地图。迁移`202610170004_map_piece_assignment.sql`、Admin API/UI和地点坐标估算仍是未发布候选；不得据此认定生产后台已有这些功能。
+- 地图估算使用版本`fukuoka-road-73-v13`。独立站点核验只支持标记为“系统推算”的查找线索；真实卡片位置必须由运营人员核对/修正。地点计算在录音/地点 claim 成功之后执行，失效或RPC失败不得反向失败录音提交。Places坐标不进入持久化、日志、CSV或响应。
+- 该隔离分支包含阶段回退标签：`checkpoint-admin-transcription-status-2026-10-17`、`checkpoint-admin-map-geometry-2026-10-17`、`checkpoint-admin-map-transform-2026-10-17`、`checkpoint-admin-map-persistence-2026-10-17`、`checkpoint-admin-map-claim-2026-10-17`，以及集成标签`checkpoint-admin-map-piece-assignment-2026-10-17`和最终文档同步标签`checkpoint-admin-map-piece-assignment-final-2026-10-17`。标签都是不可变提交锚点；恢复步骤沿用上方worktree示例，禁止重置或强推共享分支。
+- 生产查询/导出、migration dry-run/apply、Edge部署和Pages发布没有包含在本地候选开发授权内。需先取得单独授权并完成备份、兼容/回滚审查和生产验收。
 
 ## 前端
 

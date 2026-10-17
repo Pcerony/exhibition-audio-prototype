@@ -70,6 +70,16 @@ describe('cloud admin repository', () => {
     expect(JSON.parse(fetcher.mock.calls[0][1]?.body as string)).toEqual({ action: 'list', search: 'Fukuoka', status: 'bound', offset: 50, limit: 50 });
   });
 
+  it('sends map-piece filtering and versioned manual corrections through authenticated admin API', async () => {
+    const { repository, fetcher } = setup();
+    fetcher.mockResolvedValueOnce(new Response(JSON.stringify({ tags: [], total: 0 })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ version: 4, state: 'assigned', pieceCode: 'C6', source: 'manual', mapVersion: 'fukuoka-road-73-v13' })));
+    await repository.listTags({ pieceCode: 'C6', offset: 0, limit: 50 });
+    await repository.setPieceAssignment({ recordingId: 'recording-id', expectedVersion: 3, state: 'assigned', pieceCode: 'C6', mapVersion: 'fukuoka-road-73-v13' });
+    expect(JSON.parse(fetcher.mock.calls[0][1]?.body as string)).toEqual({ action: 'list', pieceCode: 'C6', offset: 0, limit: 50 });
+    expect(JSON.parse(fetcher.mock.calls[1][1]?.body as string)).toEqual({ action: 'setPieceAssignment', recordingId: 'recording-id', expectedVersion: 3, state: 'assigned', pieceCode: 'C6', mapVersion: 'fukuoka-road-73-v13' });
+  });
+
   it('keeps category filtering and recording-time sorting on the server', async () => {
     const { repository, fetcher } = setup();
     fetcher.mockResolvedValueOnce(new Response(JSON.stringify({ tags: [], total: 0 })))

@@ -6,7 +6,7 @@ import { useRecorder } from './useRecorder';
 import { LanguageSwitch } from '../../i18n/LanguageSwitch';
 import { useI18n } from '../../i18n/I18nProvider';
 import './visitor.css';
-import { memoryLocationUrl, type MemoryLocation } from '../../domain/location';
+import { memoryLocationUrl, type MapPoint, type MemoryLocation } from '../../domain/location';
 import { LocationPicker } from './LocationPicker';
 import { MemoryLocationMap } from './MemoryLocationMap';
 import { VisitorAudioPlayer } from './VisitorAudioPlayer';
@@ -32,6 +32,7 @@ export function VisitorPage({ repository, token }: Props) {
   const [message, setMessage] = useState<MessageKey | ''>('');
   const [loadFailed, setLoadFailed] = useState(false);
   const [location, setLocation] = useState<MemoryLocation | null>(null);
+  const [mapPoint, setMapPoint] = useState<MapPoint | null>(null);
   const audioObjectUrl = useRef('');
   const shellRef = useRef<HTMLElement>(null);
   const categoryButtonRef = useRef<HTMLButtonElement>(null);
@@ -50,6 +51,7 @@ export function VisitorPage({ repository, token }: Props) {
     setJustSubmitted(false);
     setStage('intro'); setTheme(''); setMapVisited(false);
     setLocation(null);
+    setMapPoint(null);
     setSubmitting(false);
     setTranscriptionConsent(false);
     setCategoryDialogOpen(false);
@@ -97,7 +99,7 @@ export function VisitorPage({ repository, token }: Props) {
     setMessage('');
     try {
       const result = await repository.claim(token, {
-        id: crypto.randomUUID(), blob: recorder.blob, nickname: '', duration: recorder.duration, location, categoryCode: theme, transcriptionConsent,
+        id: crypto.randomUUID(), blob: recorder.blob, nickname: '', duration: recorder.duration, location, mapPoint, categoryCode: theme, transcriptionConsent,
       });
       if (activeToken.current !== token) return;
       if (result.status === 'claimed' || result.status === 'already-bound') {
@@ -183,7 +185,7 @@ export function VisitorPage({ repository, token }: Props) {
         <div className="outdoor-progress"><span className="step-number">{String(step).padStart(2,'0')}<small> / 05</small></span><span>{stepLabel[step-1]}</span>{stage !== 'intro' && <button title={t('flow.back')} aria-label={t('flow.back')} disabled={submitting || recorder.starting || recorder.state === 'recording'} onClick={back}><ArrowLeft size={25}/></button>}</div>
         {stage === 'intro' && <section className="outdoor-step intro-step"><p className="step-kicker">{t('app.title')}</p><h1>{t('flow.slogan')}</h1><p>{t('flow.introBody')}</p><button className="primary-action" onClick={() => setStage('theme')}>{t('flow.begin')}<ArrowRight size={25}/></button></section>}
         {stage === 'theme' && <section className="outdoor-step"><h1>{t('flow.themeTitle')}</h1><div className="theme-options">{categories.map(({ code, label, Icon }) => <button key={code} aria-pressed={theme === code} onClick={() => { setTheme(code); setMapVisited(true); setStage('map'); }}><Icon size={30}/><span>{label}</span><ArrowRight size={22}/></button>)}</div></section>}
-        {mapVisited && <div hidden={stage !== 'map'}><LocationPicker key={token} onDone={value => { setLocation(value); setStage('record'); }} /></div>}
+        {mapVisited && <div hidden={stage !== 'map'}><LocationPicker key={token} onDone={(value, point) => { setLocation(value); setMapPoint(point ?? null); setStage('record'); }} /></div>}
         {stage === 'record' && <section className="outdoor-step recording-view">
           <h1>{recorder.state === 'ready' ? t('flow.preview') : t('visitor.promptTitle')}</h1>
           {recorder.state !== 'ready' && <div className={`outdoor-recorder ${recorder.state}`}><Mic size={52} strokeWidth={1.7}/><p className="record-time">{formatDuration(recorder.duration)}</p><p>{recorder.state === 'recording' ? t('visitor.recordingNow') : t('visitor.recordHint')}</p></div>}

@@ -29,11 +29,12 @@ it('confirms the explicitly selected point', async () => {
   await waitFor(() => expect(mount).toHaveBeenCalled());
   const value = { source: 'pin', lat: 33.59, lng: 130.4 };
   const { act } = await import('@testing-library/react');
-  act(() => mount.mock.calls[0][0].onSelect(value));
+  const mapPoint = { lat: value.lat, lng: value.lng };
+  act(() => mount.mock.calls[0][0].onSelect({ location: value, mapPoint }));
   fireEvent.change(screen.getByRole('combobox'), { target: { value: 'en' } });
   expect(mount).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByRole('button', { name: 'Use this place' }));
-  expect(done).toHaveBeenCalledWith(value);
+  expect(done).toHaveBeenCalledWith(value, mapPoint);
 });
 it('keeps skip available when Google cannot load', async () => {
   mount.mockRejectedValue(new Error('offline'));

@@ -3,9 +3,9 @@ import { MapPin } from 'lucide-react';
 import type { MemoryLocation } from '../../domain/location';
 import { useI18n } from '../../i18n/I18nProvider';
 import { mapLanguages } from '../../i18n/visitorMessages';
-import { mountMemoryLocationMap } from './googleMaps';
+import { mountMemoryLocationMap,type MapPointWgs84 } from './googleMaps';
 
-export function MemoryLocationMap({ location }: { location: MemoryLocation }) {
+export function MemoryLocationMap({ location,onPoint }: { location: MemoryLocation;onPoint?:(point:MapPointWgs84)=>void }) {
   const { locale, t } = useI18n();
   const map = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
@@ -16,6 +16,7 @@ export function MemoryLocationMap({ location }: { location: MemoryLocation }) {
     setState('loading');
     mountMemoryLocationMap({
       mapElement: map.current!, location, language: mapLanguages[locale],
+      onPoint,
       onReady: () => { if (active) setState('ready'); },
       onError: () => { if (active) setState('failed'); },
     }).then(cleanup => {
@@ -24,7 +25,7 @@ export function MemoryLocationMap({ location }: { location: MemoryLocation }) {
       } else cleanup();
     }).catch(() => { if (active) setState('failed'); });
     return () => { active = false; dispose?.(); };
-  }, [location, locale]);
+  }, [location, locale,onPoint]);
 
   return <div className="location-map-frame memory-location-map-frame">
     {state === 'failed'

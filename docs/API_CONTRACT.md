@@ -1,8 +1,22 @@
 # 跨端 API 契约
 
+## 现场工作人员网站（候选）
+
+`POST staff-api` 验证 Supabase JWT 和 `operator_profiles` 的 staff/operator/admin 角色；staff 仍不能访问 admin-api。共用一个受限 staff 登录账号，成员名单通过 session 返回，选中 memberId 本机按项目/账号记住。姓名是自报身份，不代替认证账号。
+
+工作人员网页仅接受普通账号名`staff`，映射为已确认的内部Auth标识`staff-portal@staff.invalid`，无需收件邮箱。密码仍由Auth验证；网页仅接受`staff`角色会话，误配置为高权限角色时拒绝登录并退出。服务端API为兼容负责人直接核验继续允许operator/admin调用，但共享账号不得具有这两种角色。没有邮件找回流程，密码由负责人通过受控Auth管理重设。
+
+- `session` -> `{userId,role,members:[{id,name}]}`。
+- `list` 接受 `{tagId?,search?,reviewState?:'all'|'unreviewed'|'approved'|'empty',categoryCode?:'A'|'B'|'C'|'D',batchDate?,offset?,limit?}`，limit 1–50，search最多120字符。录音提交时间倒序、空卡最后、ID次排序；类别/状态/日期过滤与检索均在分页之前。返回 `{cards,total}`。卡片含 categoryCode（未分类历史卡为null），只含 id/label/inventoryLabel/status/createdAt/categoryCode/recording，不含 token、provisioning、Storage path。录音含 id/duration/createdAt/location/transcriptionConsent/transcription/pieceAssignment/latestReview。专用认证 DTO 的 transcription 含 status/text/published/version/updatedAt，不含供应商错误。既有 admin list/CSV 继续不含正文，匿名接口只读 ready 且 published 的文字。
+- `save` 接受 `{recordingId,memberId,version,text,published}`。纯文本最多10000字符；published=true 必须非空，保存 ready、递增 version、撤销 AI 租约。需有效当前启用录音、转写同意、既有任务和版本。保存草稿隐藏文本；确认发布后访客可见。并发旧版本返回409 VERSION_CONFLICT，禁用/删除/重置返回404 RECORDING_NOT_FOUND。更新和审计同事务。
+- `playback` 接受 `{recordingId,memberId}`，短期签名网址120秒；`activity` 接受 `{recordingId,memberId,event:'location_viewed'}`；`history` 接受 `{tagId}` 返回该卡最近100项 `{id,action,memberName,createdAt}`。
+- 审计保留认证账号、名单ID/姓名快照、当前录音ID、动作和服务时间；不得包含文本/音频/访客token/签名URL。成员ID由服务器名册验证，客户端不得传审计姓名或时间。
+- `staff_action(uuid,jsonb)` 仅 service_role 可执行；staff 角色不获得任何表直读、旧管理RPC或写卡权限。成员名册私有表启用RLS，不允许公开注册自行获得staff角色。
+- AI成功写回新文字也递增转写version，以拒绝AI完成前打开的旧编辑器。旧finish RPC的内部实现不对service_role开放，调用路径仍为原有 `finish_transcription` 名称/参数。
+
 ## 工作人员界面边界（2026-10-17）
 
-固定A/B/C/D是参观者主题，空卡无主题，提交录音后自动赋号。新版网页/Android管理界面不提供分类侧栏、分类筛选、创建/改名/移动分类，按batchDate/search/status/sort管理；卡号、只读元数据和CSV保留主题。为兼容历史客户端，本轮不删除categoryId/uncategorized/move等服务端契约、不迁移或清除数据，但新版不发送这些操作。Android历史待处理move必须人工核查丢弃，禁止新版重发。
+固定A/B/C/D是参观者主题，空卡无主题，提交录音后自动赋号。完整后台和Android不提供分类编辑；工作人员审核列表可按A/B/C/D筛选，但不能创建/改名/移动分类。工作人员的`staff-api list`支持`categoryCode?:'A'|'B'|'C'|'D'`，过滤发生在检索和分页之前。为兼容历史客户端，本轮不删除categoryId/uncategorized/move等服务端契约、不迁移或清除数据。Android历史待处理move必须人工核查丢弃，禁止新版重发。
 
 ## 按需写卡（已部署，旧nextJob语义不变）
 
@@ -18,6 +32,21 @@
 - 现有AdminRepository新增required方法`getTranscription(recordingId)`,`retryTranscription(recordingId,version)`,`saveTranscription(recordingId,version,text,published)`，返回按上述定义。后台list DTO本轮不携带草稿，按需get避免列表泄漏。
 - 私有POST transcription-worker使用x-maintenance-secret=MAINTENANCE_SECRET，缺/错401，无Groq密钥503 TRANSCRIPTION_NOT_CONFIGURED且不领任务。每次最多1条；服务端私有对象下载后调用固定Groq端点及whisper-large-v3-turbo；密钥仅Edge Secrets。worker完成条件包括recording仍为有效tag当前录音、同意、租约token/version匹配。重置/删除级联取消，禁用期间不处理/不公开；编辑/重试撤销旧结果。API错误只返回稳定码，不含供应商原始错误或正文。
 - Groq原语言转写，非翻译；新文本默认不公开。审核发布只影响文本不影响音频。默认不开启自动cron，待GROQ_API_KEY配置后集成负责人执行独立Vault-backed调度脚本，不能在代码中写入密钥或自动开通付费。
+
+### 运营列表转写状态摘要
+
+- 认证`admin-api`的`list`可接收`transcriptionState?:'not_consented'|'pending'|'processing'|'draft'|'published'|'failed'`。筛选在服务端全量集合上先执行，再计数、排序和分页；所有现有搜索、录音状态、日期和排序行为保持不变。筛选只匹配已有录音，不匹配空卡。
+- Admin列表中的录音可包含`transcriptionSummary:{consented:boolean,status:'pending'|'processing'|'ready'|'failed'|null,published:boolean}`。无同意时展示未同意；已同意但任务缺失或pending时筛为待处理；ready且未发布为草稿待审核；ready且published为已发布。列表只取状态字段，不带正文、错误码或供应商错误。
+- `admin-api`认证后将列表请求路由到数据库`admin_list(operator,body)`；该函数先校验运营者与筛选参数，再在服务端筛选、计数和分页，并只授权给Edge Function使用的`service_role`执行。Edge Function按当前页批量补充地点与最小转写摘要，不能把转写正文、对象路径或内部错误带入列表DTO或CSV。
+- 列表摘要仅由认证运营API返回；访客`public-tag`响应不变。既有单条`getTranscription`仍是唯一的运营端正文读取入口；CSV字段不新增转写状态或正文。非法筛选值返回HTTP 400 `REQUEST_INVALID`。
+
+## 73 块拼装板归属（v13，功能分支待发布）
+
+- `public-upload-claim`可选接收瞬时`mapPoint:{lat:number,lng:number}`。它只用于成功claim后的本次分类；缺失、无效、图外或边界不确定均不得使录音/地点提交失败。Place搜索结果坐标不得落库、写日志或回传；已存`location`仍遵循下方访客地点契约（Place ID 或用户确认的pin坐标）。音频/地点claim成功后，服务端以版本`fukuoka-road-73-v13`尝试保存自动板块摘要；计算或RPC失败时claim仍返回`claimed`，assignment保持待处理/待核对。自动输出只表示地点推算线索，不证明实体卡的实际摆放位置。
+- 新迁移`202610170004_map_piece_assignment.sql`在录音claim时创建assignment：无地点为`not_applicable`，有地点为`pending`。成功分类的状态为`assigned`、`needs_review`或`outside_map`，字段含`pieceCode|null`、`source:'automatic'|'manual'|null`、`mapVersion|null`、`version`和`updatedAt`。仅73个合法编号可赋值；边界25米内、无效点、图外不伪造明确板号。相同自动写入幂等，任何自动结果都不能覆盖人工修正。
+- `admin-api`认证`list`增加`pieceCode?:string`，由数据库在全量筛选后、count和分页前应用；仅接受地图73个编号。每条录音可带最小`pieceAssignment`摘要，不包含`mapPoint`、Places坐标/地址/名称或转写正文。已有认证后台地点读取字段契约不因本功能扩大。CSV字段保持不变。
+- `admin-api`认证操作员可调用`setPieceAssignment`，请求`{recordingId,expectedVersion,state,pieceCode,mapVersion}`。`state`为`assigned|needs_review|outside_map`；assigned必须带合法`pieceCode`，另外两种必须为null；`mapVersion`必须为`fukuoka-road-73-v13`。服务端以JWT验证出的操作者身份调用原子RPC，忽略请求中伪造身份字段；版本不匹配返回409 `VERSION_CONFLICT`，录音/展签不存在返回404 `RECORDING_NOT_FOUND`，无权限返回403 `OPERATOR_REQUIRED`。写入和`map_piece_override`审计旧值/新值/操作者/时间同事务完成。
+- 后台将地图估算与人工修正明确区分；点击73块之一可筛选列表，选择列表记录可高亮其板号。窄屏地图在自身区域横向查看。2026-10-17迁移和Edge已按负责人上线授权部署，前端随staff PR发布；生产备份/恢复、迁移演练及验收见验证记录。
 
 ## 录音后分类 V3（当前契约）
 

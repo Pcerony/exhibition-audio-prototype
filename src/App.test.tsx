@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { resolveAppRoute, resolveTagToken } from './App';
 
 describe('visitor URL routing', () => {
+  it('keeps the restricted staff website separate from the full admin', () => {
+    expect(resolveAppRoute('/', '#/staff')).toEqual({ type: 'staff' });
+    expect(resolveAppRoute('/staff', '')).toEqual({ type: 'staff' });
+  });
   it('opens a dedicated preview without treating it as a real tag', () => {
     expect(resolveAppRoute('/', '#/preview')).toEqual({ type: 'preview' });
     expect(resolveTagToken('/', '#/preview')).toBeNull();
