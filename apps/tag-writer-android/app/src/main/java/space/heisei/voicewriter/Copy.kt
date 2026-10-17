@@ -7,6 +7,19 @@ class Copy(requested: String = "ja") {
     fun category(category: Category) = if (category.code in listOf("A", "B", "C", "D")) "${category.code} · ${get("category${category.code}")}" else category.name
     companion object {
         private val entries = mapOf(
+            "updateCheck" to listOf("更新を確認", "检查更新", "Check for Updates"),
+            "updateBusy" to listOf("書き込みを停止し、未送信の結果を同期してから更新してください。", "请先停止写卡并同步待上传结果，再进行更新。", "Stop writing and sync pending results before updating."),
+            "updateChecking" to listOf("更新を確認中…", "正在检查更新…", "Checking for updates…"),
+            "updateCurrent" to listOf("最新バージョンです。", "目前已经是最新版本。", "You are up to date."),
+            "updateFailed" to listOf("更新を確認・検証できませんでした。通信を確認し、再試行してください。現在のアプリは引き続き使えます。", "无法检查或校验更新，请检查网络后重试。当前应用仍可继续使用。", "Update check or verification failed. Check your connection and retry. The current app still works."),
+            "updateAvailable" to listOf("新しいバージョン", "发现新版本", "New Version"),
+            "updateLater" to listOf("後で", "稍后", "Later"),
+            "updateDownload" to listOf("ダウンロード", "下载更新", "Download"),
+            "updateDownloading" to listOf("更新をダウンロード中", "正在下载更新", "Downloading Update"),
+            "updateReady" to listOf("更新の準備完了", "更新已准备好", "Update Ready"),
+            "updateInstall" to listOf("インストール", "安装更新", "Install"),
+            "updateInstallBody" to listOf("アカウントと保存データは保持されます。Androidの画面で更新を確認してください。", "账号与本地数据会保留，请在安卓系统界面确认更新，不要卸载旧版。", "Your account and app data will be kept. Confirm the update in Android. Do not uninstall the old app."),
+            "updatePermission" to listOf("このアプリからのインストールを許可し、戻って「インストール」を押してください。", "请允许此应用安装未知应用，返回后再点“安装更新”。", "Allow installs from this app, then return and tap Install."),
             "singleReadFirst" to listOf("1枚操作 · まずNFC読取", "单张操作 · 先读取 NFC", "Single Card · Read NFC First"),
             "chipOperationFailed" to listOf("タグの操作結果を確認できません。読み直して確認してください。", "无法确认芯片操作结果，请先重新读取核查。", "Tag Operation Could Not Be Confirmed. Read the Tag Again Before Retrying."),
             "clearChip" to listOf("タグ内のデータを消去", "清空芯片内容", "Clear Tag Contents"),
