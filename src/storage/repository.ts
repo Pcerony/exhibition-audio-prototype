@@ -1,10 +1,10 @@
 import { claimTag, createTag, resetTag, type RecordingInfo, type Tag } from '../domain/tags';
 import { indexedDbAudioStore, type AudioStore } from './indexedDb';
-import { parseMemoryLocation, type MemoryLocation } from '../domain/location';
+import { parseMemoryLocation, type MapPoint, type MemoryLocation } from '../domain/location';
 import { MEMORY_CATEGORIES, formatMemorySerial, isMemoryCategoryCode, memoryBatchDate, type MemoryCategoryCode } from '../domain/classification';
 
 type NewTag = { id: string; token: string; label: string; batch?: string };
-export type NewRecording = { id: string; blob: Blob; nickname: string; duration: number; location?: MemoryLocation | null; categoryCode?: MemoryCategoryCode; transcriptionConsent?: boolean };
+export type NewRecording = { id: string; blob: Blob; nickname: string; duration: number; location?: MemoryLocation | null; mapPoint?: MapPoint | null; categoryCode?: MemoryCategoryCode; transcriptionConsent?: boolean };
 export type ClaimResult = { status: 'claimed' | 'already-bound' | 'not-found'; tag: Tag | null };
 
 export interface TagRepository {

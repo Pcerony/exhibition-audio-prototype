@@ -114,7 +114,7 @@ export function createSupabaseVisitorRepository(): VisitorRepository {
       try {
         await request('public-upload-claim', {
           method: 'POST',
-          body: { uploadId: grant.uploadId, nickname: recording.nickname, durationSeconds: recording.duration, location: parseMemoryLocation(recording.location), categoryCode: recording.categoryCode, transcriptionConsent: recording.transcriptionConsent === true },
+          body: { uploadId: grant.uploadId, nickname: recording.nickname, durationSeconds: recording.duration, location: parseMemoryLocation(recording.location), ...(recording.mapPoint ? { mapPoint: recording.mapPoint } : {}), categoryCode: recording.categoryCode, transcriptionConsent: recording.transcriptionConsent === true },
           headers: { 'x-upload-token': grant.claimToken },
         });
         return { status: 'claimed', tag: await getTag(token) };

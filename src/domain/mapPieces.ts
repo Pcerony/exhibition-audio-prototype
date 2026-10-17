@@ -1,4 +1,4 @@
-import geometry from './map-piece-geometry-v13.json';
+import geometry from './map-piece-geometry-v13.json' with { type: 'json' };
 
 export type MapPieceCode = string;
 export type MapPoint = readonly [x: number, y: number];

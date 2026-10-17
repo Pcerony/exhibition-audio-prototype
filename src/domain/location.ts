@@ -2,6 +2,8 @@ export type MemoryLocation =
   | { source: 'pin'; lat: number; lng: number }
   | { source: 'place'; placeId: string };
 
+export type MapPoint = { lat: number; lng: number };
+
 export function memoryLocationUrl(location: MemoryLocation | null | undefined): string | null {
   if (!location) return null;
   const query = new URLSearchParams({ api: '1', query: location.source === 'pin' ? `${location.lat},${location.lng}` : 'place' });

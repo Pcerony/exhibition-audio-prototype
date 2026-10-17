@@ -4,7 +4,7 @@ import { createMemoryRepository } from '../../storage/repository';
 import { VisitorPage } from './VisitorPage';
 import { I18nProvider } from '../../i18n/I18nProvider';
 import { visitorMessages } from '../../i18n/visitorMessages';
-import type { MemoryLocation } from '../../domain/location';
+import type { MapPoint, MemoryLocation } from '../../domain/location';
 
 const mapsMock = vi.hoisted(() => ({
   mountLocationMap: vi.fn(),
@@ -18,7 +18,9 @@ const repository = createMemoryRepository();
 beforeEach(async () => {
   vi.restoreAllMocks();
   mapsMock.mountLocationMap.mockReset().mockImplementation((options: unknown) => {
-    (options as { onSelect: (location: MemoryLocation) => void }).onSelect({ source: 'pin', lat: 33.59, lng: 130.4 });
+    (options as { onSelect: (selection: { location: MemoryLocation; mapPoint: MapPoint }) => void }).onSelect({
+      location: { source: 'pin', lat: 33.59, lng: 130.4 }, mapPoint: { lat: 33.59, lng: 130.4 },
+    });
     return Promise.resolve(() => {});
   });
   mapsMock.mountMemoryLocationMap.mockReset().mockImplementation((options: unknown) => {
@@ -260,8 +262,8 @@ describe('visitor page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '重新选择地点' }));
     expect(screen.getByRole('heading', { name: '这段回忆，发生在哪里？' })).toBeVisible();
-    const mapOptions = mapsMock.mountLocationMap.mock.calls[0][0] as { onSelect: (value: MemoryLocation) => void };
-    await act(async () => mapOptions.onSelect({ source: 'pin', lat: 33.61, lng: 130.42 }));
+    const mapOptions = mapsMock.mountLocationMap.mock.calls[0][0] as { onSelect: (value: { location: MemoryLocation; mapPoint: MapPoint }) => void };
+    await act(async () => mapOptions.onSelect({ location: { source: 'pin', lat: 33.61, lng: 130.42 }, mapPoint: { lat: 33.61, lng: 130.42 } }));
     fireEvent.click(screen.getByRole('button', { name: '确认地点' }));
     expect(screen.getByRole('heading', { name: '听听你的声音。' })).toBeVisible();
     expect(mapsMock.mountMemoryLocationMap).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -271,6 +273,7 @@ describe('visitor page', () => {
     await screen.findByRole('heading', { name: '现在可以去实体地图上放置立牌了。' });
     expect(claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({
       categoryCode: 'B', location: { source: 'pin', lat: 33.61, lng: 130.42 },
+      mapPoint: { lat: 33.61, lng: 130.42 },
     }));
   });
 

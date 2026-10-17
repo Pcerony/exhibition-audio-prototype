@@ -19,13 +19,19 @@ beforeEach(() => {
       }
       getCenter() { return { lat: () => center.lat, lng: () => center.lng }; }
       addListener(name: string, callback: () => void) { listeners[name] = callback; return { remove() {} }; }
-      setCenter(value: typeof center) { center = value; listeners.center_changed?.(); }
+      setCenter(value: typeof center | { lat: () => number; lng: () => number }) {
+        if (typeof (value as { lat: unknown }).lat === 'function') {
+          const point = value as { lat: () => number; lng: () => number };
+          center = { lat: point.lat(), lng: point.lng() };
+        } else center = value as typeof center;
+        listeners.center_changed?.();
+      }
       setZoom() {}
     },
     places: {
       PlaceAutocompleteElement: class { constructor() { return document.createElement('div'); } },
       Place: class {
-        location = { lat: 33.61, lng: 130.43 };
+        location = { lat: () => 33.61, lng: () => 130.43 };
         constructor(_options: { id: string }) {}
         async fetchFields(options: { fields: string[] }) { placeFields = options.fields; }
       },
@@ -50,7 +56,7 @@ it('tracks keyboard/camera center movement without selecting the initial center'
   center = { lat: 33.6, lng: 130.42 };
   listeners.center_changed?.();
   listeners.idle?.();
-  expect(map.onSelect).toHaveBeenLastCalledWith({ source: 'pin', ...center });
+  expect(map.onSelect).toHaveBeenLastCalledWith({ location: { source: 'pin', ...center }, mapPoint: center });
   map.dispose();
 });
 
@@ -67,10 +73,12 @@ it('invalidates the previous point while a search result is loading', async () =
 it('keeps a resolved search result as a place rather than converting it to a pin', async () => {
   const map = await mount();
   const event = Object.assign(new Event('gmp-select'), { placePrediction: { toPlace: () => ({
-    id: 'synthetic-place', location: { lat: 33.61, lng: 130.43 }, fetchFields: async () => {},
+    id: 'synthetic-place', location: { lat: () => 33.61, lng: () => 130.43 }, fetchFields: async () => {},
   }) } });
   map.search.firstElementChild!.dispatchEvent(event);
-  await vi.waitFor(() => expect(map.onSelect).toHaveBeenLastCalledWith({ source: 'place', placeId: 'synthetic-place' }));
+  await vi.waitFor(() => expect(map.onSelect).toHaveBeenLastCalledWith({
+    location: { source: 'place', placeId: 'synthetic-place' }, mapPoint: { lat: 33.61, lng: 130.43 },
+  }));
   map.dispose();
 });
 

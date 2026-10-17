@@ -1,5 +1,8 @@
 import type { MemoryLocation } from '../../domain/location';
 
+export type MapPointWgs84 = { lat: number; lng: number };
+export type LocationSelection = { location: MemoryLocation; mapPoint: MapPointWgs84 };
+
 let loading: Promise<void> | undefined;
 function loadMaps(language: string): Promise<void> {
   if (loading) return loading;
@@ -28,7 +31,7 @@ function loadMaps(language: string): Promise<void> {
 
 export async function mountLocationMap(options: {
   mapElement: HTMLElement; searchElement: HTMLElement; language: string;
-  onSelect: (location: MemoryLocation | null) => void; onError: () => void;
+  onSelect: (selection: LocationSelection | null) => void; onError: () => void;
 }): Promise<() => void> {
   await loadMaps(options.language);
   const center = { lat: 33.5902, lng: 130.4017 };
@@ -43,7 +46,10 @@ export async function mountLocationMap(options: {
   const selectCenter = () => {
     selectionRevision++;
     const point = map.getCenter();
-    if (point && !disposed) options.onSelect({ source: 'pin', lat: point.lat(), lng: point.lng() });
+    if (point && !disposed) {
+      const mapPoint = { lat: point.lat(), lng: point.lng() };
+      options.onSelect({ location: { source: 'pin', ...mapPoint }, mapPoint });
+    }
   };
   const drag = map.addListener('dragend', selectCenter);
   const centerChange = map.addListener('center_changed', () => {
@@ -74,7 +80,10 @@ export async function mountLocationMap(options: {
         map.setCenter(place.location);
         map.setZoom(16);
       } finally { programmatic = false; }
-      options.onSelect({ source: 'place', placeId: place.id });
+      options.onSelect({
+        location: { source: 'place', placeId: place.id },
+        mapPoint: { lat: place.location.lat(), lng: place.location.lng() },
+      });
     } catch { if (!disposed && revision === selectionRevision) options.onError(); }
   };
   const error = () => { if (!disposed) options.onError(); };

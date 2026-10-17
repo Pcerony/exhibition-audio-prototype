@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, MapPin } from 'lucide-react';
-import type { MemoryLocation } from '../../domain/location';
 import { useI18n } from '../../i18n/I18nProvider';
-import { mountLocationMap } from './googleMaps';
+import { mountLocationMap, type LocationSelection, type MapPointWgs84 } from './googleMaps';
 import { PolicyLinks } from './PolicyPage';
 import { mapLanguages } from '../../i18n/visitorMessages';
 
-export function LocationPicker({ onDone }: { onDone: (location: MemoryLocation | null) => void }) {
+export function LocationPicker({ onDone }: { onDone: (location: LocationSelection['location'] | null, mapPoint?: MapPointWgs84 | null) => void }) {
   const { locale, t } = useI18n();
   const map = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLDivElement>(null);
-  const [selected, setSelected] = useState<MemoryLocation | null>(null);
+  const [selected, setSelected] = useState<LocationSelection | null>(null);
   const [failed, setFailed] = useState(false);
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -34,7 +33,7 @@ export function LocationPicker({ onDone }: { onDone: (location: MemoryLocation |
     </div>
     {failed && <p className="inline-error" role="alert">{t('location.failed')}</p>}
     <div className="location-actions">
-      <button className="primary-action" disabled={!selected} onClick={() => onDone(selected)}><Check size={18} />{t('location.confirm')}</button>
+      <button className="primary-action" disabled={!selected} onClick={() => { if (selected) onDone(selected.location, selected.mapPoint); }}><Check size={18} />{t('location.confirm')}</button>
       <button className="secondary-action" onClick={() => onDone(null)}>{t('location.skip')}</button>
     </div>
     <p className="privacy-note">{t('location.notice')}</p>
