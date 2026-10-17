@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { memoryLocationUrl } from '../../domain/location';
 import { MEMORY_CATEGORIES } from '../../domain/classification';
 import {
@@ -16,7 +16,12 @@ import {
   RotateCcw,
   X,
   FileText,
+  MapPin,
+  RefreshCw,
 } from "lucide-react";
+import { MAP_PIECE_VERSION } from '../../domain/mapPieceVersion';
+import { MAP_PIECE_CODES } from '../../domain/mapPieceCodes';
+const MapPieceMap = lazy(() => import('./MapPieceMap').then((module) => ({ default: module.MapPieceMap })));
 import type {
   AdminTranscriptionState,
   AdminRepository,
@@ -98,6 +103,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<TagQuery["status"]>();
   const [transcriptionState, setTranscriptionState] = useState<TagQuery['transcriptionState']>();
+  const [pieceCode, setPieceCode] = useState<TagQuery['pieceCode']>();
   const [sort, setSort] = useState<TagQuery["sort"]>("recorded_desc");
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
@@ -114,6 +120,13 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
   const [bulk, setBulk] = useState<BulkDialog | null>(null);
   const [ack, setAck] = useState(false);
   const [stale, setStale] = useState(false);
+  const [activeMapRecordingId, setActiveMapRecordingId] = useState<string | null>(null);
+  const [correction, setCorrection] = useState<ManagedTag | null>(null);
+  const [correctionChoice, setCorrectionChoice] = useState('needs_review');
+  const [correctionSaving, setCorrectionSaving] = useState(false);
+  const [correctionError, setCorrectionError] = useState('');
+  const [correctionStale, setCorrectionStale] = useState(false);
+  const mapSectionRef = useRef<HTMLElement | null>(null);
   const visitorUrl = (tag: ManagedTag) =>
     tag.provisioning?.visitorUrl ??
     `${baseUrl.replace(/\/$/, "")}/#/t/${tag.token}`;
@@ -128,6 +141,10 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
     setAudit(null);
     setAudio(null);
     setTranscription(null);
+    setPieceCode(undefined);
+    setActiveMapRecordingId(null);
+    setCorrection(null);
+    setCorrectionStale(false);
   }
   function failure(cause: unknown) {
     const code = cause instanceof Error ? cause.message : "";
@@ -193,6 +210,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
         search,
         status,
         ...(transcriptionState ? { transcriptionState } : {}),
+        ...(pieceCode ? { pieceCode } : {}),
         batchDate: batchDate || undefined,
         sort,
         offset,
@@ -217,7 +235,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
     return () => {
       active = false;
     };
-  }, [repository, session, search, status, transcriptionState, batchDate, sort, offset, revision]);
+  }, [repository, session, search, status, transcriptionState, pieceCode, batchDate, sort, offset, revision]);
   const refresh = () => setRevision((v) => v + 1);
   async function create(request: CreateRequest) {
     setPending(request);
@@ -320,6 +338,46 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
       "tags.csv",
     );
   }
+  function openPieceCorrection(tag: ManagedTag) {
+    const assignment = tag.recording?.pieceAssignment;
+    if (!tag.recording || !assignment) return;
+    setCorrection(tag);
+    setCorrectionChoice(assignment.pieceCode ? `piece:${assignment.pieceCode}`
+      : assignment.state === 'outside_map' ? 'outside_map' : 'needs_review');
+    setCorrectionError('');
+    setCorrectionStale(false);
+  }
+  async function savePieceCorrection() {
+    const recording = correction?.recording;
+    const assignment = recording?.pieceAssignment;
+    if (!recording || !assignment || correctionSaving) return;
+    const state = correctionChoice.startsWith('piece:') ? 'assigned'
+      : correctionChoice === 'outside_map' ? 'outside_map' : 'needs_review';
+    const nextPieceCode = state === 'assigned' ? correctionChoice.slice('piece:'.length) : null;
+    setCorrectionSaving(true);
+    setCorrectionError('');
+    setCorrectionStale(false);
+    try {
+      await repository.setPieceAssignment({
+        recordingId: recording.id, expectedVersion: assignment.version, state,
+        pieceCode: nextPieceCode, mapVersion: MAP_PIECE_VERSION,
+      });
+      setActiveMapRecordingId(recording.id);
+      setCorrection(null);
+      refresh();
+    } catch (cause) {
+      const code = cause instanceof Error ? cause.message : '';
+      if (code === 'AUTH_REQUIRED' || code === 'OPERATOR_REQUIRED') {
+        setCorrection(null);
+        failure(cause);
+      } else {
+        setCorrectionStale(code === 'VERSION_CONFLICT');
+        setCorrectionError(code === 'VERSION_CONFLICT' ? m.pieceConflict : m.pieceUnavailable);
+      }
+    } finally {
+      setCorrectionSaving(false);
+    }
+  }
   function icon(name: string, element: React.ReactNode, action: () => void) {
     return (
       <button
@@ -335,6 +393,8 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
     );
   }
   const group = bulk?.groups[bulk.index];
+  const activeMapRecording = tags.find((tag) => tag.recording?.id === activeMapRecordingId)?.recording;
+  const highlightedPiece = activeMapRecording?.pieceAssignment?.pieceCode ?? null;
   return (
     <main className="admin-shell cloud-admin">
       <header className="admin-header">
@@ -495,6 +555,26 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                 </div>
               )}
             </section>
+            <section ref={mapSectionRef} className="piece-map-section" aria-labelledby="piece-map-heading">
+              <div className="piece-map-copy">
+                <div>
+                  <h2 id="piece-map-heading">{m.mapTitle}</h2>
+                  <p>{m.mapHint}</p>
+                </div>
+                {pieceCode && <button type="button" className="piece-map-clear" onClick={() => { setPieceCode(undefined); setOffset(0); }} title={m.mapClear} aria-label={m.mapClear}><X size={17}/></button>}
+              </div>
+              <div className="piece-map-viewport">
+                <Suspense fallback={<p role="status">{m.loading}</p>}>
+                  <MapPieceMap
+                    ariaLabel={`${m.mapTitle} (${MAP_PIECE_CODES.length})`}
+                    selectedPiece={pieceCode}
+                    highlightedPiece={highlightedPiece}
+                    onSelect={(next) => { setPieceCode((current) => current === next ? undefined : next); setActiveMapRecordingId(null); setOffset(0); }}
+                  />
+                </Suspense>
+              </div>
+              {pieceCode && <p className="piece-map-filter-state" role="status">{m.pieceColumn}: {pieceCode}</p>}
+            </section>
             <div className="table-controls">
               <label className="batch-date-filter">
                 {n.batchDate}
@@ -612,6 +692,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                     <th>{m.label}</th>
                     <th>{m.recording}</th>
                     <th>{m.transcriptionFilter}</th>
+                    <th>{m.pieceColumn}</th>
                     <th>{n.recordedAt}</th>
                     <th>{m.write}</th>
                     <th>{m.url}</th>
@@ -629,6 +710,12 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                       published: m.transcriptionPublished,
                       failed: m.transcriptionFailed,
                     }[rowTranscriptionState] : '—';
+                    const pieceAssignment = tag.recording?.pieceAssignment;
+                    const pieceAssignmentLabel = pieceAssignment?.state === 'not_applicable' ? m.pieceNotApplicable
+                      : pieceAssignment?.state === 'pending' ? m.piecePending
+                      : pieceAssignment?.state === 'assigned' ? m.pieceAssigned
+                      : pieceAssignment?.state === 'needs_review' ? m.pieceReview
+                      : pieceAssignment?.state === 'outside_map' ? m.pieceOutside : '—';
                     return <tr key={tag.id}>
                       <td>
                         <input
@@ -669,6 +756,21 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                         {rowTranscriptionState
                           ? <span className={`transcription-status state-${rowTranscriptionState}`}>{rowTranscriptionLabel}</span>
                           : '—'}
+                      </td>
+                      <td className="piece-assignment-cell">
+                        {pieceAssignment ? <>
+                          <div className="piece-assignment-line">
+                            <button type="button" className="piece-focus-button" disabled={!pieceAssignment.pieceCode} aria-label={`${m.mapTitle} ${pieceAssignment.pieceCode ?? ''} ${tag.serialNumber ?? tag.label}`} onClick={() => {
+                              setActiveMapRecordingId(tag.recording!.id);
+                              mapSectionRef.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+                            }}>
+                              <MapPin size={14}/><strong>{pieceAssignment.pieceCode ?? '—'}</strong>
+                            </button>
+                            <span>{pieceAssignmentLabel}</span>
+                          </div>
+                          {pieceAssignment.source && <small>{pieceAssignment.source === 'manual' ? m.pieceManual : m.pieceAutomatic}</small>}
+                          {tag.recording && <button type="button" className="piece-edit-button" disabled={busy || !!bulk} aria-label={`${m.pieceEdit} ${tag.serialNumber ?? tag.label}`} onClick={() => openPieceCorrection(tag)}>{m.pieceEdit}</button>}
+                        </> : '—'}
                       </td>
                       <td className="time-cell">
                         {tag.recording
@@ -857,6 +959,38 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
         onAuthError={failure}
         onClose={() => setTranscription(null)}
       />}
+      {session && correction && correction.recording?.pieceAssignment && <OperatorDialog
+        titleId="piece-correction-title"
+        locked={correctionSaving}
+        onClose={() => { setCorrection(null); setCorrectionError(''); }}
+      >
+        <h2 id="piece-correction-title">{m.pieceDialog}</h2>
+        <p>{m.pieceDialogHint}</p>
+        {correctionError && <div className="admin-message error piece-correction-message" role="alert">
+          <span>{correctionError}</span>
+          {correctionStale && <button type="button" className="toolbar-secondary" onClick={() => {
+            setCorrection(null);
+            setCorrectionError('');
+            setCorrectionStale(false);
+            setActiveMapRecordingId(null);
+            setPieceCode(undefined);
+            setOffset(0);
+            refresh();
+          }}><RefreshCw size={15}/>{m.pieceReload}</button>}
+        </div>}
+        <label>
+          {m.pieceSelect}
+          <select aria-label={m.pieceSelect} value={correctionChoice} disabled={correctionSaving} onChange={(event) => setCorrectionChoice(event.target.value)}>
+            <option value="needs_review">{m.pieceReview}</option>
+            <option value="outside_map">{m.pieceOutside}</option>
+            {MAP_PIECE_CODES.map((code) => <option key={code} value={`piece:${code}`}>{code}</option>)}
+          </select>
+        </label>
+        <footer>
+          <button type="button" disabled={correctionSaving} onClick={() => { setCorrection(null); setCorrectionError(''); }}>{m.pieceCancel}</button>
+          <button type="button" className="toolbar-primary" disabled={correctionSaving} onClick={() => void savePieceCorrection()}>{correctionSaving ? n.working : m.pieceSave}</button>
+        </footer>
+      </OperatorDialog>}
       {bulk && group && (
         <OperatorDialog
           titleId="bulk-title"

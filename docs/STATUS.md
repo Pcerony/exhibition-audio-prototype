@@ -1,12 +1,14 @@
 # 项目进度与交接
 
-## 后台转写状态阶段（2026-10-17，未部署）
+## 后台转写摘要与拼装板定位候选（2026-10-17，未部署）
 
-后台录音列表状态摘要与筛选已在隔离分支 `codex/admin-transcription-status` 实现；仅返回同意/处理/发布状态，不把转写正文加入列表或 CSV。该功能分支本地前端 150 项、后端 34 项测试以及普通/Pages 构建通过。`checkpoint-admin-map-before-implementation-2026-10-17`、`checkpoint-admin-transcription-plan-2026-10-17`、`checkpoint-admin-transcription-contract-2026-10-17`、`checkpoint-admin-list-api-2026-10-17`、`checkpoint-admin-list-handler-2026-10-17` 和 `checkpoint-admin-list-ui-2026-10-17` 是逐阶段的可回退点。
+隔离分支`codex/admin-transcription-status`现包含后台录音列表的转写状态摘要/筛选，以及73块地图总览、按板筛选、记录高亮和运营手动修正。列表只读转写同意/处理/发布状态，不含转写正文；CSV字段不变。地图使用固定版本`fukuoka-road-73-v13`，运算结果只标记为“系统推算”，不能当作卡片实体位置的证明；运营者可按实际地图手动修正，后端以版本检查和审计保护修改。
 
-本轮没有查询、导出或修改生产录音数据，没有应用生产 migration、部署 Edge Function 或发布前端。已实现功能仍须经过地图相关设计/实现、代码审查和负责人发布批准后才会进入生产。
+自动板号计算只在成功录音/地点claim之后执行，错误不影响参观者提交。Place搜索坐标只在本次请求内短暂参与计算，不写入assignment、日志、CSV或响应；长期地点数据仍遵循既有Place ID/pin契约。地图证据和准确性边界见[数据校准记录](MAP_PIECE_DATA.md)。
 
-73 块预览提供的是本地毫米坐标轮廓；目前没有经验证的地理坐标变换，不能据此自动把参观者选择地点归到某块。自动归属和运营手动修正都还未实现或部署。定位设计与准确性门槛见[后台拼装板定位设计](superpowers/specs/2026-10-17-admin-map-piece-assignment-design.md)。
+本候选在独立worktree完成并通过21个前端测试文件/163项、后端40项、普通和Pages构建，以及390/768/1280px合成界面检查；验证细节见[验证记录](VERIFICATION.md)。隔离分支`codex/admin-transcription-status`的集成回退锚点为`checkpoint-admin-map-piece-assignment-2026-10-17`，早期阶段标签仍保留于[开发说明](DEVELOPMENT.md)。
+
+本轮未查询、导出或修改生产录音数据，未应用生产migration、未部署Edge Function、未发布Pages。此处“完成”仅指候选分支实现及本地验证，不等于生产已启用；生产发布需要负责人另行授权并完成备份、迁移回滚审查和现场抽查。工作目录中的既有未提交运营文档未带入或更改。
 
 ## 参观者提交前综合确认（2026-10-17）
 

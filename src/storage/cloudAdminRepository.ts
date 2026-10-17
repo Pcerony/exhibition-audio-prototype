@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { TranscriptionResult } from '../domain/transcription';
-import type { AdminRepository, AuditEntry, Category, ManagedTag, OperatorSession, ProvisioningJob } from './adminRepository';
+import type { AdminRepository, AuditEntry, Category, ManagedTag, OperatorSession, PieceAssignmentSummary, PieceAssignmentUpdate, ProvisioningJob } from './adminRepository';
 export type AdminAuth = {
   getSession(): Promise<{ accessToken: string; userId: string; email?: string } | null>;
   signIn(email: string, password: string): Promise<void>;
@@ -47,6 +47,12 @@ export function createCloudAdminRepository(config: { url: string; key: string; a
     },
     signOut: () => config.auth.signOut(),
     listTags: (query = {}) => request<{ tags: ManagedTag[]; total: number }>('list', query),
+    async setPieceAssignment(input: PieceAssignmentUpdate) {
+      return request<PieceAssignmentSummary>('setPieceAssignment', {
+        recordingId: input.recordingId, expectedVersion: input.expectedVersion, state: input.state,
+        pieceCode: input.pieceCode, mapVersion: input.mapVersion,
+      });
+    },
     createBatch: (rows, requestKey) => request<{ tags: ManagedTag[] }>('createBatch', { rows, requestKey }),
     async resetTag(tagId) { await request('reset', { tagId }); },
     async setEnabled(tagId, enabled) { await request('setEnabled', { tagId, enabled }); },

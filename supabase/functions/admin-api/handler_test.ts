@@ -54,7 +54,7 @@ Deno.test('v2 errors do not leak database details and category identities are UU
   }
   const f=fixture();equal((await f.handler(request({action:'createCards',categoryId:'not-a-uuid'}))).status,400);equal(f.calls,[]);
 });
-function fixture(role: string | null = 'operator', valid = true, rpcData: unknown = { ok: true }, rpcError: { code: string; message: string } | null = null, configured = false, listRows: { recordings?: unknown[]; transcriptions?: unknown[] } = {}) {
+function fixture(role: string | null = 'operator', valid = true, rpcData: unknown = { ok: true }, rpcError: { code: string; message: string } | null = null, configured = false, listRows: { recordings?: unknown[]; transcriptions?: unknown[]; assignments?: unknown[] } = {}) {
   const calls: unknown[] = [];
   const selections: { table: string; columns: string }[] = [];
   const client = {
@@ -65,7 +65,7 @@ function fixture(role: string | null = 'operator', valid = true, rpcData: unknow
         eq: () => ({ maybeSingle: async () => ({ data: role ? { role } : null, error: null }) }),
         in: async (_field: string, ids: string[]) => ({ data: table === 'recordings'
           ? listRows.recordings ?? ids.map((id) => ({ id, location: { source: 'place', placeId: 'synthetic-place' }, transcription_consent: false }))
-          : listRows.transcriptions ?? [], error: null }),
+          : table === 'recording_piece_assignments' ? listRows.assignments ?? [] : listRows.transcriptions ?? [], error: null }),
       };
     } }),
     rpc: async (name: string, args: unknown) => { calls.push({ name, args }); return { data: rpcData, error: rpcError }; },
@@ -120,6 +120,49 @@ Deno.test('admin list includes transcription status but never the transcript bod
   equal(body.tags[0].recording.transcriptionSummary, { consented: true, status: 'ready', published: false });
   if (JSON.stringify(body).includes('private-sentinel') || JSON.stringify(body).includes('errorCode')) throw new Error('private transcription data leaked');
   equal(f.selections.find((item) => item.table === 'recording_transcriptions')?.columns, 'recording_id,status,published');
+});
+Deno.test('admin list includes only the minimal piece assignment summary', async () => {
+  const f = fixture('operator', true, { tags: [{ recording: { id, nickname: '' } }], total: 1 }, null, false, {
+    recordings: [{ id, location: { source: 'place', placeId: 'synthetic-place' }, transcription_consent: true }],
+    transcriptions: [{ recording_id: id, status: 'ready', published: false, text: 'private-sentinel' }],
+    assignments: [{ recording_id: id, assignment_state: 'needs_review', piece_code: 'E3', assignment_source: 'automatic', map_version: 'fukuoka-road-73-v13', version: 2, updated_at: '2026-10-17T01:00:00Z' }],
+  });
+  const response=await f.handler(request({action:'list'}));
+  equal(response.status,200);
+  const body=await response.json();
+  equal(body.tags[0].recording.pieceAssignment,{state:'needs_review',pieceCode:'E3',source:'automatic',mapVersion:'fukuoka-road-73-v13',version:2,updatedAt:'2026-10-17T01:00:00Z'});
+  if(JSON.stringify(body).includes('private-sentinel'))throw Error('private transcript data leaked');
+  equal(f.selections.find(item=>item.table==='recording_piece_assignments')?.columns,'recording_id,assignment_state,piece_code,assignment_source,map_version,version,updated_at');
+});
+Deno.test('admin list strips provider coordinates and metadata from saved Place locations', async () => {
+ const f=fixture('operator',true,{tags:[{recording:{id,nickname:''}}],total:1},null,false,{
+  recordings:[{id,location:{source:'place',placeId:'synthetic-place',lat:33.5912638547,lng:130.3986370049,name:'Private place name',address:'Private place address'},transcription_consent:false}],
+ });
+ const response=await f.handler(request({action:'list'}));
+ equal(response.status,200);
+ const body=await response.json();
+ equal(body.tags[0].recording.location,{source:'place',placeId:'synthetic-place'});
+ const serialized=JSON.stringify(body);
+ for(const privateValue of ['33.5912638547','130.3986370049','Private place name','Private place address']){
+  if(serialized.includes(privateValue))throw Error(`provider location data leaked: ${privateValue}`);
+ }
+});
+Deno.test('manual map correction validates fields and uses the verified operator identity',async()=>{
+ const body={action:'setPieceAssignment',recordingId:id,expectedVersion:3,state:'assigned',pieceCode:'C6',mapVersion:'fukuoka-road-73-v13',userId:'forged'};
+ const f=fixture('operator',true,{version:4,state:'assigned',pieceCode:'C6',source:'manual',mapVersion:'fukuoka-road-73-v13'});
+ const response=await f.handler(request(body));
+ equal(response.status,200);
+ equal(f.calls,[{name:'set_manual_piece_assignment',args:{p_operator:id,p_recording_id:id,p_expected_version:3,p_state:'assigned',p_piece_code:'C6',p_map_version:'fukuoka-road-73-v13'}}]);
+ for(const invalid of [
+  {...body,pieceCode:'Z9'}, {...body,expectedVersion:0}, {...body,mapVersion:'unknown'},
+  {...body,state:'outside_map',pieceCode:'C6'}, {...body,state:'assigned',pieceCode:null},
+ ]){
+  const rejected=fixture();
+  const result=await rejected.handler(request(invalid));
+  equal(result.status,400);equal(await result.json(),{code:'REQUEST_INVALID'});equal(rejected.calls,[]);
+ }
+ const stale=await fixture('operator',true,null,{code:'P0001',message:'VERSION_CONFLICT internal detail'}).handler(request(body));
+ equal(stale.status,409);equal(await stale.json(),{code:'VERSION_CONFLICT'});
 });
 Deno.test('admin list rejects an unknown transcription filter before querying', async () => {
   const f = fixture();

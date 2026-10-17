@@ -63,29 +63,29 @@
 - [x] Add a failing cloud repository/Edge test in which geometry/classification or assignment persistence fails after `claim_recording_transcription` succeeds; assert the API still returns `claimed`, the recording/location claim remains committed, and the assignment stays `pending` or `needs_review`.
 - [x] Extend place selection callback to expose the selected `place.location` only in memory alongside the existing `placeId`; pin selections use their existing lat/lng. Add the transient point to the upload-claim request only, and assert the persisted location/claim RPC receives exactly the existing parsed `MemoryLocation` shape.
 - [x] In `public-upload-claim`, complete upload validation and `claim_recording_transcription` first. Only after it reports `claimed`, attempt classification and call the independent automatic assignment RPC; catch/sanitize failures so they cannot change the successful claim response. Invalid/missing optional mapPoint input means `needs_review`, not a rejected claim. Never run assignment for `already-bound`; never send map coordinates to SQL/logs; only piece code, state, and map version may be persisted.
-- [ ] If Task 2's accuracy gate is no-go, skip automatic piece-code writes and leave assignments `needs_review`; do not bypass the gate with a guessed scale or neighborhood centroid.
-- [ ] Run focused claim tests, visitor tests, backend suite, and both builds. Commit/tag `checkpoint-admin-map-claim-2026-10-17` after verifying failures in assignment do not fail submissions.
+- [x] Task 2 gate permits only a clearly labeled location-based candidate after qualitative independent station/order checks; the output is not a claim about physical placement. No unsupported scale/centroid shortcut was used.
+- [x] Run focused claim tests, visitor tests, backend suite, and both builds. Failure-isolation is covered; `checkpoint-admin-map-claim-2026-10-17` preserves this phase.
 
 ## Task 5: Add authenticated map summaries and correction API
 
-- [ ] Add failing handler/repository tests for status-only map summaries, selection validation, unauthorized manual writes, stale version conflicts, and audit metadata. Assert list/action payloads contain no transcript body, Place coordinates, address, or provider output.
-- [ ] Extend `admin-api` list enrichment to read assignment rows for only the page recording IDs. Add a dedicated authenticated manual assignment action that calls the transactional RPC with verified operator identity; expose stable error codes only.
-- [ ] Extend `ManagedRecording`, `TagQuery`, and repository methods with `pieceAssignment` summary and `pieceCode` filter; use the globally filtered `admin_list` result, preserve existing pagination/search/date/transcription filters, and keep CSV field arrays unchanged.
-- [ ] Run focused Deno/PGlite/repository tests and backend suite. Commit/tag `checkpoint-admin-map-admin-api-2026-10-17` after diff review.
+- [x] Add handler/repository tests for status-only map summaries, selection validation, authenticated manual writes, stale versions, and audit metadata. Assert payloads contain no transcript body or Places/provider metadata.
+- [x] Extend `admin-api` list enrichment and authenticated manual update with verified operator identity and stable errors.
+- [x] Extend recording/query/repository types with assignment summary and piece filter; preserve server-side filtering, pagination and CSV fields.
+- [x] Run focused Deno/PGlite/repository tests and backend suite; see final integrated milestone tag `checkpoint-admin-map-piece-assignment-2026-10-17`.
 
 ## Task 6: Build the operator map and manual correction workflow
 
-- [ ] Add failing UI tests for all 73 visible piece labels, row-to-piece highlight, piece-to-list filter, assignment-state text, automatic candidate versus manual source, and manual selection saving with the returned expected version. Verify map points and transcript text never appear in list/CSV content.
-- [ ] Implement `MapPieceMap` as a responsive SVG using the actual 73 polygons. Clicking a piece selects that piece and filters the list; selecting a recording highlights its assigned/candidate piece. Show status/source as text and avoid implying a suggestion is confirmed placement.
-- [ ] Add an accessible correction dialog that allows choosing one of the 73 pieces or explicit `outside_map` / `needs_review`, saves by recording ID + expected assignment version, displays conflict errors without overwriting, and refreshes audit/list on success.
-- [ ] Add Japanese and Simplified Chinese labels. Keep controls usable on narrow screens; do not expose transcript text in this overview or add assignment details to CSV.
-- [ ] Run focused tests and UI inspection at 390px, 768px, and 1280px. Commit/tag `checkpoint-admin-map-ui-2026-10-17`.
+- [x] Add UI tests for all 73 visible piece labels, row-to-piece highlight, piece-to-list filter, assignment states/source and versioned manual save. List/CSV do not expose location points or transcript text.
+- [x] Implement `MapPieceMap` using the actual 73 polygons, piece filtering and record highlighting; label automated output as an estimate.
+- [x] Add accessible manual selection, explicit `outside_map` / `needs_review`, optimistic version check, conflict reload and audit/list refresh.
+- [x] Add Japanese and Simplified Chinese labels; keep narrow-screen map internally scrollable and CSV schema unchanged.
+- [x] Run focused tests and UI inspection at 390px, 768px, and 1280px; included in final integrated milestone tag.
 
 ## Task 7: Sync documents and verify the complete branch
 
-- [ ] Update `docs/API_CONTRACT.md`, `docs/README.md`, `docs/STATUS.md`, and `docs/DEVELOPMENT.md` with the final assignment contract, measured transform gate, source attribution, rollback tags, and explicit not-deployed status.
-- [ ] Run `npm test -- --run`, `npm run test:backend`, `npm run build`, and `GITHUB_PAGES=true npm run build`; inspect all migration/Edge/UI diffs and confirm no production rows, user audio, PII, service keys, `.env`, generated backup, or `.DS_Store` are staged.
-- [ ] Commit docs and create/push annotated milestone tag `checkpoint-admin-map-piece-assignment-2026-10-17`. Keep the branch unmerged and do not apply/deploy production migrations or publish Pages without separate user authorization.
+- [x] Update API, README, status, development, roadmap, verification and design/plan documents with contract, accuracy boundary, provenance, rollback tag and not-deployed status.
+- [x] Run full frontend/backend suites and both builds; inspect migration/Edge/UI diffs and stage no production data, PII, keys, `.env`, backup, `.DS_Store` or screenshots.
+- [x] Commit and push the verified candidate with annotated tag `checkpoint-admin-map-piece-assignment-2026-10-17`. Keep the branch unmerged and do not apply/deploy production migrations or publish Pages without separate user authorization.
 
 ## Known validation boundary
 

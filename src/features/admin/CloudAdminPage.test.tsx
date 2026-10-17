@@ -30,6 +30,10 @@ const tag: ManagedTag = {
     duration: 4,
     mimeType: "audio/webm",
     createdAt: "2026-01-02",
+    pieceAssignment: {
+      state: 'needs_review', pieceCode: 'A2', source: 'automatic', mapVersion: 'fukuoka-road-73-v13', version: 2,
+      updatedAt: '2026-01-02T01:00:00Z',
+    },
   },
 };
 function repository(): AdminRepository {
@@ -45,6 +49,7 @@ function repository(): AdminRepository {
     getTranscription: vi.fn().mockResolvedValue({ configured: false, consented: false, transcription: null }),
     retryTranscription: vi.fn(),
     saveTranscription: vi.fn(),
+    setPieceAssignment: vi.fn().mockResolvedValue({ version: 3, state: 'assigned', pieceCode: 'B2', source: 'manual', mapVersion: 'fukuoka-road-73-v13' }),
     listJobs: vi.fn().mockResolvedValue([]),
     provision: vi.fn(),
     getAudit: vi.fn().mockResolvedValue([]),
@@ -74,6 +79,80 @@ function repository(): AdminRepository {
     applyBulk: vi.fn().mockResolvedValue(undefined),
   };
 }
+
+it('shows all 73 map pieces, filters records by selected piece and displays estimates as unconfirmed', async () => {
+  const r = repository();
+  show(r, 'zh-CN');
+  await screen.findByText('A001');
+  const map = await screen.findByRole('group', { name: /73/ });
+  expect(within(map).getAllByRole('button')).toHaveLength(73);
+  expect(within(map).getByRole('button', { name: 'A1' })).toBeInTheDocument();
+  expect(screen.getByText(/系统推算/)).toBeVisible();
+  expect(screen.getByText(/需要核对/)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: /A2 A001/ }));
+  expect(within(map).getByRole('button', { name: 'A2' })).toHaveClass('is-highlighted');
+  fireEvent.click(within(map).getByRole('button', { name: 'A2' }));
+  await waitFor(() => expect(r.listTags).toHaveBeenLastCalledWith(expect.objectContaining({ pieceCode: 'A2', offset: 0 })));
+  expect(screen.queryByText('private transcript sentinel')).not.toBeInTheDocument();
+  expect(screen.queryByText('130.4063520063')).not.toBeInTheDocument();
+});
+
+it('keeps a conflicted manual correction open and does not overwrite the stale version', async () => {
+  const r = repository();
+  vi.mocked(r.setPieceAssignment).mockRejectedValue(new Error('VERSION_CONFLICT'));
+  show(r, 'zh-CN');
+  await screen.findByText('A001');
+  fireEvent.click(screen.getByRole('button', { name: '手动修正拼装板 A001' }));
+  const dialog = screen.getByRole('dialog', { name: '修正拼装板位置' });
+  fireEvent.change(within(dialog).getByLabelText('实体拼装板'), { target: { value: 'piece:B2' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: '保存修正' }));
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('记录已更新');
+  expect(screen.getByRole('dialog', { name: '修正拼装板位置' })).toBeInTheDocument();
+  expect(r.setPieceAssignment).toHaveBeenCalledTimes(1);
+});
+
+it('reloads the latest assignment after a version conflict before allowing a retry', async () => {
+  const r = repository();
+  const latestTag: ManagedTag = {
+    ...tag,
+    recording: { ...tag.recording!, pieceAssignment: { ...tag.recording!.pieceAssignment!, pieceCode: 'A3', version: 3 } },
+  };
+  vi.mocked(r.listTags).mockResolvedValueOnce({ tags: [tag], total: 1 }).mockResolvedValueOnce({ tags: [latestTag], total: 1 });
+  vi.mocked(r.setPieceAssignment)
+    .mockRejectedValueOnce(new Error('VERSION_CONFLICT'))
+    .mockResolvedValueOnce({ version: 4, state: 'assigned', pieceCode: 'B2', source: 'manual', mapVersion: 'fukuoka-road-73-v13', updatedAt: null });
+  show(r, 'zh-CN');
+  await screen.findByText('A001');
+  fireEvent.click(screen.getByRole('button', { name: '手动修正拼装板 A001' }));
+  let dialog = screen.getByRole('dialog', { name: '修正拼装板位置' });
+  fireEvent.change(within(dialog).getByLabelText('实体拼装板'), { target: { value: 'piece:B2' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: '保存修正' }));
+  await within(dialog).findByRole('alert');
+  fireEvent.click(within(dialog).getByRole('button', { name: '重新加载列表' }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: '修正拼装板位置' })).not.toBeInTheDocument());
+  await waitFor(() => expect(r.listTags).toHaveBeenCalledTimes(2));
+  fireEvent.click(screen.getByRole('button', { name: '手动修正拼装板 A001' }));
+  dialog = screen.getByRole('dialog', { name: '修正拼装板位置' });
+  fireEvent.change(within(dialog).getByLabelText('实体拼装板'), { target: { value: 'piece:B2' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: '保存修正' }));
+  await waitFor(() => expect(r.setPieceAssignment).toHaveBeenLastCalledWith({
+    recordingId: 'r1', expectedVersion: 3, state: 'assigned', pieceCode: 'B2', mapVersion: 'fukuoka-road-73-v13',
+  }));
+});
+
+it('saves an operator-selected map piece with the observed assignment version', async () => {
+  const r = repository();
+  show(r, 'zh-CN');
+  await screen.findByText('A001');
+  fireEvent.click(screen.getByRole('button', { name: '手动修正拼装板 A001' }));
+  const dialog = screen.getByRole('dialog', { name: '修正拼装板位置' });
+  fireEvent.change(within(dialog).getByLabelText('实体拼装板'), { target: { value: 'piece:B2' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: '保存修正' }));
+  await waitFor(() => expect(r.setPieceAssignment).toHaveBeenCalledWith({
+    recordingId: 'r1', expectedVersion: 2, state: 'assigned', pieceCode: 'B2', mapVersion: 'fukuoka-road-73-v13',
+  }));
+  await waitFor(() => expect(r.listTags).toHaveBeenCalledTimes(2));
+});
 function show(r: AdminRepository, locale?: string) {
   if (locale) localStorage.setItem('exhibition-audio-language-v2', locale);
   render(

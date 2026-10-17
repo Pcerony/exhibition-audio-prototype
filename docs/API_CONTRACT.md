@@ -26,6 +26,14 @@
 - `admin-api`认证后将列表请求路由到数据库`admin_list(operator,body)`；该函数先校验运营者与筛选参数，再在服务端筛选、计数和分页，并只授权给Edge Function使用的`service_role`执行。Edge Function按当前页批量补充地点与最小转写摘要，不能把转写正文、对象路径或内部错误带入列表DTO或CSV。
 - 列表摘要仅由认证运营API返回；访客`public-tag`响应不变。既有单条`getTranscription`仍是唯一的运营端正文读取入口；CSV字段不新增转写状态或正文。非法筛选值返回HTTP 400 `REQUEST_INVALID`。
 
+## 73 块拼装板归属（v13，功能分支待发布）
+
+- `public-upload-claim`可选接收瞬时`mapPoint:{lat:number,lng:number}`。它只用于成功claim后的本次分类；缺失、无效、图外或边界不确定均不得使录音/地点提交失败。Place搜索结果坐标不得落库、写日志或回传；已存`location`仍遵循下方访客地点契约（Place ID 或用户确认的pin坐标）。音频/地点claim成功后，服务端以版本`fukuoka-road-73-v13`尝试保存自动板块摘要；计算或RPC失败时claim仍返回`claimed`，assignment保持待处理/待核对。自动输出只表示地点推算线索，不证明实体卡的实际摆放位置。
+- 新迁移`202610170004_map_piece_assignment.sql`在录音claim时创建assignment：无地点为`not_applicable`，有地点为`pending`。成功分类的状态为`assigned`、`needs_review`或`outside_map`，字段含`pieceCode|null`、`source:'automatic'|'manual'|null`、`mapVersion|null`、`version`和`updatedAt`。仅73个合法编号可赋值；边界25米内、无效点、图外不伪造明确板号。相同自动写入幂等，任何自动结果都不能覆盖人工修正。
+- `admin-api`认证`list`增加`pieceCode?:string`，由数据库在全量筛选后、count和分页前应用；仅接受地图73个编号。每条录音可带最小`pieceAssignment`摘要，不包含`mapPoint`、Places坐标/地址/名称或转写正文。已有认证后台地点读取字段契约不因本功能扩大。CSV字段保持不变。
+- `admin-api`认证操作员可调用`setPieceAssignment`，请求`{recordingId,expectedVersion,state,pieceCode,mapVersion}`。`state`为`assigned|needs_review|outside_map`；assigned必须带合法`pieceCode`，另外两种必须为null；`mapVersion`必须为`fukuoka-road-73-v13`。服务端以JWT验证出的操作者身份调用原子RPC，忽略请求中伪造身份字段；版本不匹配返回409 `VERSION_CONFLICT`，录音/展签不存在返回404 `RECORDING_NOT_FOUND`，无权限返回403 `OPERATOR_REQUIRED`。写入和`map_piece_override`审计旧值/新值/操作者/时间同事务完成。
+- 后台将地图估算与人工修正明确区分；点击73块之一可筛选列表，选择列表记录可高亮其板号。窄屏地图在自身区域横向查看。迁移、Edge Function和页面当前仅在`codex/admin-transcription-status`候选分支；未应用生产迁移、未部署Edge、未发布Pages。部署前需单独授权、生产备份/迁移演练和发布验收。
+
 ## 录音后分类 V3（当前契约）
 
 - 固定分类A/B/C/D，固定UUID依次`00000000-0000-4000-8000-000000000001`至`...0004`，名称美食/旅行/相遇/其他回忆。`categories`只返回这四项，nextNumber兼容字段不用于预分配；createCategory/renameCategory拒绝CATEGORIES_FIXED。
