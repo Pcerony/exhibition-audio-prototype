@@ -1,5 +1,5 @@
 import proj4 from 'proj4';
-import { mapPieces, type MapPiece, type MapPieceCode, type MapPoint } from './mapPieces';
+import { mapPieces, type MapPiece, type MapPieceCode, type MapPoint } from './mapPieces.ts';
 
 const WGS84 = 'EPSG:4326';
 const FUKUOKA_PLANE = 'EPSG:6670';

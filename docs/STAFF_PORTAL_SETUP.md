@@ -1,6 +1,6 @@
 # 工作人员网站接入
 
-本候选实现独立入口 `https://voice.heisei.space/#/staff`，不替换完整后台和安卓写卡端。当前未部署，不表示该正式入口已启用。
+工作人员独立入口为 `https://voice.heisei.space/#/staff`，不替换完整后台和安卓写卡端。2026-10-17生产迁移003/004/005、三个Edge Functions和独立共享staff账号已配置并通过云端合成联调；前端随本次PR发布，实际发布完成以GitHub Pages成功记录及线上页面核验为准。
 
 ## 一个共享账号
 
@@ -21,6 +21,8 @@ on conflict (user_id) do update set role = excluded.role;
 登录后从八位研究室成员中选择名字。名单按负责人指定的[研究室成员页](https://www.sodes.org/ja/members.html)录入，排除張彦芳与Zoé Láscari。手机记住会话和所选成员，支持切换成员、退出登录；这是共享账号下自报身份，不是个人账号认证。
 
 ## 发布顺序
+
+以下步骤1至3已于2026-10-17执行；后续重部署仍须复核，不要重复创建共享账号或重复执行迁移。
 
 1. 审查并备份数据库，核对已应用迁移。此分支基于73板地图候选，须依次应用尚未应用的迁移，包括地图相关003/004和 `202610170005_staff_portal.sql`，不可只拷贝前端。
 2. 依次部署本候选修改的 `admin-api`、`public-upload-claim` 和新增的 `staff-api` Edge Functions。前两者包含后台拼装板筛选/修正及新录音的拼装板归属处理；Pages工作流只发布静态前端，不会部署Edge Functions。函数自行验证Bearer JWT和数据库角色，使用既有私有音频bucket和服务端密钥配置；密钥不可放入Vite。

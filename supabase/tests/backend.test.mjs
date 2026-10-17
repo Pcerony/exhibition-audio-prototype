@@ -15,3 +15,9 @@ test('claim endpoint never deletes a candidate object based on a stale lookup', 
   assert.doesNotMatch(source, /\.remove\(/);
   assert.doesNotMatch(source, /removeUnclaimedObject/);
 });
+test('cloud claim map imports resolve without the frontend package environment', () => {
+  const config = JSON.parse(readFileSync('supabase/functions/public-upload-claim/deno.json', 'utf8'));
+  assert.equal(config.imports.proj4, 'npm:proj4@2.22.0');
+  assert.match(readFileSync('src/domain/mapPieceAssignment.ts', 'utf8'), /from '\.\/mapPieces\.ts'/);
+  assert.match(readFileSync('src/domain/mapPieces.ts', 'utf8'), /from '\.\/mapPieceVersion\.ts'/);
+});

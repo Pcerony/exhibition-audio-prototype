@@ -1,5 +1,5 @@
 import geometry from './map-piece-geometry-v13.json' with { type: 'json' };
-import { MAP_PIECE_VERSION } from './mapPieceVersion';
+import { MAP_PIECE_VERSION } from './mapPieceVersion.ts';
 
 if (geometry.version !== MAP_PIECE_VERSION) throw new Error('MAP_GEOMETRY_VERSION_MISMATCH');
 

@@ -4,6 +4,8 @@
 
 `POST staff-api` 验证 Supabase JWT 和 `operator_profiles` 的 staff/operator/admin 角色；staff 仍不能访问 admin-api。共用一个受限 staff 登录账号，成员名单通过 session 返回，选中 memberId 本机按项目/账号记住。姓名是自报身份，不代替认证账号。
 
+工作人员网页仅接受普通账号名`staff`，映射为已确认的内部Auth标识`staff-portal@staff.invalid`，无需收件邮箱。密码仍由Auth验证；网页仅接受`staff`角色会话，误配置为高权限角色时拒绝登录并退出。服务端API为兼容负责人直接核验继续允许operator/admin调用，但共享账号不得具有这两种角色。没有邮件找回流程，密码由负责人通过受控Auth管理重设。
+
 - `session` -> `{userId,role,members:[{id,name}]}`。
 - `list` 接受 `{tagId?,search?,reviewState?:'all'|'unreviewed'|'approved'|'empty',categoryCode?:'A'|'B'|'C'|'D',batchDate?,offset?,limit?}`，limit 1–50，search最多120字符。录音提交时间倒序、空卡最后、ID次排序；类别/状态/日期过滤与检索均在分页之前。返回 `{cards,total}`。卡片含 categoryCode（未分类历史卡为null），只含 id/label/inventoryLabel/status/createdAt/categoryCode/recording，不含 token、provisioning、Storage path。录音含 id/duration/createdAt/location/transcriptionConsent/transcription/pieceAssignment/latestReview。专用认证 DTO 的 transcription 含 status/text/published/version/updatedAt，不含供应商错误。既有 admin list/CSV 继续不含正文，匿名接口只读 ready 且 published 的文字。
 - `save` 接受 `{recordingId,memberId,version,text,published}`。纯文本最多10000字符；published=true 必须非空，保存 ready、递增 version、撤销 AI 租约。需有效当前启用录音、转写同意、既有任务和版本。保存草稿隐藏文本；确认发布后访客可见。并发旧版本返回409 VERSION_CONFLICT，禁用/删除/重置返回404 RECORDING_NOT_FOUND。更新和审计同事务。
@@ -44,7 +46,7 @@
 - 新迁移`202610170004_map_piece_assignment.sql`在录音claim时创建assignment：无地点为`not_applicable`，有地点为`pending`。成功分类的状态为`assigned`、`needs_review`或`outside_map`，字段含`pieceCode|null`、`source:'automatic'|'manual'|null`、`mapVersion|null`、`version`和`updatedAt`。仅73个合法编号可赋值；边界25米内、无效点、图外不伪造明确板号。相同自动写入幂等，任何自动结果都不能覆盖人工修正。
 - `admin-api`认证`list`增加`pieceCode?:string`，由数据库在全量筛选后、count和分页前应用；仅接受地图73个编号。每条录音可带最小`pieceAssignment`摘要，不包含`mapPoint`、Places坐标/地址/名称或转写正文。已有认证后台地点读取字段契约不因本功能扩大。CSV字段保持不变。
 - `admin-api`认证操作员可调用`setPieceAssignment`，请求`{recordingId,expectedVersion,state,pieceCode,mapVersion}`。`state`为`assigned|needs_review|outside_map`；assigned必须带合法`pieceCode`，另外两种必须为null；`mapVersion`必须为`fukuoka-road-73-v13`。服务端以JWT验证出的操作者身份调用原子RPC，忽略请求中伪造身份字段；版本不匹配返回409 `VERSION_CONFLICT`，录音/展签不存在返回404 `RECORDING_NOT_FOUND`，无权限返回403 `OPERATOR_REQUIRED`。写入和`map_piece_override`审计旧值/新值/操作者/时间同事务完成。
-- 后台将地图估算与人工修正明确区分；点击73块之一可筛选列表，选择列表记录可高亮其板号。窄屏地图在自身区域横向查看。迁移、Edge Function和页面当前仅在`codex/admin-transcription-status`候选分支；未应用生产迁移、未部署Edge、未发布Pages。部署前需单独授权、生产备份/迁移演练和发布验收。
+- 后台将地图估算与人工修正明确区分；点击73块之一可筛选列表，选择列表记录可高亮其板号。窄屏地图在自身区域横向查看。2026-10-17迁移和Edge已按负责人上线授权部署，前端随staff PR发布；生产备份/恢复、迁移演练及验收见验证记录。
 
 ## 录音后分类 V3（当前契约）
 

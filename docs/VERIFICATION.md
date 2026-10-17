@@ -1,6 +1,17 @@
 # 验证记录
 
+## 工作人员用户名与生产发布核验（2026-10-17）
+
+- 用户名归一化/内部标识映射、拒绝其他用户名和邮箱、误授admin时退出、普通文本账号表单等回归先失败再实现。20项相关测试通过；最新全量以`npm test -- --run --maxWorkers=1`验证25文件/186项通过。默认并行曾在本机高负载下触发UI超时，单worker重跑通过，未放宽断言或超时。后端47项Deno+3项Node通过；普通/Pages构建通过。
+- 生产数据库建立AES-256-GCM加密pg_dump归档，密钥写macOS钥匙串；归档461条目录项、解密往返校验及隔离PostgreSQL恢复通过。恢复包含38卡、20录音、20转写、1原Auth用户和20对象元数据；音频文件在原有私有导出中，Vault/平台角色和PITR不在本逻辑备份范围。
+- 迁移dry-run仅003/004/005；先生产事务rollback预演，验证卡片、录音、转写/发布、NFC任务网址和原账号未改变，再实际应用。三个Edge已部署；public-upload-claim增加局部Deno proj4映射并使用显式.ts导入，通过真实云端打包。
+- 共享账号由Auth Admin创建、email_confirm=true、不发邮件、不关闭全局邮箱确认。role=staff，真实密码登录通过；密码仅交接至仓库外本机0600文件及钥匙串。
+- `scripts/verify-staff-portal.mjs`云端验证通过：真实共享登录、八成员、匿名401、完整admin-api403、私有草稿不公开、合成音频签名可取、地点审计、同版本并发200/409、批准/隐藏、逐卡历史和直接表访问拒绝。合成数据全部清理，不审核真实卡、不向AI发音频。UTC规范化后的备份/生产指纹确认原四张核心表内容不变。
+- 390px本地浏览器普通用户名提交后进入成员选择。前端发布随本次PR进行，实际成功记录和正式页面核验需完成后再判定上线；不把本地预览或自动化当作双手机/NFC验收。
+
 ## 现场工作人员网站候选（2026-10-17，未部署）
+
+以下为发布前历史记录，最新生产状态以上一节为准。
 
 - `npm test -- --run`：25个测试文件、184项通过。`npm run test:backend`：47项Deno和2项Node通过。普通及`GITHUB_PAGES=true`构建通过，工作人员入口独立懒加载；单个产物均低于500KB。
 - `EMBEDDED_PG_RUNTIME=/tmp/exhibition-pg-runtime node supabase/tests/postgres_staff_portal.mjs`：全部迁移应用到新建、用后移除的真实PostgreSQL通过；两个审核请求只有一个成功，另一个VERSION_CONFLICT；重置后保存与过期AI完成均不能覆盖。
