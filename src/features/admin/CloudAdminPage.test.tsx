@@ -97,6 +97,15 @@ it('shows QR-only identities as QR-only instead of claiming their card is pendin
   expect(await screen.findByText('仅二维码')).toBeVisible();
 });
 
+it('shows verified NFC status after a QR recording receives its physical card', async () => {
+  const r = repository();
+  vi.mocked(r.listTags).mockResolvedValue({ tags: [{ ...tag, entryChannel: 'qr', provisioning: null, attachment: { status: 'verified' } }], total: 1 });
+  show(r, 'zh-CN');
+  await screen.findByText('A001');
+  expect(screen.getByText('读回已验证')).toBeVisible();
+  expect(screen.queryByText('仅二维码')).not.toBeInTheDocument();
+});
+
 it('shows all 73 map pieces, filters records by selected piece and displays estimates as unconfirmed', async () => {
   const r = repository();
   show(r, 'zh-CN');

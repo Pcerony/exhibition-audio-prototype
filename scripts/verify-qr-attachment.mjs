@@ -53,6 +53,8 @@ try {
  const after=(await admin({action:'qrCards',search:tagId})).body.tags[0];
  assert.equal(JSON.stringify({label:after.label,recording:after.recording.id,version:after.version}),original);
  assert.equal(after.attachment.status,'verified');
+ const management=await admin({action:'list',search:after.label});assert.equal(management.status,200);
+ assert.equal(management.body.tags.find(t=>t.id===tagId)?.attachment?.status,'verified');
  stage='independent visitor playback and privacy';
  const playback=await endpoint('public-playback-url',{token});assert.equal(playback.status,200);
  const downloaded=await fetch(playback.body.url);assert.equal(downloaded.status,200);assert.equal((await downloaded.arrayBuffer()).byteLength,audio.length);

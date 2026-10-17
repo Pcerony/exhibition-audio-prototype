@@ -2,6 +2,8 @@
 
 ## 安卓二维码补卡 3.4.0（2026-10-18）
 
+- 后续一致性增量：新增180002仅扩展tag_dto的attachment字段；网页列表/CSV优先显示补卡状态，避免已补卡记录仍标“仅二维码”。新回归先失败再实现；前端211项、57Deno+3Node和PG并发、普通/Pages构建通过。新鲜加密备份与隔离恢复、180002单项dry-run、包含补卡任务/收据的事务rollback指纹核验通过；迁移已应用。APK未改变，不需再次升级。
+
 - SQL/Edge和JVM测试先失败再实现；最终72项JVM、57项Deno/3项Node通过，Android assembleDebug/lintDebug（0错误、保留既有警告），前端210项和普通/Pages构建通过。独立PG多连接验证同设备12次prepare同任务/租约、异设备冲突、固定芯片、跨任务hash唯一、过期续租和8次报告仅一次成功审计。QR任务不进普通库存，录音改变后旧任务失效。
 - 独立审查修复首次报告迟到被租约卡死，以及另一设备晚到成功后旧失败报告堵塞队列；原租约收据/写前登记、身份/版本/完整URL共同保护迟到结果。单元回归覆盖端点kind持久化及旧报告默认nfc、非空NDEF拒绝、只读/截断、编号/录音状态和匹配失败报告清理。不能把纯policy测试称为Android真机测试。
 - 生产迁移前加密备份解密验证并隔离恢复，40 tags/20 recordings/20 transcripts/2 Auth users/20 storage object元数据。180001 dry-run只此一项；生产事务应用后rollback的原tags/recordings/jobs/transcripts/audit/management表指纹不变，私有表和包装RPC权限检查通过。随后应用180001及admin-api。

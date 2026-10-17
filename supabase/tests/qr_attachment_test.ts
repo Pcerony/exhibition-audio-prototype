@@ -45,6 +45,8 @@ Deno.test('QR attachment preserves identity, isolates stock, pins a single chip 
   await rejects({...begin,leaseToken:renewed.leaseToken,chipHash:'b'.repeat(64)},'CHIP_CONFLICT',other);
   // The first verified report may arrive late, even after a different device recovered the same pinned chip.
   await admin(report);
+  const management=(await admin({action:'list',search:qr.label})).tags.find((x:any)=>x.id===qr.id);
+  assert(management?.attachment?.status==='verified' && management.provisioning===null,'management still claims QR-only after NFC attachment');
   await db.query("update public.qr_card_attachments set lease_expires_at=now()-interval '1 hour' where id=$1",[lease.job.id]);
   await admin(report);
   await rejects({...report,status:'failed'},'JOB_CONFLICT');

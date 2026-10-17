@@ -4,9 +4,11 @@ import {resolve} from 'node:path';
 
 const ref=process.argv[process.argv.indexOf('--project-ref')+1];
 if(!process.argv.includes('--allow-remote-rehearsal')||!/^[a-z]{20}$/.test(ref??'')) throw Error('Pass --project-ref and --allow-remote-rehearsal after encrypted backup/restore verification');
-const tables=['tags','recordings','provisioning_jobs','recording_transcriptions','audit_log','management_requests'];
+const migrationName=process.argv.includes('--migration')?process.argv[process.argv.indexOf('--migration')+1]:'202610180001_qr_card_attachments.sql';
+if(!['202610180001_qr_card_attachments.sql','202610180002_qr_attachment_management_status.sql'].includes(migrationName))throw Error('Unsupported migration');
+const tables=['tags','recordings','provisioning_jobs','recording_transcriptions','audit_log','management_requests',...(migrationName.startsWith('202610180002')?['qr_card_attachments','qr_attachment_leases']:[])];
 const fingerprints=tables.map(t=>`md5(coalesce((select jsonb_agg(to_jsonb(r) order by to_jsonb(r)::text)::text from public.${t} r),'[]')) as ${t}`).join(',');
-const migration=readFileSync('supabase/migrations/202610180001_qr_card_attachments.sql','utf8');
+const migration=readFileSync(`supabase/migrations/${migrationName}`,'utf8');
 const directory=resolve('output/private-backups/qr-attachment-preflight');mkdirSync(directory,{recursive:true,mode:0o700});
 const path=resolve(directory,'rehearsal.sql');
 writeFileSync(path,`begin isolation level repeatable read;
