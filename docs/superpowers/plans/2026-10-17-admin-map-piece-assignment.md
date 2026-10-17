@@ -51,12 +51,12 @@
 
 ## Task 3: Persist assignments with race-safe manual precedence
 
-- [ ] Write PGlite SQL tests first for: claim creates `pending` when a location exists and `not_applicable` without one; valid automatic assignment is idempotent; invalid map versions/codes are rejected; `outside_map`/`needs_review` keep no fabricated code; manual update increments version and records old/new/operator/time in `audit_log`; stale version fails; later automatic update cannot replace a manual assignment; deleting/resetting the recording cascades assignment state.
-- [ ] Run `npx --yes deno@2.9.6 test --node-modules-dir=none --no-lock --allow-read supabase/tests/map_piece_assignment_test.ts` and confirm the missing table/functions fail.
-- [ ] Add the new migration (never edit an existing migration). RLS and table grants stay service-role-only. Initialize one assignment row transactionally for every newly claimed recording, using existing saved location only to distinguish pending from not-applicable.
-- [ ] Add service-role-only idempotent automatic assignment RPC and authenticated-operator manual update RPC. The manual RPC checks operator role and expected version, validates the map version/piece code, and writes assignment plus audit entry atomically. Every automatic write uses a conditional update that refuses rows whose source is `manual`.
-- [ ] Replace `admin_list` in this new migration so the optional `pieceCode` filter is applied to the full filtered set before total count and pagination; preserve every existing search, transcription, date, state, and ordering rule.
-- [ ] Run the focused PGlite migration tests and existing backend suite. Commit/tag `checkpoint-admin-map-persistence-2026-10-17` after review of the complete migration diff.
+- [x] Write PGlite SQL tests first for: claim creates `pending` when a location exists and `not_applicable` without one; valid automatic assignment is idempotent; invalid map versions/codes are rejected; `outside_map`/`needs_review` keep no fabricated code; manual update increments version and records old/new/operator/time in `audit_log`; stale version fails; later automatic update cannot replace a manual assignment; deleting/resetting the recording cascades assignment state.
+- [x] Run `npx --yes deno@2.9.6 test --node-modules-dir=none --no-lock --allow-read supabase/tests/map_piece_assignment_test.ts` and confirm the missing table/functions fail.
+- [x] Add the new migration (never edit an existing migration). RLS and table grants stay service-role-only. Initialize one assignment row transactionally for every newly claimed recording, using existing saved location only to distinguish pending from not-applicable.
+- [x] Add service-role-only idempotent automatic assignment RPC and authenticated-operator manual update RPC. The manual RPC checks operator role and expected version, validates the map version/piece code, and writes assignment plus audit entry atomically. Every automatic write uses a conditional update that refuses rows whose source is `manual`.
+- [x] Replace `admin_list` in this new migration so the optional `pieceCode` filter is applied to the full filtered set before total count and pagination; preserve every existing search, transcription, date, state, and ordering rule.
+- [x] Run the focused PGlite migration tests and existing backend suite. Commit/tag `checkpoint-admin-map-persistence-2026-10-17` after review of the complete migration diff.
 
 ## Task 4: Compute after claim without making claim depend on maps
 
