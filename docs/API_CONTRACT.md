@@ -110,6 +110,10 @@ V2补充：job还有tagVersion、leased、leaseExpiresAt、writtenAt（核验成
 - `audit` → `{entries}` 最近100项，字段 `id,action,operatorId,tagId,createdAt`。
 - `maintenance` → `{removed,pending}`，认证运营者处理回收队列。
 
+job 为 `{id,tagId,label,batch,visitorUrl,version,status,errorCode}`。服务端网址固定 `https://voice.heisei.space/#/t/<token>`，Android 不生成 token。
+
+独立 `POST maintenance` worker 要求 `x-maintenance-secret` 匹配 Edge MAINTENANCE_SECRET，无配置失败关闭。定时任务秘密存 Vault，不给客户端。
+
 ### 仅二维码备用入口
 
 - 独立二维码子页面位于`#/staff/qr`（工作人员入口）和`#/admin/qr`（运营入口），不新增网站、账号或角色模型。staff页面只有二维码生成工作流，不需要选择审核署名，也不调用标签列表、试听、审计读取或写卡作业接口。
@@ -117,11 +121,13 @@ V2补充：job还有tagVersion、leased、leaseExpiresAt、writtenAt（核验成
 - 页面在当前浏览器标签页的`sessionStorage`按用户保存已签发条目；新条目自动选中，工作人员可点历史条目重新显示对应二维码。刷新后仍可回看，staff/operator任一后台退出或认证失效时清除历史及当前/待重试请求key，避免后续登录恢复上个账号的二维码；列表仅属本标签页，不是服务端或跨设备历史，不新增API。
 - requestKey按操作者和请求内容幂等：网络结果不确定时重试必须使用原key并取回原网址；新参与者只能由界面显式开始后生成新key。跨操作者或不同请求体重用返回`REQUEST_KEY_CONFLICT`。`qr_issue`审计与标签创建同事务提交。
 - 标签`entryChannel`为`nfc`（历史/常规标签默认）或`qr`。二维码标签不进入Android的任何自动/手动写卡池；管理列表标记“仅二维码”，不能误示为待写卡。参观者扫码后由普通`#/t/<token>`路由进入原录音/收听流程。
-- 将来是否把该同一网址补写到一枚NFC卡是独立后续流程，本接口不绑定实体卡、不改写既有URL，也不承诺现在可以安全补写。
+- 同一网址补写到NFC卡已列入下节候选规划；当前本接口仍不绑定实体卡、不改写既有URL，不支持直接补卡。
 
-job 为 `{id,tagId,label,batch,visitorUrl,version,status,errorCode}`。服务端网址固定 `https://voice.heisei.space/#/t/<token>`，Android 不生成 token。
+### 二维码补卡联动（Proposed，未实现）
 
-独立 `POST maintenance` worker 要求 `x-maintenance-secret` 匹配 Edge MAINTENANCE_SECRET，无配置失败关闭。定时任务秘密存 Vault，不给客户端。
+2026-10-18提出的跨端需求及候选流程见[工程说明](QR_NFC_WORKFLOW.md)。目标是在Android精确查询已录音QR身份，经过专用准备/租约、空白芯片写入完整原URL、物理读回和服务端确认后记录补卡状态；原tagId/token/录音不变，`entryChannel='qr'`保留签发来源，普通写卡池继续排除QR。
+
+当前不存在此补卡API；`createQrEntry`、普通`prepareWrite/leaseJob/provision`均不能当作补卡接口调用。需先冻结来源与物理状态DTO、专用任务/幂等/版本/恢复协议、服务端分页筛选及错误码，再同步后端、契约测试与Android。通用list可能返回QR记录，但Android当前没有消费`entryChannel`或专用补卡入口，不能据此认定已支持联动。
 
 ## Android 与 Repository
 

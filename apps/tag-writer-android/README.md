@@ -1,5 +1,9 @@
 # Native NFC Writer
 
+## QR linkage status
+
+The app and QR web page share cloud tag/recording data, but this app does not yet identify QR-origin entries or support attaching a physical chip to an existing QR recording. Generic list visibility is not proof of NFC provisioning. Do not use new-card creation or the automatic writer pool as a substitute. The proposed same-URL attachment workflow, protocol prerequisites, recovery rules, and acceptance gates are documented in [QR/NFC engineering notes](../../docs/QR_NFC_WORKFLOW.md). This is documentation only, not an APK or API update; current operation guidance is in [the Chinese Android guide](../../docs/ANDROID_V2_GUIDE_ZH.md).
+
 ## 3.1 按需连续写卡
 
 连续写卡使用 `prepareWrite` 自动取得唯一网址，不需要先在网页批量开卡。请求 UUID 在发请求前按服务端和账号保存；超时重试沿用原请求。收到租约后原子保存任务及版本，失败/暂停恢复只重试同一任务，不自动覆盖已完成或已录音卡。冲突后需要核查实体卡并明确重置准备请求。

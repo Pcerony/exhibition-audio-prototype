@@ -9,8 +9,8 @@
 
 - [工作人员主题管理简化](superpowers/specs/2026-10-17-simplify-operator-themes.md)：四主题自动编号保留，工作人员不再手动分类，按日期/搜索/状态管理。
 
-- [卡片不足时的二维码备用入口](superpowers/plans/2026-10-17-qr-fallback.md)：现有运营后台子页面、QR-only标签身份、幂等重试和写卡池隔离。
-- [二维码入口供所有工作人员使用](superpowers/plans/2026-10-17-qr-fallback-all-staff.md)：现有工作人员网站内的独立 QR-only 子页面，继续共用访客流程与数据库。
+- [二维码与 NFC 补卡工程说明](QR_NFC_WORKFLOW.md)：二维码已上线能力、跨端身份关系、Android 补卡候选设计、失败恢复和验收，是二维码流程主文档。
+- [二维码初版计划](superpowers/plans/2026-10-17-qr-fallback.md)、[所有工作人员接入计划](superpowers/plans/2026-10-17-qr-fallback-all-staff.md)：历史实施依据，当前状态以上述工程说明为准。
 
 - [按需开卡与强反馈设计](superpowers/specs/2026-10-17-on-demand-writing-design.md)：取消先开卡的必经步骤、连续写卡弹窗与安全重试。
 
@@ -48,6 +48,8 @@
 
 ## 当前开发重点
 
-卡片当天用尽时，任何工作人员都可从工作人员网站`#/staff/qr`打开独立的二维码备用子页面，为参观者签发QR-only入口；参观者扫码后仍走原访客网址和录音流程，不改变NFC写卡流程，也不新增角色模型。原运营后台`#/admin/qr`入口继续保留。当前增量支持回看本浏览器标签页内已生成的二维码；列表随刷新保留，退出登录时清除。二维码备用入口基础流程已随PR #23发布，历史列表更新已随PR #26发布。二维码跨设备扫码、现场网络和实体NFC仍需按[验证记录](VERIFICATION.md)完成现场验收。
+实体卡不足或参观者手机不能读取NFC时，工作人员可从`#/staff/qr`为其签发二维码；运营入口`#/admin/qr`保留。扫码沿用原访客录音/收听流程，不新增角色。基础流程随PR #23发布，当前标签页的列表回看随PR #26发布；刷新保留列表，退出时清除，不跨手机同步。
+
+2026-10-18新增[Android补卡联动候选设计](QR_NFC_WORKFLOW.md)：录音后找到原QR记录，向空白芯片补写同一稳定URL，而非迁移音频或新建身份。此能力尚未实现，不可把当前APP查询到录音等同于可补卡；计划与现有NFC空卡池隔离，详见[路线图](ROADMAP.md)。二维码双手机、展厅网络和实体NFC仍需按[验证记录](VERIFICATION.md)现场验收。
 
 旧的 `docs/superpowers/specs/2026-09-29-exhibition-audio-nfc-design.md` 和早期原型计划记录了单浏览器原型阶段的决定；如与本文档冲突，以本目录核心文档为准。
