@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "packageName": "space.heisei.voicewriter",
+  "versionCode": 10,
+  "versionName": "3.3.0",
+  "minSdk": 26,
+  "url": "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.3.0-rc1/voice-writer-v3.3.0-candidate.apk",
+  "size": 2555512,
+  "sha256": "77b483c365526357819df43946844d888afec6cb75988b7a09c41854dd41ff20",
+  "notes": {
+    "ja": "アプリ内更新に対応しました。起動時の新バージョン通知、設定からの更新確認、ダウンロードとインストールが可能です。書き込み中・未送信の結果がある間は更新しません。",
+    "zh": "新增应用内更新：打开应用提醒新版，设置内检查更新，直接下载并交由安卓安装。写卡中或存在未同步结果时不会进入更新。",
+    "en": "Added in-app updates: startup notifications, manual checks in Settings, verified downloads and Android installation. Updates wait until writing is stopped and pending results are synced."
+  }
+}
