@@ -8,7 +8,7 @@ function repository(entries: QrEntry[]) {
   return {
     getSession: vi.fn().mockResolvedValue({ userId: 'operator', role: 'operator' as const }),
     signIn: vi.fn(),
-    signOut: vi.fn(),
+    signOut: vi.fn().mockResolvedValue(undefined),
     createQrEntry: vi.fn().mockImplementation(async () => entries.shift()),
   };
 }
@@ -42,6 +42,62 @@ describe('QR fallback page', () => {
     expect(await screen.findByRole('img', { name: 'QRコード U000011' })).toBeVisible();
     expect(repo.createQrEntry).toHaveBeenCalledTimes(2);
     expect(repo.createQrEntry.mock.calls[0][0]).not.toBe(repo.createQrEntry.mock.calls[1][0]);
+  });
+
+  it('keeps issued QRs in a selectable list so a previous participant QR can be displayed again', async () => {
+    const repo = repository([
+      { id: 'tag-1', label: 'U000010', entryChannel: 'qr', visitorUrl: 'https://voice.heisei.space/#/t/token-1' },
+      { id: 'tag-2', label: 'U000011', entryChannel: 'qr', visitorUrl: 'https://voice.heisei.space/#/t/token-2' },
+    ]);
+    const { container } = show(repo);
+
+    fireEvent.click(await screen.findByRole('button', { name: '次の参加者用にQRコードを作成' }));
+    await screen.findByRole('img', { name: 'QRコード U000010' });
+    fireEvent.click(await screen.findByRole('button', { name: '次の参加者' }));
+    await screen.findByRole('img', { name: 'QRコード U000011' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'QRコード U000010 を表示' }));
+
+    expect(container.querySelector('.qr-fallback-code svg')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'QRコード U000010' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'QRコード U000010 を表示' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'QRコード U000011 を表示' })).toHaveAttribute('aria-pressed', 'false');
+    expect(repo.createQrEntry).toHaveBeenCalledTimes(2);
+  });
+
+  it('restores the QR history after reload and lets staff switch to an earlier entry', async () => {
+    const entries: QrEntry[] = [
+      { id: 'tag-1', label: 'U000010', entryChannel: 'qr', visitorUrl: 'https://voice.heisei.space/#/t/token-1' },
+      { id: 'tag-2', label: 'U000011', entryChannel: 'qr', visitorUrl: 'https://voice.heisei.space/#/t/token-2' },
+    ];
+    const firstRepo = repository([...entries]);
+    const first = show(firstRepo);
+    fireEvent.click(await screen.findByRole('button', { name: '次の参加者用にQRコードを作成' }));
+    await screen.findByRole('img', { name: 'QRコード U000010' });
+    fireEvent.click(await screen.findByRole('button', { name: '次の参加者' }));
+    await screen.findByRole('img', { name: 'QRコード U000011' });
+    first.unmount();
+
+    const restoredRepo = repository([entries[1]]);
+    show(restoredRepo);
+    expect(await screen.findByRole('img', { name: 'QRコード U000011' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'QRコード U000010 を表示' }));
+    expect(screen.getByRole('img', { name: 'QRコード U000010' })).toBeVisible();
+  });
+
+  it('clears locally stored QR history when the staff session ends', async () => {
+    const repo = repository([
+      { id: 'tag-1', label: 'U000010', entryChannel: 'qr', visitorUrl: 'https://voice.heisei.space/#/t/token-1' },
+    ]);
+    show(repo, { loginMode: 'staff', backHref: '#/staff' });
+    fireEvent.click(await screen.findByRole('button', { name: '次の参加者用にQRコードを作成' }));
+    await screen.findByRole('img', { name: 'QRコード U000010' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'ログアウト' }));
+    await screen.findByRole('heading', { name: 'ログイン' });
+
+    expect(sessionStorage.getItem('exhibition-qr-history-v1:operator')).toBeNull();
+    expect(sessionStorage.getItem('exhibition-qr-current-request-v1:operator')).toBeNull();
   });
 
   it('retries an uncertain issuance with the same key and restores the current QR after reload', async () => {
