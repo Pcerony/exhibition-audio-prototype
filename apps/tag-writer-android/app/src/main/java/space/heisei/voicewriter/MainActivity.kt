@@ -516,13 +516,18 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                         successGate.success(System.currentTimeMillis())
                         showFeedback(WriteFeedback.SUCCESS, writeEpoch)
                         // Android's ignore callback only fires once this physical tag has left the field.
-                        val accepted = adapter?.ignore(tag, 800, {
+                        val nfc = adapter
+                        if (nfc == null || !nfc.isEnabled) { pauseWriting(); message(t("nfcOff")); return@ui }
+                        val accepted = try { nfc.ignore(tag, 800, {
                             if (resumed && epoch == writeEpoch && flow.stage == WriterFlow.Stage.REMOVAL) {
                                 successGate.removed()
                             }
-                        }, handler) == true
-                        if (!accepted) { pauseWriting(); message(t("paused")) }
-                        else awaitRemoval(writeEpoch)
+                        }, handler) } catch (_: Exception) {
+                            pauseWriting(); message(t("paused")); return@ui
+                        }
+                        // false also means the tag was already removed while the cloud report completed.
+                        successGate.observeIgnoreResult(accepted)
+                        awaitRemoval(writeEpoch)
                     }
                 } else flow.pause()
             } catch (e: Exception) {
