@@ -30,7 +30,7 @@ export type PieceAssignmentUpdate = {
   state: 'assigned' | 'needs_review' | 'outside_map'; pieceCode: string | null; mapVersion: string;
 };
 export type ManagedRecording = NonNullable<Tag['recording']> & { transcriptionSummary?: AdminTranscriptionSummary; pieceAssignment?: PieceAssignmentSummary };
-export type ManagedTag = Omit<Tag, 'recording'> & { recording: ManagedRecording | null; provisioning: ProvisioningJob | null; entryChannel?: 'nfc' | 'qr'; version?: number };
+export type ManagedTag = Omit<Tag, 'recording'> & { recording: ManagedRecording | null; provisioning: ProvisioningJob | null; attachment?: Pick<ProvisioningJob, 'status'> | null; entryChannel?: 'nfc' | 'qr'; version?: number };
 export type OperatorSession = { userId: string; email?: string; role: 'operator' | 'admin' };
 export type QrEntry = { id: string; label: string; visitorUrl: string; entryChannel: 'qr' };
 export type TagQuery = { search?: string; status?: 'unbound' | 'bound' | 'disabled'; transcriptionState?: AdminTranscriptionState; pieceCode?: string; offset?: number; limit?: number; categoryId?: string; batchDate?: string; uncategorized?: boolean; sort?: 'recorded_desc' | 'recorded_asc' | 'number' };

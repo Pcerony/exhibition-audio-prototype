@@ -334,7 +334,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
           tag.batchDate ? "" : tag.batch,
           visitorUrl(tag),
           tag.status ?? (tag.recording ? "bound" : "unbound"),
-          tag.entryChannel === 'qr' && !tag.provisioning ? m.qrOnly : tag.provisioning?.status ?? "pending",
+          tag.attachment?.status ?? (tag.entryChannel === 'qr' && !tag.provisioning ? m.qrOnly : tag.provisioning?.status ?? "pending"),
           tag.recording?.createdAt ?? "",
         ]),
       ],
@@ -784,7 +784,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                             )
                           : "—"}
                       </td>
-                      <td>{tag.entryChannel === 'qr' && !tag.provisioning ? m.qrOnly : m[tag.provisioning?.status ?? "pending"]}</td>
+                      <td>{tag.attachment ? m[tag.attachment.status] : tag.entryChannel === 'qr' && !tag.provisioning ? m.qrOnly : m[tag.provisioning?.status ?? "pending"]}</td>
                       <td className="tag-url">
                         <a
                           href={visitorUrl(tag)}

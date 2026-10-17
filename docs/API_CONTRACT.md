@@ -15,6 +15,8 @@
 
 专用私有租约收据保留原账号/任务及已登记芯片的写前授权，因此首次结果迟到、甚至同任务已被另一设备续租后，原操作者仍可提交原有效 verified 报告；写前 begin 始终要求当前未过期租约。过期不会授权新的物理写入。晚到 failed 不覆盖另一设备的新尝试，也不能降级 verified。客户端看到完全匹配任务/网址/版本已 verified 时，持久移除被成功结果取代的 QR failed 报告，避免堵塞后续补卡。
 
+完整后台 list 的 tag DTO 同样增加 `attachment:QrJob|null`；`entryChannel`只表示最初入口来源，补卡后仍为qr，不能据此断言没有实体卡。列表/CSV用attachment.status显示写卡状态；普通provisioning和普通jobs池不变。
+
 ## 语言提示与工作人员重新转写
 
 新录音`public-upload-claim`可带`transcriptionLanguage`（ja/zh/en/ko/es/fr/de/it/pt/ru/vi/th/id/ar/hi/auto），省略按ja；界面语言zh-CN/zh-TW均映射zh。工作人员`staff-api`新增`retryTranscription`，字段`recordingId/memberId/version/languageHint`；名单身份、同意、当前绑定、版本、每条一分钟限频及provider配置均在服务端验证。list的`transcription`增`languageHint`。重试保留旧文作参考、立即取消公开、撤销旧lease、版本+1并重新排队；相同版本并发仅一条成功，处理中不可重复。审计动作为`staff_retry_transcription`，保留署名/时间/语言，不记正文。新结果仍需人工确认。仅转写原语言，不调用翻译接口；既有20条不批量重跑。
