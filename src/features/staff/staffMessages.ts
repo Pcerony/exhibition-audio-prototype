@@ -1,6 +1,7 @@
 const zh = {
   language: '语言',
   title: '现场审核',
+  qrFallback: '二维码备用入口',
   sourceLanguage: '录音语言',
   autoLanguage: '自动识别',
   retryTranscription: '重新 AI 转写',
@@ -103,6 +104,7 @@ export type StaffMessages = typeof zh;
 const ja: StaffMessages = {
   language: 'Language / 言語',
   title: '現場レビュー',
+  qrFallback: 'QRコード予備受付',
   sourceLanguage: '録音の言語',
   autoLanguage: '自動判別',
   retryTranscription: 'AIで再文字起こし',
@@ -204,6 +206,7 @@ const ja: StaffMessages = {
 const en: StaffMessages = {
   language: 'Language',
   title: 'Staff review',
+  qrFallback: 'QR fallback',
   sourceLanguage: 'Recording language',
   autoLanguage: 'Detect automatically',
   retryTranscription: 'Retry AI transcription',

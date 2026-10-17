@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QrEntry } from '../../storage/adminRepository';
 import { I18nProvider } from '../../i18n/I18nProvider';
 import { QrFallbackPage } from './QrFallbackPage';
@@ -13,8 +13,8 @@ function repository(entries: QrEntry[]) {
   };
 }
 
-function show(repo: ReturnType<typeof repository>) {
-  const view = render(<I18nProvider><QrFallbackPage repository={repo} /></I18nProvider>);
+function show(repo: ReturnType<typeof repository>, options: { loginMode?: 'operator' | 'staff'; backHref?: string } = {}) {
+  const view = render(<I18nProvider><QrFallbackPage repository={repo} {...options} /></I18nProvider>);
   return view;
 }
 
@@ -22,6 +22,7 @@ beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
 });
+afterEach(() => vi.restoreAllMocks());
 
 describe('QR fallback page', () => {
   it('renders a server-issued QR and replaces it only after explicitly starting the next participant', async () => {
@@ -69,5 +70,27 @@ describe('QR fallback page', () => {
 
     expect(repo.createQrEntry).not.toHaveBeenCalled();
     expect(await screen.findByRole('alert')).toHaveTextContent('操作を完了できませんでした。接続を確認して再試行してください。');
+  });
+
+  it('uses the existing shared staff login and returns to the staff portal', async () => {
+    const repo = repository([]);
+    localStorage.setItem('exhibition-audio-language-v2', 'zh-CN');
+    repo.getSession.mockResolvedValue(null);
+    repo.signIn.mockResolvedValue({ userId: 'staff-user', role: 'staff' });
+    repo.createQrEntry.mockResolvedValue({
+      id: 'staff-qr',
+      label: 'U000020',
+      entryChannel: 'qr',
+      visitorUrl: 'https://voice.heisei.space/#/t/staff-opaque-token',
+    });
+    show(repo, { loginMode: 'staff', backHref: '#/staff' });
+    expect(await screen.findByLabelText('账号名')).toHaveValue('staff');
+    expect(screen.getByRole('link', { name: '返回工作人员页面' })).toHaveAttribute('href', '#/staff');
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: '登录' }));
+    await waitFor(() => expect(repo.signIn).toHaveBeenCalledWith('staff', 'secret'));
+    fireEvent.click(await screen.findByRole('button', { name: '为下一位参与者生成二维码' }));
+    expect(await screen.findByRole('img', { name: '二维码 U000020' })).toBeVisible();
+    expect(repo.createQrEntry).toHaveBeenCalledOnce();
   });
 });

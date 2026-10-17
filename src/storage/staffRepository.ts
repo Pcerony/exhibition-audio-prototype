@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { AdminAuth } from './cloudAdminRepository';
-import type { PieceAssignmentSummary } from './adminRepository';
+import type { PieceAssignmentSummary, QrEntry } from './adminRepository';
 import type { MemoryLocation } from '../domain/location';
 import type { MemoryCategoryCode } from '../domain/classification';
 import type { TranscriptionLanguage } from '../domain/transcriptionLanguage';
@@ -61,6 +61,7 @@ export interface StaffRepository {
   getSession(): Promise<StaffSession | null>;
   signIn(username: string, password: string): Promise<StaffSession>;
   signOut(): Promise<void>;
+  createQrEntry(requestKey: string): Promise<QrEntry>;
   retryTranscription(recordingId: string, memberId: string, version: number, languageHint: TranscriptionLanguage): Promise<void>;
   list(query: StaffQuery): Promise<{ cards: StaffCard[]; total: number }>;
   save(
@@ -153,6 +154,7 @@ export function createCloudStaffRepository(config: {
       await config.auth.signOut();
       acceptedUserId = null;
     },
+    createQrEntry: (requestKey) => request<QrEntry>('createQrEntry', { requestKey }),
     subscribeAuth: config.auth.onSessionChange,
     list: (query) => request('list', query),
     async retryTranscription(recordingId, memberId, version, languageHint) {

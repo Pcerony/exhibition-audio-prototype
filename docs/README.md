@@ -10,6 +10,7 @@
 - [工作人员主题管理简化](superpowers/specs/2026-10-17-simplify-operator-themes.md)：四主题自动编号保留，工作人员不再手动分类，按日期/搜索/状态管理。
 
 - [卡片不足时的二维码备用入口](superpowers/plans/2026-10-17-qr-fallback.md)：现有运营后台子页面、QR-only标签身份、幂等重试和写卡池隔离。
+- [二维码入口供所有工作人员使用](superpowers/plans/2026-10-17-qr-fallback-all-staff.md)：现有工作人员网站内的独立 QR-only 子页面，继续共用访客流程与数据库。
 
 - [按需开卡与强反馈设计](superpowers/specs/2026-10-17-on-demand-writing-design.md)：取消先开卡的必经步骤、连续写卡弹窗与安全重试。
 
@@ -47,6 +48,6 @@
 
 ## 当前开发重点
 
-卡片当天用尽时，工作人员可从现有运营后台打开独立的二维码备用子页面，为参观者签发QR-only入口；参观者扫码后仍走原访客网址和录音流程，不改变NFC写卡流程，也不新增权限模型。迁移007、兼容的`admin-api`和Pages前端均已发布。二维码跨设备扫码、现场网络和实体NFC仍需按[验证记录](VERIFICATION.md)完成现场验收。
+卡片当天用尽时，任何工作人员都可从工作人员网站打开独立的二维码备用子页面，为参观者签发QR-only入口；参观者扫码后仍走原访客网址和录音流程，不改变NFC写卡流程，也不新增角色模型。原运营后台入口继续保留。二维码跨设备扫码、现场网络和实体NFC仍需按[验证记录](VERIFICATION.md)完成现场验收。
 
 旧的 `docs/superpowers/specs/2026-09-29-exhibition-audio-nfc-design.md` 和早期原型计划记录了单浏览器原型阶段的决定；如与本文档冲突，以本目录核心文档为准。

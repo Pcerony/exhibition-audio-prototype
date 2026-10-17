@@ -21,7 +21,7 @@
 
 ## 访问控制
 
-- 二维码备用页面复用现有运营后台登录与`operator/admin`后端授权，不增加权限级别；其前端仅暴露单个二维码创建动作。服务端幂等创建一个不透明访客token身份并写`qr_issue`审计，不产生写卡任务。二维码公开网址仍只允许原有访客查询/录音/播放能力。
+- 二维码备用页面复用现有工作人员登录（`#/staff/qr`）或运营后台登录（`#/admin/qr`），不增加账号或角色模型。工作人员页面的界面只有二维码创建流程；服务端沿用staff-api认证会话，以原子事务幂等创建不透明访客token身份并写`qr_issue`审计，不产生写卡任务。二维码公开网址仍只允许原有访客查询/录音/播放能力。
 
 - `service_role`、数据库密码、加密密钥仅保存在 Supabase/GitHub Actions secrets 或受控 server 环境；不得进入 Vite `VITE_*` 环境变量、浏览器 bundle、Android APK、CSV 或日志。
 - 所有 exposed Postgres 表启用 RLS；除明确需要的调用路径外撤销 anon/authenticated 直接写入权限。Storage 默认 private，并用最小权限策略。

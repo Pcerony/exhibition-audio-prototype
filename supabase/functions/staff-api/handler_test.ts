@@ -70,6 +70,26 @@ Deno.test('staff retry validates language and version, requires provider, and fo
   const response=await fixture('staff',true,null,{message:code+' secret'}).handler(request(body));equal(response.status,status);equal(await response.json(),{code});
  }
 });
+Deno.test('authenticated staff can issue QR entries using only the validated idempotency key', async () => {
+ const qr={id, label:'U000010', entryChannel:'qr', visitorUrl:'https://voice.heisei.space/#/t/opaque-token'};
+ const f=fixture('staff',true,qr);
+ const response=await f.handler(request({action:'createQrEntry',requestKey:id,operatorId:'forged'}));
+ equal(response.status,200);
+ equal(await response.json(),qr);
+ equal(f.calls,[{name:'staff_action',args:{p_operator:id,p_body:{action:'createQrEntry',requestKey:id}}}]);
+});
+Deno.test('staff QR issuance rejects malformed keys and maps idempotency conflicts', async () => {
+ const invalid=fixture();
+ equal((await invalid.handler(request({action:'createQrEntry',requestKey:'bad'}))).status,400);
+ equal(invalid.calls,[]);
+ const conflict=fixture('staff',true,null,{message:'REQUEST_KEY_CONFLICT database details'});
+ const response=await conflict.handler(request({action:'createQrEntry',requestKey:id}));
+ equal(response.status,409);
+ equal(await response.json(),{code:'REQUEST_KEY_CONFLICT'});
+ const forbidden=fixture('visitor');
+ equal((await forbidden.handler(request({action:'createQrEntry',requestKey:id}))).status,403);
+ equal(forbidden.calls,[]);
+});
 Deno.test(
   'staff API denies anonymous, forged and non-member identities',
   async () => {
