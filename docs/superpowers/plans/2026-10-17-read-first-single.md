@@ -17,8 +17,10 @@
 - [x] 新增SingleCard策略；NfcReader提供完整指纹；NfcWriter清空并核验及写前同芯片校验。
 - [x] MainActivity单张改读卡起步与操作确认；三语；Api单张新卡幂等创建，持久准备独立隔离。
 - [x] 安卓62项JVM测试、assembleDebug/lint通过，0错误/5项既有警告。独立审查发现并修复读回失败后可能重复写同URL至另一芯片的问题：只有确定未写入的失败可解除不确定标记，其余需核查后明确丢弃准备。复审无阻塞项。
-- [ ] 发布3.2.0/code9试用包，核验远端附件并补干净发行前端/后端回归。
+- [x] 发布3.2.0/code9试用包，远端附件大小和SHA256与本地一致。干净发行归档前端149项、2项Node+30项Deno及普通/Pages构建全部通过。
 
 仅改Android及本轮专属文档。共享目录其他访客/地图/工程文档改动不纳入提交，发行用干净基线。实体空卡/外部卡/已录音/换卡拒绝、清空读回及成功反馈仍须实体手机验收。
 
 APK所有DEX检查公开配置与无服务端密钥，沿用原Android Debug证书 `48a52ba6a1cdc413f5ee828b11cd922a4604951299547b7cea37c2e901d04b3d`。SHA256 `b878cf88115817b54d00f2398c9832f11e81dcdfddb191408f9c5558acb932e0`。无连接设备或模拟器，不以JVM/构建代替实体NFC验收；无生产数据写入或schema变更。
+
+隔离发行提交 `eeea3fb` 只含本轮12个安卓与专属文档文件；工作目录其他访客/地图/文档编辑未纳入。下载：`https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.2.0-rc1/voice-writer-v3.2.0-candidate.apk`。
