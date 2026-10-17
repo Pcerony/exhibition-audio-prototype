@@ -3,7 +3,7 @@ import { json, preflight, readJson } from '../_shared/http.ts';
 import { runMaintenance } from '../_shared/maintenance.ts';
 import { parseMemoryLocation } from '../../../src/domain/location.ts';
 
-const actions = new Set(['session', 'list', 'createBatch', 'reset', 'setEnabled', 'playback', 'jobs', 'provision', 'audit', 'maintenance', 'categories', 'createCategory', 'renameCategory', 'createCards', 'bulkPreview', 'bulkApply', 'leaseJob', 'nextJob', 'releaseJob', 'getTranscription', 'retryTranscription', 'saveTranscription']);
+const actions = new Set(['session', 'list', 'createBatch', 'createQrEntry', 'reset', 'setEnabled', 'playback', 'jobs', 'provision', 'audit', 'maintenance', 'categories', 'createCategory', 'renameCategory', 'createCards', 'bulkPreview', 'bulkApply', 'leaseJob', 'nextJob', 'releaseJob', 'getTranscription', 'retryTranscription', 'saveTranscription']);
 actions.add('prepareWrite');
 actions.add('setPieceAssignment');
 const transcriptionStates = new Set(['not_consented', 'pending', 'processing', 'draft', 'published', 'failed']);
@@ -43,6 +43,9 @@ export function createHandler(getClient: () => SupabaseClient, isTranscriptionCo
         && (typeof body.pieceCode !== 'string' || !mapPieceCode.test(body.pieceCode))) return json({ code: 'REQUEST_INVALID' }, 400);
       for (const field of ['tagId', 'recordingId', 'jobId', 'requestKey', 'categoryId', 'targetCategoryId']) {
         if (field in body && (typeof body[field] !== 'string' || !uuid.test(body[field]))) return json({ code: 'REQUEST_INVALID' }, 400);
+      }
+      if (body.action === 'createQrEntry' && (typeof body.requestKey !== 'string' || !uuid.test(body.requestKey))) {
+        return json({ code: 'REQUEST_INVALID' }, 400);
       }
       if (body.action === 'prepareWrite' && (
         typeof body.deviceId !== 'string' || !body.deviceId.trim() || body.deviceId.length > 120

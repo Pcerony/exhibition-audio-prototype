@@ -18,6 +18,7 @@ import {
   FileText,
   MapPin,
   RefreshCw,
+  QrCode,
 } from "lucide-react";
 import { MAP_PIECE_VERSION } from '../../domain/mapPieceVersion';
 import { MAP_PIECE_CODES } from '../../domain/mapPieceCodes';
@@ -331,7 +332,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
           tag.batchDate ? "" : tag.batch,
           visitorUrl(tag),
           tag.status ?? (tag.recording ? "bound" : "unbound"),
-          tag.provisioning?.status ?? "pending",
+          tag.entryChannel === 'qr' && !tag.provisioning ? m.qrOnly : tag.provisioning?.status ?? "pending",
           tag.recording?.createdAt ?? "",
         ]),
       ],
@@ -404,6 +405,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
         </div>
         <div className="admin-header-right">
           <LanguageSwitch />
+          {session && <a className="icon-button" href="#/admin/qr" aria-label={m.qrFallback} title={m.qrFallback}><QrCode size={18} /></a>}
           {(session || roleError) &&
             icon(
               m.logout,
@@ -779,7 +781,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                             )
                           : "—"}
                       </td>
-                      <td>{m[tag.provisioning?.status ?? "pending"]}</td>
+                      <td>{tag.entryChannel === 'qr' && !tag.provisioning ? m.qrOnly : m[tag.provisioning?.status ?? "pending"]}</td>
                       <td className="tag-url">
                         <a
                           href={visitorUrl(tag)}

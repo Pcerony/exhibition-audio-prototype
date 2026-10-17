@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { TranscriptionResult } from '../domain/transcription';
-import type { AdminRepository, AuditEntry, Category, ManagedTag, OperatorSession, PieceAssignmentSummary, PieceAssignmentUpdate, ProvisioningJob } from './adminRepository';
+import type { AdminRepository, AuditEntry, Category, ManagedTag, OperatorSession, PieceAssignmentSummary, PieceAssignmentUpdate, ProvisioningJob, QrEntry } from './adminRepository';
 export type AdminAuth = {
   getSession(): Promise<{ accessToken: string; userId: string; email?: string } | null>;
   signIn(email: string, password: string): Promise<void>;
@@ -35,6 +35,7 @@ export function createCloudAdminRepository(config: { url: string; key: string; a
     async listCategories() { return (await request<{ categories: Category[] }>('categories')).categories; },
     async createCategory(name, requestKey) { return (await request<{ category: Category }>('createCategory', { name, requestKey })).category; },
     async renameCategory(categoryId, name) { await request('renameCategory', { categoryId, name }); },
+    createQrEntry: (requestKey) => request<QrEntry>('createQrEntry', { requestKey }),
     createCards: (count, requestKey) => request('createCards', { count, requestKey, protocolVersion: 3 }),
     previewBulk: (tagIds, operation, targetCategoryId) => request('bulkPreview', { tagIds, operation, ...(targetCategoryId ? { targetCategoryId } : {}) }),
     async applyBulk(input) { await request('bulkApply', input); },
