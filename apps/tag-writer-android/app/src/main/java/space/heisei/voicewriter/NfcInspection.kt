@@ -1,7 +1,7 @@
 package space.heisei.voicewriter
 
 data class InspectedRecord(val kind: String, val value: String, val bytes: Int)
-data class InspectedTag(val kind: String, val records: List<InspectedRecord> = emptyList(), val writable: Boolean? = null, val truncated: Boolean = false)
+data class InspectedTag(val kind: String, val records: List<InspectedRecord> = emptyList(), val writable: Boolean? = null, val truncated: Boolean = false, val fingerprint: String = "")
 data class InspectedCard(val url: String, val state: String, val card: Card? = null)
 
 object NfcInspection {
