@@ -260,7 +260,33 @@
   font-size: 12px;
 }
 .transcription-status {
+  display: inline-block;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.transcription-status.state-not_consented {
+  color: #555d63;
+  background: #edf0f2;
+}
+.transcription-status.state-pending,
+.transcription-status.state-draft {
+  color: #765000;
+  background: #fff1c2;
+}
+.transcription-status.state-processing {
+  color: #145a7a;
+  background: #dff2fa;
+}
+.transcription-status.state-published {
   color: #15583d;
+  background: #e3f0e9;
+}
+.transcription-status.state-failed {
+  color: #982c35;
+  background: #fbe5e6;
 }
 .cloud-pagination {
   display: flex;

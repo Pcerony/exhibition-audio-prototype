@@ -74,7 +74,8 @@ function repository(): AdminRepository {
     applyBulk: vi.fn().mockResolvedValue(undefined),
   };
 }
-function show(r: AdminRepository) {
+function show(r: AdminRepository, locale?: string) {
+  if (locale) localStorage.setItem('exhibition-audio-language-v2', locale);
   render(
     <I18nProvider>
       <CloudAdminPage repository={r} baseUrl="https://example.test" />
@@ -336,6 +337,36 @@ it('lists recordings without theme filters while date, search and status remain 
     expect(query).not.toHaveProperty('categoryId');
     expect(query).not.toHaveProperty('uncategorized');
   }
+});
+it('shows transcription consent and progress without text and filters the global list state', async () => {
+  const r = repository();
+  const summaries = [
+    { consented: false, status: null, published: false },
+    { consented: true, status: 'pending' as const, published: false },
+    { consented: true, status: 'processing' as const, published: false },
+    { consented: true, status: 'ready' as const, published: false },
+    { consented: true, status: 'ready' as const, published: true },
+    { consented: true, status: 'failed' as const, published: false },
+  ];
+  vi.mocked(r.listTags).mockResolvedValue({
+    tags: summaries.map((transcriptionSummary, index) => ({
+      ...tag,
+      id: `tag-${index}`,
+      label: `A00${index}`,
+      recording: { ...tag.recording!, id: `recording-${index}`, transcriptionSummary },
+    })),
+    total: summaries.length,
+  });
+  show(r, 'zh-CN');
+  await waitFor(() => expect(document.querySelectorAll('.transcription-status')).toHaveLength(6));
+  expect(Array.from(document.querySelectorAll('.transcription-status')).map((node) => node.textContent)).toEqual([
+    '未同意', '待处理', '处理中', '草稿待审核', '已发布', '失败',
+  ]);
+  expect(screen.queryByText('private-sentinel')).not.toBeInTheDocument();
+  fireEvent.click(screen.getAllByRole('button', { name: '文字转写' })[0]);
+  expect(await screen.findByRole('dialog')).toBeVisible();
+  fireEvent.change(screen.getByLabelText('转写状态'), { target: { value: 'draft' } });
+  await waitFor(() => expect(r.listTags).toHaveBeenLastCalledWith(expect.objectContaining({ transcriptionState: 'draft' })));
 });
 it('keeps reset and delete available for mixed recorded and empty selection', async () => {
   const r = repository();

@@ -18,6 +18,7 @@ import {
   FileText,
 } from "lucide-react";
 import type {
+  AdminTranscriptionState,
   AdminRepository,
   AuditEntry,
   ManagedTag,
@@ -46,6 +47,15 @@ type BulkDialog = {
   requestKey: string;
 };
 const PAGE_SIZE = 50;
+function transcriptionListState(recording: ManagedTag['recording']): AdminTranscriptionState | null {
+  if (!recording) return null;
+  const summary = recording.transcriptionSummary;
+  if (!summary?.consented) return 'not_consented';
+  if (summary.status === 'processing') return 'processing';
+  if (summary.status === 'ready') return summary.published ? 'published' : 'draft';
+  if (summary.status === 'failed') return 'failed';
+  return 'pending';
+}
 function download(rows: (string | number)[][], name: string) {
   const content = rows
     .map((row) =>
@@ -87,6 +97,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<TagQuery["status"]>();
+  const [transcriptionState, setTranscriptionState] = useState<TagQuery['transcriptionState']>();
   const [sort, setSort] = useState<TagQuery["sort"]>("recorded_desc");
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
@@ -181,6 +192,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
       .listTags({
         search,
         status,
+        ...(transcriptionState ? { transcriptionState } : {}),
         batchDate: batchDate || undefined,
         sort,
         offset,
@@ -205,7 +217,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
     return () => {
       active = false;
     };
-  }, [repository, session, search, status, batchDate, sort, offset, revision]);
+  }, [repository, session, search, status, transcriptionState, batchDate, sort, offset, revision]);
   const refresh = () => setRevision((v) => v + 1);
   async function create(request: CreateRequest) {
     setPending(request);
@@ -527,6 +539,23 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                 ))}
               </select>
               <select
+                aria-label={m.transcriptionFilter}
+                value={transcriptionState ?? ""}
+                disabled={!!bulk}
+                onChange={(e) => {
+                  setTranscriptionState((e.target.value || undefined) as TagQuery['transcriptionState']);
+                  setOffset(0);
+                }}
+              >
+                <option value="">{m.all}</option>
+                <option value="not_consented">{m.transcriptionNotConsented}</option>
+                <option value="pending">{m.transcriptionPending}</option>
+                <option value="processing">{m.transcriptionProcessing}</option>
+                <option value="draft">{m.transcriptionDraft}</option>
+                <option value="published">{m.transcriptionPublished}</option>
+                <option value="failed">{m.transcriptionFailed}</option>
+              </select>
+              <select
                 aria-label={n.sort}
                 value={sort}
                 disabled={!!bulk}
@@ -582,6 +611,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                     </th>
                     <th>{m.label}</th>
                     <th>{m.recording}</th>
+                    <th>{m.transcriptionFilter}</th>
                     <th>{n.recordedAt}</th>
                     <th>{m.write}</th>
                     <th>{m.url}</th>
@@ -589,8 +619,17 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {tags.map((tag) => (
-                    <tr key={tag.id}>
+                  {tags.map((tag) => {
+                    const rowTranscriptionState = transcriptionListState(tag.recording);
+                    const rowTranscriptionLabel = rowTranscriptionState ? {
+                      not_consented: m.transcriptionNotConsented,
+                      pending: m.transcriptionPending,
+                      processing: m.transcriptionProcessing,
+                      draft: m.transcriptionDraft,
+                      published: m.transcriptionPublished,
+                      failed: m.transcriptionFailed,
+                    }[rowTranscriptionState] : '—';
+                    return <tr key={tag.id}>
                       <td>
                         <input
                           type="checkbox"
@@ -625,6 +664,11 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                         </span>
                         <small>{tag.recording?.nickname}</small>
                         {tag.recording?.location && <a href={memoryLocationUrl(tag.recording.location)!} target="_blank" rel="noreferrer">{locale === 'ja-JP' ? '思い出の場所' : '回忆地点'}</a>}
+                      </td>
+                      <td className="transcription-status-cell">
+                        {rowTranscriptionState
+                          ? <span className={`transcription-status state-${rowTranscriptionState}`}>{rowTranscriptionLabel}</span>
+                          : '—'}
                       </td>
                       <td className="time-cell">
                         {tag.recording
@@ -702,8 +746,8 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
                           />
                         )}
                       </td>
-                    </tr>
-                  ))}
+                    </tr>;
+                  })}
                 </tbody>
               </table>
               {!loading && !tags.length && (
