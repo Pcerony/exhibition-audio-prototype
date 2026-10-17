@@ -8,6 +8,14 @@
 - `admin-api`已部署；PR #21合并后Pages运行39041369533中的前端测试、后端测试、Pages构建和部署全部成功。Playwright正式站点检查`https://voice.heisei.space/#/admin/qr`可到达并显示既有日语后台登录页；未输入真实工作人员凭据、未签发生产二维码。
 - 真实工作人员签发、独立手机扫码录音/播放、展厅网络及实体NFC读回仍待现场验收；自动化和线上登录页检查不能替代这些设备验收。
 
+## 所有工作人员二维码入口（2026-10-17）
+
+- `npm test -- --run`：27个测试文件、204项通过；`npm run test:backend`：3项Node检查、55项Deno测试通过；独立PostgreSQL会话验证staff/admin两入口共享requestKey时只创建一条记录并保持NFC写卡池隔离。普通构建、Pages构建及`git diff --check`通过。
+- 生产迁移dry-run仅列`202610170008_staff_qr_fallback.sql`。新鲜AES-256-GCM加密pg_dump包含`public/auth/storage/supabase_migrations`，密钥留在macOS钥匙串；解密认证和隔离PostgreSQL恢复通过。生产事务内应用后rollback的预演确认tags、recordings、provisioning_jobs、audit_log和management_requests行数不变。
+- 迁移008与`staff-api`已部署。只读查询确认迁移已登记、service_role可调用现有staff/admin包装RPC、authenticated不可直接调用、内部QR事务函数对service_role也不可直接执行。匿名`createQrEntry` HTTP请求返回`AUTH_REQUIRED`/401，没有创建生产二维码。
+- PR #23以提交`4c97a999`合并；Pages运行39042568706中的测试、后端检查、Pages构建和部署均成功。Playwright检查正式`#/staff/qr`显示staff登录及单一二维码流程，`#/staff`与`#/admin/qr`仍分别显示既有staff/运营登录页；390×844页面宽度为390px，无横向溢出。
+- 未输入真实staff密码、未在生产签发二维码。真实工作人员签发、独立设备扫码录音与另一设备播放、展厅网络及实体NFC读回仍待现场验收。
+
 ## 原语言提示与重新AI转写（2026-10-17）
 
 - `npm test -- --run --maxWorkers=1`通过26文件/195项；`npm run test:backend`通过3项Node和51项Deno。普通及Pages构建通过。新增用例先失败再实现，覆盖访客locale映射、手选语言、取消确认、版本冲突保留编辑、等待期间禁用批准及立即重新打开详情的状态竞争。
