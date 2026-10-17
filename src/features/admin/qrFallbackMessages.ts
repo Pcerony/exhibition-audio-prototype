@@ -19,6 +19,8 @@ export const qrFallbackMessages = {
     staffAccountError: 'このアカウントにはスタッフ権限がありません。',
     error: '操作を完了できませんでした。接続を確認して再試行してください。',
     qrLabel: 'QRコード {{label}}',
+    history: '発行済みQRコード',
+    selectQr: 'QRコード {{label}} を表示',
   },
   'zh-CN': {
     title: '二维码备用入口',
@@ -40,5 +42,7 @@ export const qrFallbackMessages = {
     staffAccountError: '该账号没有工作人员权限。',
     error: '操作未完成。请检查连接后重试。',
     qrLabel: '二维码 {{label}}',
+    history: '已生成的二维码',
+    selectQr: '查看二维码 {{label}}',
   },
 } as const;

@@ -180,6 +180,7 @@ function show(r: AdminRepository, locale?: string) {
 }
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   vi.stubGlobal(
     "confirm",
     vi.fn(() => true),
@@ -252,14 +253,47 @@ it("clears protected data on search role denial and can sign out", async () => {
   const r = repository();
   show(r);
   await screen.findByText("A001");
+  sessionStorage.setItem('exhibition-qr-history-v1:op', 'history');
+  sessionStorage.setItem('exhibition-qr-current-request-v1:op', 'current');
+  sessionStorage.setItem('exhibition-qr-pending-request-v1:op', 'pending');
   vi.mocked(r.listTags).mockRejectedValueOnce(new Error("OPERATOR_REQUIRED"));
   fireEvent.change(screen.getByLabelText("検索"), {
     target: { value: "denied" },
   });
   await screen.findByRole("button", { name: "ログイン" });
   expect(screen.queryByText("A001")).not.toBeInTheDocument();
+  expect(sessionStorage.getItem('exhibition-qr-history-v1:op')).toBeNull();
+  expect(sessionStorage.getItem('exhibition-qr-current-request-v1:op')).toBeNull();
+  expect(sessionStorage.getItem('exhibition-qr-pending-request-v1:op')).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "ログアウト" }));
   await waitFor(() => expect(r.signOut).toHaveBeenCalled());
+});
+it("clears QR history when an authenticated operator logs out", async () => {
+  const r = repository();
+  show(r);
+  await screen.findByText("A001");
+  sessionStorage.setItem('exhibition-qr-history-v1:op', JSON.stringify([
+    { id: 'qr-tag', label: 'U000010', entryChannel: 'qr', visitorUrl: 'https://voice.heisei.space/#/t/opaque-token' },
+  ]));
+  sessionStorage.setItem('exhibition-qr-current-request-v1:op', 'request-current');
+  sessionStorage.setItem('exhibition-qr-pending-request-v1:op', 'request-pending');
+  fireEvent.click(screen.getByRole("button", { name: "ログアウト" }));
+  await waitFor(() => expect(r.signOut).toHaveBeenCalled());
+  expect(sessionStorage.getItem('exhibition-qr-history-v1:op')).toBeNull();
+  expect(sessionStorage.getItem('exhibition-qr-current-request-v1:op')).toBeNull();
+  expect(sessionStorage.getItem('exhibition-qr-pending-request-v1:op')).toBeNull();
+});
+it("clears QR state after an initial operator session role denial", async () => {
+  sessionStorage.setItem('exhibition-qr-history-v1:previous-user', 'history');
+  sessionStorage.setItem('exhibition-qr-current-request-v1:previous-user', 'current');
+  sessionStorage.setItem('exhibition-qr-pending-request-v1:previous-user', 'pending');
+  const r = repository();
+  vi.mocked(r.getSession).mockRejectedValueOnce(new Error("OPERATOR_REQUIRED"));
+  show(r);
+  await screen.findByRole("button", { name: "ログイン" });
+  expect(sessionStorage.getItem('exhibition-qr-history-v1:previous-user')).toBeNull();
+  expect(sessionStorage.getItem('exhibition-qr-current-request-v1:previous-user')).toBeNull();
+  expect(sessionStorage.getItem('exhibition-qr-pending-request-v1:previous-user')).toBeNull();
 });
 it("gates protected data behind auth", async () => {
   const r = repository();

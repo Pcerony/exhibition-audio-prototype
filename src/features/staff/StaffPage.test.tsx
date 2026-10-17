@@ -8,6 +8,7 @@ import type {
   StaffSession,
 } from '../../storage/staffRepository';
 import { StaffPage } from './StaffPage';
+import { QrFallbackPage } from '../admin/QrFallbackPage';
 vi.mock('../visitor/MemoryLocationMap', () => ({
   MemoryLocationMap: () => <div>Google map</div>,
 }));
@@ -102,10 +103,23 @@ function show(repo: StaffRepository) {
 }
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   localStorage.setItem('exhibition-audio-language-v2', 'zh-CN');
   vi.restoreAllMocks();
 });
 describe('staff website', () => {
+  it('clears all QR fallback state after an initial staff session role denial', async () => {
+    sessionStorage.setItem('exhibition-qr-history-v1:previous-user', 'history');
+    sessionStorage.setItem('exhibition-qr-current-request-v1:previous-user', 'current');
+    sessionStorage.setItem('exhibition-qr-pending-request-v1:previous-user', 'pending');
+    const repo = repository();
+    vi.mocked(repo.getSession).mockRejectedValueOnce(new Error('STAFF_REQUIRED'));
+    show(repo);
+    expect(await screen.findByRole('button', { name: '登录' })).toBeVisible();
+    expect(sessionStorage.getItem('exhibition-qr-history-v1:previous-user')).toBeNull();
+    expect(sessionStorage.getItem('exhibition-qr-current-request-v1:previous-user')).toBeNull();
+    expect(sessionStorage.getItem('exhibition-qr-pending-request-v1:previous-user')).toBeNull();
+  });
   it('offers the isolated QR page to authenticated staff before member selection', async () => {
     const repo = repository();
     show(repo);
@@ -353,6 +367,11 @@ describe('staff website', () => {
   });
   it('does not silently reuse an identity from another account and clears it on logout', async () => {
     localStorage.setItem(memoryKey, 'member-a');
+    sessionStorage.setItem('exhibition-qr-history-v1:shared', JSON.stringify([
+      { id: 'qr-tag', label: 'U000010', entryChannel: 'qr', visitorUrl: 'https://voice.heisei.space/#/t/opaque-token' },
+    ]));
+    sessionStorage.setItem('exhibition-qr-current-request-v1:shared', 'request-current');
+    sessionStorage.setItem('exhibition-qr-pending-request-v1:shared', 'request-pending');
     const repo = repository();
     show(repo);
     const user = userEvent.setup();
@@ -360,6 +379,15 @@ describe('staff website', () => {
     await user.click(screen.getByRole('button', { name: '退出登录' }));
     expect(await screen.findByRole('button', { name: '登录' })).toBeVisible();
     expect(localStorage.getItem(memoryKey)).toBeNull();
+    expect(sessionStorage.getItem('exhibition-qr-history-v1:shared')).toBeNull();
+    expect(sessionStorage.getItem('exhibition-qr-current-request-v1:shared')).toBeNull();
+    expect(sessionStorage.getItem('exhibition-qr-pending-request-v1:shared')).toBeNull();
+    render(<I18nProvider><QrFallbackPage repository={repo} loginMode="staff" /></I18nProvider>);
+    expect(await screen.findByRole('button', { name: '为下一位参与者生成二维码' })).toBeVisible();
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+    expect(repo.createQrEntry).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem('exhibition-qr-current-request-v1:shared')).toBeNull();
+    expect(sessionStorage.getItem('exhibition-qr-pending-request-v1:shared')).toBeNull();
   });
   it('refreshes other staff updates on focus without overwriting an open edit', async () => {
     localStorage.setItem(memoryKey, 'member-a');

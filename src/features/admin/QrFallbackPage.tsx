@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, LogOut, QrCode } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { QrEntry } from '../../storage/adminRepository';
+import { clearQrFallbackSession, qrHistoryStorageKey } from '../../storage/qrHistoryStorage';
 import { useOperatorI18n } from '../../i18n/I18nProvider';
 import { LanguageSwitch } from '../../i18n/LanguageSwitch';
 import { qrFallbackMessages } from './qrFallbackMessages';
@@ -20,6 +21,30 @@ type Props = { repository: QrRepository; loginMode?: 'operator' | 'staff'; backH
 const CURRENT_KEY = 'exhibition-qr-current-request-v1';
 const PENDING_KEY = 'exhibition-qr-pending-request-v1';
 
+function storedQrHistory(userId: string): QrEntry[] {
+  try {
+    const raw = sessionStorage.getItem(qrHistoryStorageKey(userId));
+    const values: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(values)) return [];
+    return values.filter((value): value is QrEntry => {
+      if (!value || typeof value !== 'object') return false;
+      const entry = value as Partial<QrEntry>;
+      if (typeof entry.id !== 'string' || !entry.id || typeof entry.label !== 'string' || !entry.label
+        || entry.entryChannel !== 'qr' || typeof entry.visitorUrl !== 'string') return false;
+      try {
+        const url = new URL(entry.visitorUrl);
+        return url.protocol === 'https:'
+          && (url.hostname === 'voice.heisei.space' || url.origin === window.location.origin)
+          && /^#\/t\/[^/?#]+$/.test(url.hash);
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return [];
+  }
+}
+
 export function QrFallbackPage({ repository, loginMode = 'operator', backHref = '#/admin' }: Props) {
   const { locale } = useOperatorI18n();
   const m = qrFallbackMessages[locale];
@@ -31,8 +56,10 @@ export function QrFallbackPage({ repository, loginMode = 'operator', backHref = 
   const [identifier, setIdentifier] = useState(loginMode === 'staff' ? 'staff' : '');
   const [password, setPassword] = useState('');
   const [current, setCurrent] = useState<QrEntry | null>(null);
+  const [history, setHistory] = useState<QrEntry[]>([]);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const historyRef = useRef<QrEntry[]>([]);
 
   function storageKey(userId: string, key: string) {
     return `${key}:${userId}`;
@@ -40,15 +67,10 @@ export function QrFallbackPage({ repository, loginMode = 'operator', backHref = 
 
   function clearIssuance(userId?: string) {
     setCurrent(null);
+    historyRef.current = [];
+    setHistory([]);
     setPendingKey(null);
-    if (userId) {
-      try {
-        sessionStorage.removeItem(storageKey(userId, CURRENT_KEY));
-        sessionStorage.removeItem(storageKey(userId, PENDING_KEY));
-      } catch {
-        // Keep logout independent from browser storage availability.
-      }
-    }
+    clearQrFallbackSession(userId);
   }
 
   async function issue(key: string, userId: string) {
@@ -64,6 +86,17 @@ export function QrFallbackPage({ repository, loginMode = 'operator', backHref = 
         sessionStorage.removeItem(pendingStorageKey);
       } catch {
         // Keep a successful server response visible even if storage becomes unavailable.
+      }
+      const prior = historyRef.current;
+      const nextHistory = prior.some((item) => item.id === entry.id)
+        ? prior.map((item) => item.id === entry.id ? entry : item)
+        : [...prior, entry];
+      historyRef.current = nextHistory;
+      setHistory(nextHistory);
+      try {
+        sessionStorage.setItem(qrHistoryStorageKey(userId), JSON.stringify(nextHistory));
+      } catch {
+        // Keep the in-memory list usable when browser storage is unavailable.
       }
       setCurrent(entry);
       setPendingKey(null);
@@ -103,6 +136,10 @@ export function QrFallbackPage({ repository, loginMode = 'operator', backHref = 
   useEffect(() => {
     if (!session || restoredRef.current) return;
     restoredRef.current = true;
+    const restoredHistory = storedQrHistory(session.userId);
+    historyRef.current = restoredHistory;
+    setHistory(restoredHistory);
+    setCurrent(restoredHistory.at(-1) ?? null);
     let pending: string | null;
     let current: string | null;
     try {
@@ -179,20 +216,43 @@ export function QrFallbackPage({ repository, loginMode = 'operator', backHref = 
           </section>
         ) : (
           <>
-            <h1>{current?.label ?? m.title}</h1>
-            {current && <div className="qr-fallback-output">
-              <div className="qr-fallback-code" role="img" aria-label={m.qrLabel.replace('{{label}}', current.label)}>
-                <QRCodeSVG value={current.visitorUrl} size={288} level="M" marginSize={2} aria-hidden="true" />
-              </div>
-              <p className="qr-fallback-label">{current.label}</p>
-            </div>}
-            {busy && <p className="qr-fallback-loading" role="status">{m.creating}</p>}
-            {error && pendingKey && <div className="qr-fallback-actions">
-              <button className="toolbar-primary" disabled={busy} onClick={() => void issue(pendingKey, session.userId)}>{m.retry}</button>
-            </div>}
-            {!error && !busy && <div className="qr-fallback-actions">
-              <button className="toolbar-primary" onClick={createNext}>{current ? m.next : m.create}</button>
-            </div>}
+            <div className={`qr-fallback-workspace${history.length ? ' has-history' : ''}`}>
+              {history.length > 0 && <section className="qr-fallback-history" aria-labelledby="qr-fallback-history-title">
+                <h2 id="qr-fallback-history-title">{m.history}</h2>
+                <ul>
+                  {[...history].reverse().map((entry) => (
+                    <li key={entry.id}>
+                      <button
+                        type="button"
+                        className="qr-fallback-history-item"
+                        aria-label={m.selectQr.replace('{{label}}', entry.label)}
+                        aria-pressed={current?.id === entry.id}
+                        onClick={() => setCurrent(entry)}
+                      >
+                        <QrCode size={18} aria-hidden="true" />
+                        <span>{entry.label}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>}
+              <section className="qr-fallback-current" aria-live="polite">
+                <h1>{current?.label ?? m.title}</h1>
+                {current && <div className="qr-fallback-output">
+                  <div className="qr-fallback-code" role="img" aria-label={m.qrLabel.replace('{{label}}', current.label)}>
+                    <QRCodeSVG value={current.visitorUrl} size={288} level="M" marginSize={2} aria-hidden="true" />
+                  </div>
+                  <p className="qr-fallback-label">{current.label}</p>
+                </div>}
+                {busy && <p className="qr-fallback-loading" role="status">{m.creating}</p>}
+                {error && pendingKey && <div className="qr-fallback-actions">
+                  <button className="toolbar-primary" disabled={busy} onClick={() => void issue(pendingKey, session.userId)}>{m.retry}</button>
+                </div>}
+                {!error && !busy && <div className="qr-fallback-actions">
+                  <button className="toolbar-primary" onClick={createNext}>{current ? m.next : m.create}</button>
+                </div>}
+              </section>
+            </div>
           </>
         )}
       </section>
