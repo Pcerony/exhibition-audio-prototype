@@ -66,6 +66,14 @@ describe('staff repository', () => {
     await expect(f.repository.signIn('staff', 'secret')).rejects.toThrow('STAFF_REQUIRED');
     expect(f.auth.signOut).toHaveBeenCalledOnce();
   });
+  it('clears a persisted session when its role is no longer staff', async () => {
+    const f = fixture();
+    f.fetcher.mockImplementation(async () => new Response(JSON.stringify({
+      userId: 'account', role: 'admin', members: [],
+    }), { status: 200 }));
+    await expect(f.repository.getSession()).rejects.toThrow('STAFF_REQUIRED');
+    expect(f.auth.signOut).toHaveBeenCalledOnce();
+  });
   it('passes member selection and version but never grants admin operations', async () => {
     const f = fixture();
     await f.repository.save('recording', 'member', 3, 'corrected', true);

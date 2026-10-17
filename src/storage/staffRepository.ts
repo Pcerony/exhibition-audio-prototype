@@ -114,13 +114,18 @@ export function createCloudStaffRepository(config: {
   }
   async function getSession() {
     if (!(await config.auth.getSession())) return null;
-    const session = await request<StaffSession>('session');
-    if (
-      session.role !== 'staff' ||
-      !Array.isArray(session.members)
-    )
-      throw Error('STAFF_REQUIRED');
-    return session;
+    try {
+      const session = await request<StaffSession>('session');
+      if (session.role !== 'staff' || !Array.isArray(session.members))
+        throw Error('STAFF_REQUIRED');
+      return session;
+    } catch (cause) {
+      if (cause instanceof Error && cause.message === 'STAFF_REQUIRED') {
+        await config.auth.signOut().catch(() => {});
+        acceptedUserId = null;
+      }
+      throw cause;
+    }
   }
   return {
     identityScope: url,
@@ -135,7 +140,8 @@ export function createCloudStaffRepository(config: {
         if (!session) throw Error('AUTH_REQUIRED');
         return session;
       } catch (cause) {
-        await config.auth.signOut().catch(() => {});
+        if (!(cause instanceof Error && cause.message === 'STAFF_REQUIRED'))
+          await config.auth.signOut().catch(() => {});
         acceptedUserId = null;
         throw cause;
       }
