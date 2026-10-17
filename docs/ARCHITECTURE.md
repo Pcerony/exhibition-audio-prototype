@@ -16,6 +16,8 @@
 
 现场端在现有 Vite 应用中独立懒加载，使用专用 `staff-api` 与 `staff_action`，不是把完整后台按钮隐藏。共享 Auth 账号使用 `staff` 角色，成员仅为操作时选择的署名；仅能查询、试听、查看地点、修改转写和审核发布，不能创建/写卡/重置/删除。地图复用既有73板算法与轮廓。详见[工作人员接入](STAFF_PORTAL_SETUP.md)。
 
+二维码备用接待是现有认证运营后台中的懒加载子路由`#/admin/qr`，复用同一云数据库、admin-api和既有运营认证，不另建网站或权限角色。该页面只创建一个`entry_channel='qr'`的服务器展签身份并显示稳定访客URL的二维码；不操作NFC，也不加入provisioning作业池。扫码进入原有访客token路由。以后要把同一URL补写到实体卡，必须作为另一个经过核验的流程处理。
+
 ## 核心 NFC 决策
 
 芯片网址必须每枚不同，例如 `https://voice.heisei.space/#/t/<opaque-token>`。所有网址属于同一个母网站，但 URL token 让网页能查到确切的云端标签。Android 原生写卡端负责创建/领取 provisioning 批次、写入 NDEF URI 并读回验证；参观者网页不需要 NFC Web API。

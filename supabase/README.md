@@ -9,9 +9,11 @@ Run from the repository root:
 
 ```sh
 npx -y deno test --no-lock supabase/functions/admin-api/handler_test.ts supabase/functions/_shared/maintenance_test.ts
+npx -y deno test --no-lock --node-modules-dir=none --allow-read supabase/tests/qr_fallback_test.ts
 npx -y deno test --no-lock --node-modules-dir=auto --allow-read --allow-env supabase/tests/local_database_test.ts
 npx -y deno test --no-lock --node-modules-dir=auto --allow-read supabase/tests/classification_v3_test.ts supabase/functions/public-upload-claim/handler_test.ts
 EMBEDDED_PG_RUNTIME=/tmp/exhibition-pg-runtime node supabase/tests/postgres_classification_v3.mjs
+EMBEDDED_PG_RUNTIME=/tmp/exhibition-pg-runtime node supabase/tests/postgres_qr_fallback.mjs
 node --test supabase/tests/backend.test.mjs
 npx -y deno check --no-lock supabase/functions/admin-api/index.ts supabase/functions/maintenance/index.ts supabase/functions/public-upload-init/index.ts supabase/functions/public-upload-claim/index.ts
 ```
@@ -45,6 +47,12 @@ Vault names: `exhibition_maintenance_secret`, `exhibition_project_url`,
 returned HTTP 200. See `docs/VERIFICATION.md` for live synthetic tests and physical
 device acceptance still required. Run Android builds outside cloud-sync folders
 if the provider evicts freshly generated files.
+
+QR fallback migration `202610170007_qr_fallback.sql` adds an explicit entry channel
+and a request-key-idempotent action to the existing admin RPC. Its PGlite test
+checks authorization, replay, audit, tag DTO, and pool exclusion; the independent
+PostgreSQL test verifies concurrent sessions. QR-only entries must never create a
+`provisioning_jobs` row.
 
 Existing tags are backfilled with pending provisioning jobs. The normalized-label
 unique index intentionally rejects legacy duplicate labels; check and resolve

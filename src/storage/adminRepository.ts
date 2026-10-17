@@ -30,8 +30,9 @@ export type PieceAssignmentUpdate = {
   state: 'assigned' | 'needs_review' | 'outside_map'; pieceCode: string | null; mapVersion: string;
 };
 export type ManagedRecording = NonNullable<Tag['recording']> & { transcriptionSummary?: AdminTranscriptionSummary; pieceAssignment?: PieceAssignmentSummary };
-export type ManagedTag = Omit<Tag, 'recording'> & { recording: ManagedRecording | null; provisioning: ProvisioningJob | null; version?: number };
+export type ManagedTag = Omit<Tag, 'recording'> & { recording: ManagedRecording | null; provisioning: ProvisioningJob | null; entryChannel?: 'nfc' | 'qr'; version?: number };
 export type OperatorSession = { userId: string; email?: string; role: 'operator' | 'admin' };
+export type QrEntry = { id: string; label: string; visitorUrl: string; entryChannel: 'qr' };
 export type TagQuery = { search?: string; status?: 'unbound' | 'bound' | 'disabled'; transcriptionState?: AdminTranscriptionState; pieceCode?: string; offset?: number; limit?: number; categoryId?: string; batchDate?: string; uncategorized?: boolean; sort?: 'recorded_desc' | 'recorded_asc' | 'number' };
 export type AuditEntry = { id: string | number; operatorId: string; action: string; tagId: string | null; createdAt: string; details?: Record<string, unknown> | null };
 export interface AdminRepository {
@@ -41,6 +42,7 @@ export interface AdminRepository {
   listCategories(): Promise<Category[]>;
   createCategory(name: string, requestKey: string): Promise<Category>;
   renameCategory(categoryId: string, name: string): Promise<void>;
+  createQrEntry(requestKey: string): Promise<QrEntry>;
   createCards(count: number, requestKey: string): Promise<{ tags: ManagedTag[] }>;
   previewBulk(tagIds: string[], operation: BulkOperation, targetCategoryId?: string): Promise<{ groups: BulkGroup[] }>;
   applyBulk(input: BulkApply): Promise<void>;

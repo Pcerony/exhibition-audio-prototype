@@ -52,6 +52,25 @@ Deno.test('v2 management actions pass through and version conflicts are stable',
   const response = await f.handler(request({ action: 'bulkApply' }));
   equal(response.status,409); equal(await response.json(),{code:'VERSION_CONFLICT'});
 });
+Deno.test('QR entry creation validates its idempotency key and uses the authenticated operator', async () => {
+  const responseBody = { id, label: 'U000010', entryChannel: 'qr', visitorUrl: 'https://voice.heisei.space/#/t/opaque' };
+  const f = fixture('operator', true, responseBody);
+  const response = await f.handler(request({ action: 'createQrEntry', requestKey: id }));
+  equal(response.status, 200);
+  equal(await response.json(), responseBody);
+  equal(f.calls, [{ name: 'admin_action', args: { p_operator: id, p_body: { action: 'createQrEntry', requestKey: id } } }]);
+
+  for (const requestKey of [undefined, 'not-a-uuid']) {
+    const invalid = fixture();
+    equal((await invalid.handler(request({ action: 'createQrEntry', requestKey }))).status, 400);
+    equal(invalid.calls, []);
+  }
+  const conflict = fixture('operator', true, null, { code: 'P0001', message: 'REQUEST_KEY_CONFLICT private detail' });
+  const conflictResponse = await conflict.handler(request({ action: 'createQrEntry', requestKey: id }));
+  equal(conflictResponse.status, 409);
+  equal(await conflictResponse.json(), { code: 'REQUEST_KEY_CONFLICT' });
+  equal((await fixture(null).handler(request({ action: 'createQrEntry', requestKey: id }))).status, 403);
+});
 Deno.test('v2 errors do not leak database details and category identities are UUIDs', async () => {
   for (const [code,status] of Object.entries({CATEGORY_NOT_FOUND:404,CATEGORY_NAME_EXISTS:409,VERSION_CONFLICT:409,GROUP_CONFLICT:409,LEASE_CONFLICT:409,LEASE_EXPIRED:409,CLIENT_UPGRADE_REQUIRED:426,JOB_INELIGIBLE:409})) {
     const response=await fixture('operator',true,null,{code:'P0001',message:code+' internal detail'}).handler(request({action:'nextJob'}));

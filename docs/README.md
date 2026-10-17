@@ -9,6 +9,8 @@
 
 - [工作人员主题管理简化](superpowers/specs/2026-10-17-simplify-operator-themes.md)：四主题自动编号保留，工作人员不再手动分类，按日期/搜索/状态管理。
 
+- [卡片不足时的二维码备用入口](superpowers/plans/2026-10-17-qr-fallback.md)：现有运营后台子页面、QR-only标签身份、幂等重试和写卡池隔离。
+
 - [按需开卡与强反馈设计](superpowers/specs/2026-10-17-on-demand-writing-design.md)：取消先开卡的必经步骤、连续写卡弹窗与安全重试。
 
 - [语音转文字试用接入](TRANSCRIPTION_SETUP_ZH.md)：Groq 可选同意、私有草稿、审核发布、密钥配置与验收步骤。

@@ -29,6 +29,8 @@ describe('visitor URL routing', () => {
   it('starts at the NFC touch welcome page and keeps the operator page explicit', () => {
     expect(resolveAppRoute('/exhibition-audio-prototype/', '')).toEqual({ type: 'welcome' });
     expect(resolveAppRoute('/exhibition-audio-prototype/', '#/admin')).toEqual({ type: 'admin' });
+    expect(resolveAppRoute('/exhibition-audio-prototype/', '#/admin/qr')).toEqual({ type: 'qr' });
     expect(resolveAppRoute('/admin', '')).toEqual({ type: 'admin' });
+    expect(resolveAppRoute('/admin/qr', '')).toEqual({ type: 'qr' });
   });
 });

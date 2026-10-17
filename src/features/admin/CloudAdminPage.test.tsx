@@ -61,6 +61,7 @@ function repository(): AdminRepository {
     ]),
     createCategory: vi.fn(),
     renameCategory: vi.fn(),
+    createQrEntry: vi.fn().mockResolvedValue({ id: 'qr-tag', label: 'U000010', entryChannel: 'qr', visitorUrl: 'https://voice.heisei.space/#/t/qr-token' }),
     createCards: vi.fn().mockResolvedValue({ tags: [] }),
     previewBulk: vi.fn().mockResolvedValue({
       groups: [
@@ -79,6 +80,22 @@ function repository(): AdminRepository {
     applyBulk: vi.fn().mockResolvedValue(undefined),
   };
 }
+
+it('offers the isolated QR fallback subpage from the existing operator console', async () => {
+  show(repository(), 'zh-CN');
+  await screen.findByText('A001');
+  expect(screen.getByRole('link', { name: '二维码备用入口' })).toHaveAttribute('href', '#/admin/qr');
+});
+
+it('shows QR-only identities as QR-only instead of claiming their card is pending', async () => {
+  const r = repository();
+  vi.mocked(r.listTags).mockResolvedValue({
+    tags: [{ ...tag, id: 'qr-tag', token: 'qr-token', label: 'U000010', entryChannel: 'qr', status: 'unbound', recording: null, provisioning: null }],
+    total: 1,
+  });
+  show(r, 'zh-CN');
+  expect(await screen.findByText('仅二维码')).toBeVisible();
+});
 
 it('shows all 73 map pieces, filters records by selected piece and displays estimates as unconfirmed', async () => {
   const r = repository();

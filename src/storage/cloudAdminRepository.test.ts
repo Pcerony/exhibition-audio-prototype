@@ -37,6 +37,14 @@ describe('cloud admin repository', () => {
     expect(JSON.parse(fetcher.mock.calls[1][1]?.body as string)).toEqual({ action: 'createCards', count: 30, requestKey: 'key-2', protocolVersion: 3 });
   });
 
+  it('creates one QR identity through the server and preserves the stable URL on retries', async () => {
+    const { repository, fetcher } = setup();
+    const qrEntry = { id: 'tag-id', label: 'U000010', entryChannel: 'qr' as const, visitorUrl: 'https://voice.heisei.space/#/t/opaque-token' };
+    fetcher.mockResolvedValueOnce(new Response(JSON.stringify(qrEntry)));
+    expect(await repository.createQrEntry('same-request-key')).toEqual(qrEntry);
+    expect(JSON.parse(fetcher.mock.calls[0][1]?.body as string)).toEqual({ action: 'createQrEntry', requestKey: 'same-request-key' });
+  });
+
   it('sends server preview versions and distinct group confirmation unchanged', async () => {
     const { repository, fetcher } = setup();
     const cards = [{ id: 'tag-id', version: 3, label: 'A001' }];

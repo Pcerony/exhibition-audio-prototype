@@ -1,4 +1,4 @@
-import { lazy,Suspense,useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { ArrowUpRight, Nfc } from 'lucide-react';
 import { AdminPage } from './features/admin/AdminPage';
 import { CloudAdminPage } from './features/admin/CloudAdminPage';
@@ -12,6 +12,7 @@ import './styles.css';
 import { PolicyLinks, PolicyPage } from './features/visitor/PolicyPage';
 import { VisitorPreviewPage } from './features/visitor/VisitorPreviewPage';
 const StaffEntry=lazy(()=>import('./features/staff/StaffEntry'));
+const QrFallbackPage = lazy(() => import('./features/admin/QrFallbackPage').then(({ QrFallbackPage: page }) => ({ default: page })));
 
 const repository = createBrowserRepository();
 const cloudConfigured = hasSupabaseConfig();
@@ -50,7 +51,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.lang = ['admin','staff'].includes(resolveAppRoute(route.pathname, route.hash).type) ? operatorLocale(locale) : locale;
+    document.documentElement.lang = ['admin', 'qr', 'staff'].includes(resolveAppRoute(route.pathname, route.hash).type) ? operatorLocale(locale) : locale;
     document.title = t('app.title');
   }, [locale, t, route.pathname, route.hash]);
 
@@ -67,7 +68,11 @@ export function App() {
     return <VisitorPage key={resolvedRoute.token} repository={visitorRepository} token={decodeURIComponent(resolvedRoute.token)} />;
   }
   const baseUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
-  if (resolvedRoute.type === 'admin') {
+  if (resolvedRoute.type === 'admin' || resolvedRoute.type === 'qr') {
+    if (resolvedRoute.type === 'qr') {
+      if (!adminRepository) return <main className="visitor-shell"><p className="visitor-intro">{t('app.cloudMissing')}</p></main>;
+      return <Suspense fallback={<main className="outdoor-loading" role="status"><span className="loading-ring" aria-hidden="true" /><p>{t('app.loading')}</p></main>}><QrFallbackPage repository={adminRepository} /></Suspense>;
+    }
     if (adminRepository) return <CloudAdminPage repository={adminRepository} baseUrl="https://voice.heisei.space/" />;
     if (import.meta.env.PROD) return <main className="visitor-shell"><p className="visitor-intro">{t('app.cloudMissing')}</p></main>;
     return <AdminPage repository={repository} baseUrl={baseUrl} />;
@@ -91,12 +96,13 @@ export function resolveTagToken(pathname: string, hash: string) {
   return activePath.match(/^\/t\/([^/]+)\/?$/)?.[1] ?? null;
 }
 
-export function resolveAppRoute(pathname: string, hash: string): { type: 'tag'; token: string } | { type: 'admin' | 'staff' | 'preview' } | { type: 'welcome' } | { type: 'privacy' | 'terms' } {
+export function resolveAppRoute(pathname: string, hash: string): { type: 'tag'; token: string } | { type: 'admin' | 'qr' | 'staff' | 'preview' } | { type: 'welcome' } | { type: 'privacy' | 'terms' } {
   const activePath = hash.startsWith('#/') ? hash.slice(1) : pathname;
   if(activePath==='/staff'||activePath==='/staff/')return {type:'staff'};
   if (activePath === '/preview' || activePath === '/preview/') return { type: 'preview' };
   if (activePath === '/privacy') return { type: 'privacy' };
   if (activePath === '/terms') return { type: 'terms' };
+  if (activePath === '/admin/qr' || activePath === '/admin/qr/') return { type: 'qr' };
   const token = activePath.match(/^\/t\/([^/]+)\/?$/)?.[1];
   if (token) return { type: 'tag', token };
   if (activePath === '/admin' || activePath === '/admin/') return { type: 'admin' };
