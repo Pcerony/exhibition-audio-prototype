@@ -40,6 +40,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private lateinit var feedback: WriteFeedbackDialog
     private lateinit var api: Api
     private lateinit var copy: Copy
+    private lateinit var updater: AppUpdater
     private lateinit var shell: LinearLayout
     private lateinit var content: LinearLayout
     private lateinit var state: TextView
@@ -93,6 +94,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         copy = Copy(prefs().getString("language", "ja").orEmpty())
+        updater = AppUpdater(this, { copy }, { resumed && !busy.get() && queue.isEmpty() && !UpdatePolicy.hasPendingReports(prefs().all) && lease == null && singleMutation == null && flow.stage !in listOf(WriterFlow.Stage.READY, WriterFlow.Stage.WRITING, WriterFlow.Stage.REMOVAL, WriterFlow.Stage.NEXT) })
         feedback = WriteFeedbackDialog(this, { prefs().getBoolean("sound", true) }, { prefs().edit().putBoolean("sound", it).apply() })
         api = Api(SecureSession(this))
         api.onRevoked = { singleMutation = null; inspectedIdentity = ""; overwritePermission.clear(); flow.pause(); epoch++; runOnUiThread { writeSession.reset(); lease = null; statusMessage = ""; feedback.close(); successGate.cancel(); scanArmed = false; inspectedTag = null; inspectedCards = emptyList(); reader(); stopPlayback(); cards = emptyList(); jobs = emptyList(); checked.clear(); pendingBulk = null; queue.clear(); loginScreen() } }
@@ -108,6 +110,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         work { if (api.restore()) { restoreQueue(); load(); ui { render() } } }
         handler.postDelayed(autoSync, 15000)
         handler.postDelayed(checkLease, 1000)
+        updater.check()
     }
 
     private fun column(parent: LinearLayout, padding: Int = 0) = LinearLayout(this).apply {
@@ -165,8 +168,9 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         }
     }
     private fun settings() {
-        val items = if (api.token.isBlank()) arrayOf(t("language"), t("nfc"), t("sound")) else arrayOf(api.email, t("language"), t("nfc"), t("logout"), t("sound"))
+        val items = (if (api.token.isBlank()) arrayOf(t("language"), t("nfc"), t("sound")) else arrayOf(api.email, t("language"), t("nfc"), t("logout"), t("sound"))) + "${t("updateCheck")} · ${BuildConfig.VERSION_NAME}"
         AlertDialog.Builder(this).setTitle(t("menu")).setItems(items) { _, index ->
+            if(index == items.lastIndex) { updater.check(true); return@setItems }
             val real = if (api.token.isBlank()) index + 1 else index
             if ((api.token.isBlank() && index == 2) || (api.token.isNotBlank() && index == 4)) {
                 AlertDialog.Builder(this).setTitle(t("sound")).setMultiChoiceItems(arrayOf(t("sound")), booleanArrayOf(prefs().getBoolean("sound", true))) { _, _, checked -> prefs().edit().putBoolean("sound", checked).apply() }.setPositiveButton(t("confirm"), null).show()
@@ -810,6 +814,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     })
     override fun onResume() {
         super.onResume(); resumed = true; reader()
+        if (::updater.isInitialized) updater.resume()
         if (::api.isInitialized && api.token.isNotBlank() && !busy.get()) {
             if (screen in listOf(Screen.READ, Screen.SINGLE)) render() else reload()
         }
@@ -820,5 +825,5 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         if (::api.isInitialized && api.token.isNotBlank()) executor.execute { releaseCurrent() }
         super.onPause()
     }
-    override fun onDestroy() { handler.removeCallbacks(autoSync); handler.removeCallbacks(checkLease); executor.shutdown(); readExecutor.shutdown(); lookupExecutor.shutdown(); super.onDestroy() }
+    override fun onDestroy() { updater.close(); handler.removeCallbacks(autoSync); handler.removeCallbacks(checkLease); executor.shutdown(); readExecutor.shutdown(); lookupExecutor.shutdown(); super.onDestroy() }
 }

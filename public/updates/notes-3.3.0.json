@@ -1,0 +1,5 @@
+{
+  "ja": "アプリ内更新に対応しました。起動時の新バージョン通知、設定からの更新確認、ダウンロードとインストールが可能です。書き込み中・未送信の結果がある間は更新しません。",
+  "zh": "新增应用内更新：打开应用提醒新版，设置内检查更新，直接下载并交由安卓安装。写卡中或存在未同步结果时不会进入更新。",
+  "en": "Added in-app updates: startup notifications, manual checks in Settings, verified downloads and Android installation. Updates wait until writing is stopped and pending results are synced."
+}
