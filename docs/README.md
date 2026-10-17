@@ -10,6 +10,7 @@
 
 - [语音转文字试用接入](TRANSCRIPTION_SETUP_ZH.md)：Groq 可选同意、私有草稿、审核发布、密钥配置与验收步骤。
 - [后台拼装板定位与转写状态设计](superpowers/specs/2026-10-17-admin-map-piece-assignment-design.md)：73块板定位、审核状态、失败隔离与人工修正边界。
+- [后台拼装板定位实施计划](superpowers/plans/2026-10-17-admin-map-piece-assignment.md)：固定地图来源、坐标校准、提交后自动建议和运营手动修正的分阶段验收。
 - [后台转写状态实施计划](superpowers/plans/2026-10-17-admin-transcription-status.md)：列表状态摘要与筛选，不泄露转写正文。
 
 - [后置分类V3](superpowers/specs/2026-10-16-post-recording-classification.md)：固定四类、统一空卡池、录音日批次与不复用编号；取代旧分类开卡规则。
