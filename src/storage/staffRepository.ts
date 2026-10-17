@@ -3,6 +3,7 @@ import type { AdminAuth } from './cloudAdminRepository';
 import type { PieceAssignmentSummary } from './adminRepository';
 import type { MemoryLocation } from '../domain/location';
 import type { MemoryCategoryCode } from '../domain/classification';
+import type { TranscriptionLanguage } from '../domain/transcriptionLanguage';
 
 const STAFF_USERNAME = 'staff';
 // This is an Auth identifier, not a mailbox or a secret.
@@ -20,6 +21,7 @@ export type StaffReview = {
   action: string;
 };
 export type StaffTranscript = {
+  languageHint?: TranscriptionLanguage;
   status: 'pending' | 'processing' | 'ready' | 'failed';
   text: string | null;
   published: boolean;
@@ -59,6 +61,7 @@ export interface StaffRepository {
   getSession(): Promise<StaffSession | null>;
   signIn(username: string, password: string): Promise<StaffSession>;
   signOut(): Promise<void>;
+  retryTranscription(recordingId: string, memberId: string, version: number, languageHint: TranscriptionLanguage): Promise<void>;
   list(query: StaffQuery): Promise<{ cards: StaffCard[]; total: number }>;
   save(
     recordingId: string,
@@ -152,6 +155,9 @@ export function createCloudStaffRepository(config: {
     },
     subscribeAuth: config.auth.onSessionChange,
     list: (query) => request('list', query),
+    async retryTranscription(recordingId, memberId, version, languageHint) {
+      await request('retryTranscription', {recordingId, memberId, version, languageHint});
+    },
     async save(recordingId, memberId, version, text, published) {
       await request('save', {
         recordingId,

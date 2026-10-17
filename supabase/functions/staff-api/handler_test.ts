@@ -9,6 +9,7 @@ function fixture(
   valid = true,
   data: unknown = { ok: true },
   error: unknown = null,
+  configured = true,
 ) {
   const calls: unknown[] = [];
   const client = {
@@ -44,7 +45,7 @@ function fixture(
       }),
     },
   };
-  return { handler: createHandler(() => client as never), calls };
+  return { handler: createHandler(() => client as never, () => configured), calls };
 }
 function request(body: unknown, token = 'test-jwt') {
   return new Request('https://example.invalid/staff-api', {
@@ -56,6 +57,19 @@ function request(body: unknown, token = 'test-jwt') {
     body: JSON.stringify(body),
   });
 }
+Deno.test('staff retry validates language and version, requires provider, and forwards verified fields only', async () => {
+ const body={action:'retryTranscription',recordingId:id,memberId:'wang-heisei',version:2,languageHint:'zh'};
+ const f=fixture();equal((await f.handler(request({...body,memberName:'forged',text:'secret'}))).status,200);
+ equal(f.calls,[{name:'staff_action',args:{p_operator:id,p_body:body}}]);
+ for(const change of [{languageHint:'zh-TW'},{languageHint:null},{languageHint:undefined},{version:1.5},{version:0},{memberId:''},{recordingId:'bad'}]) {
+  const invalid=fixture();equal((await invalid.handler(request({...body,...change}))).status,400);equal(invalid.calls,[]);
+ }
+ const missing=fixture('staff',true,null,null,false);
+ const unavailable=await missing.handler(request(body));equal(unavailable.status,503);equal(await unavailable.json(),{code:'TRANSCRIPTION_NOT_CONFIGURED'});equal(missing.calls,[]);
+ for(const [code,status] of [['TRANSCRIPTION_RATE_LIMITED',429],['TRANSCRIPTION_IN_PROGRESS',409]] as const){
+  const response=await fixture('staff',true,null,{message:code+' secret'}).handler(request(body));equal(response.status,status);equal(await response.json(),{code});
+ }
+});
 Deno.test(
   'staff API denies anonymous, forged and non-member identities',
   async () => {

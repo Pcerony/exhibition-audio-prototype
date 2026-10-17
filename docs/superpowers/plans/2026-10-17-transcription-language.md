@@ -8,7 +8,7 @@
 
 - [x] Stabilize API/design, then separate `supabase/` ownership from frontend/domain/repository ownership.
 - [x] Write failing locale/repository/staff UI tests; implement select/retry/confirmation/queue notice and visitor locale propagation.
-- [ ] Add migration, Edge/worker tests and isolated PostgreSQL tests for hint propagation, allowlists, authorization, rate limits, retained old text and concurrent/stale operations.
-- [ ] Run full frontend/backend suite, normal/Pages builds, and mobile/desktop browser checks with synthetic data.
-- [ ] Review changes; back up and restore production database before migration rehearsal and deployment. Verify original 20 records unchanged apart from the new metadata column. Deploy worker/claim/staff Edge before frontend.
+- [x] Add migration, Edge/worker tests and isolated PostgreSQL tests for hint propagation, allowlists, authorization, rate limits, retained old text and concurrent/stale operations.
+- [x] Run full frontend/backend suite, normal/Pages builds, and mobile/desktop browser checks with synthetic data.
+- [x] Review changes; back up and restore production database before migration rehearsal and deployment. Verify original 20 records unchanged apart from the new metadata column. Deploy worker/claim/staff Edge before frontend.
 - [ ] Publish and verify controls on the real site without retrying participant recordings. Record limits: chosen UI language is a hint, multilingual speech may require auto, and AI output always requires review.

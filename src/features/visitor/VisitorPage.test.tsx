@@ -73,7 +73,7 @@ describe('visitor page', () => {
     expect(screen.getByRole('button', { name: 'この声を残す' })).toBeEnabled();
     const claim = vi.spyOn(repository, 'claim');
     fireEvent.click(screen.getByRole('button', { name: 'この声を残す' }));
-    expect(claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({ transcriptionConsent: true }));
+    expect(claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({ transcriptionConsent: true, transcriptionLanguage: 'ja' }));
     await screen.findByRole('heading', { name: visitorMessages['ja-JP']['visitor.placementTitle'] });
   });
   it('keeps maps out of the introduction and numbers the theme step', async () => {
@@ -222,7 +222,7 @@ describe('visitor page', () => {
     expect(screen.getByRole('heading', { name: '听听你的声音。' })).toBeVisible();
     expect(screen.queryByRole('button', { name: '开始录音' })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: /把声音留在这里/ }));
-    expect(repository.claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({ categoryCode: 'A', nickname: '', transcriptionConsent: false }));
+    expect(repository.claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({ categoryCode: 'A', nickname: '', transcriptionConsent: false, transcriptionLanguage:'zh' }));
     expect(screen.getByRole('checkbox')).toBeDisabled();
     expect(screen.getByRole('button', { name: /重录/ })).toBeDisabled();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();

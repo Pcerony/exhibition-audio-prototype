@@ -30,6 +30,11 @@ function fixture() {
   return { repository, auth, fetcher };
 }
 describe('staff repository', () => {
+  it('requeues using the selected language, member and observed version', async () => {
+    const f = fixture();
+    await f.repository.retryTranscription('recording','member',3,'ja');
+    expect(JSON.parse(String((f.fetcher.mock.calls.at(-1) as unknown as [string,RequestInit])[1].body))).toEqual({action:'retryTranscription',recordingId:'recording',memberId:'member',version:3,languageHint:'ja'});
+  });
   it('restores the authorized shared session and signs in without storing passwords', async () => {
     const f = fixture();
     expect((await f.repository.getSession())?.members[0].name).toBe(

@@ -19,6 +19,7 @@ import { OperatorDialog } from '../admin/OperatorDialog';
 import { VisitorAudioPlayer } from '../visitor/VisitorAudioPlayer';
 import { staffTime, type StaffMessages } from './staffMessages';
 import type { StaffTab } from './StaffPage';
+import { transcriptionLanguages, type TranscriptionLanguage } from '../../domain/transcriptionLanguage';
 const StaffLocationPanel = lazy(() => import('./StaffLocationPanel'));
 
 export function StaffDetail({
@@ -31,6 +32,7 @@ export function StaffDetail({
   onAuthError,
   onClose,
   onSaved,
+  onRetried,
 }: {
   repository: StaffRepository;
   card: StaffCard;
@@ -41,6 +43,7 @@ export function StaffDetail({
   onAuthError: (cause: unknown) => void;
   onClose: () => void;
   onSaved: (published: boolean) => void;
+  onRetried: (languageHint: TranscriptionLanguage) => void;
 }) {
   const [card, setCard] = useState(original),
     [tab, setTab] = useState(initialTab),
@@ -48,6 +51,7 @@ export function StaffDetail({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [stale, setStale] = useState(false);
+  const [languageHint, setLanguageHint] = useState<TranscriptionLanguage>(original.recording?.transcription?.languageHint ?? 'ja');
   const [audio, setAudio] = useState<string | null>(null),
     [audioBusy, setAudioBusy] = useState(false),
     [audioFailed, setAudioFailed] = useState(false);
@@ -59,6 +63,7 @@ export function StaffDetail({
   const recording = card.recording,
     task = recording?.transcription;
   const dirty = text !== (task?.text ?? '');
+  const processing = task?.status === 'pending' || task?.status === 'processing';
   function fail(cause: unknown) {
     const code = cause instanceof Error ? cause.message : '';
     if (['AUTH_REQUIRED', 'STAFF_REQUIRED', 'MEMBER_REQUIRED'].includes(code)) {
@@ -68,7 +73,10 @@ export function StaffDetail({
     if (code === 'VERSION_CONFLICT') {
       setStale(true);
       setError(m.stale);
-    } else setError(code === 'RECORDING_NOT_FOUND' ? m.unavailable : m.error);
+    } else setError(code === 'RECORDING_NOT_FOUND' ? m.unavailable
+      : code === 'TRANSCRIPTION_RATE_LIMITED' ? m.retryRateLimited
+      : code === 'TRANSCRIPTION_IN_PROGRESS' ? m.processing
+      : code === 'TRANSCRIPTION_NOT_CONFIGURED' ? m.retryNotConfigured : m.error);
   }
   async function loadAudio() {
     if (!recording || audioWorking.current) return;
@@ -125,6 +133,7 @@ export function StaffDetail({
     if (
       !recording ||
       !task ||
+      processing ||
       working.current ||
       stale ||
       !recording.transcriptionConsent
@@ -166,6 +175,7 @@ export function StaffDetail({
         throw Error('RECORDING_NOT_FOUND');
       setCard(latest);
       setText(latest.recording?.transcription?.text ?? '');
+      setLanguageHint(latest.recording?.transcription?.languageHint ?? 'ja');
       setStale(false);
     } catch (cause) {
       if (active.current) fail(cause);
@@ -176,6 +186,16 @@ export function StaffDetail({
   }
   function close() {
     if (!busy && (!dirty || window.confirm(m.discard))) onClose();
+  }
+  async function retry() {
+    if (!recording || !task || working.current || stale || processing || !recording.transcriptionConsent) return;
+    if (!window.confirm(m.retryConfirm + (dirty ? '\n' + m.discard : ''))) return;
+    working.current = true; setBusy(true); setError('');
+    try {
+      await repository.retryTranscription(recording.id, member.id, task.version, languageHint);
+      if (active.current) onRetried(languageHint);
+    } catch (cause) { if (active.current) fail(cause); }
+    finally { working.current = false; if (active.current) setBusy(false); }
   }
   return (
     <OperatorDialog titleId="staff-detail-title" locked={busy} onClose={close}>
@@ -264,6 +284,18 @@ export function StaffDetail({
               </p>
             )}
             {recording?.transcriptionConsent && task ? (
+              <>
+              <div className="staff-retranscribe">
+                <label>{m.sourceLanguage}
+                  <select aria-label={m.sourceLanguage} value={languageHint} disabled={busy || processing || stale}
+                    onChange={event => setLanguageHint(event.target.value as TranscriptionLanguage)}>
+                    {transcriptionLanguages.map(language => <option key={language.code} value={language.code}>{language.code === 'auto' ? m.autoLanguage : language.label}</option>)}
+                  </select>
+                </label>
+                <button className="staff-action" disabled={busy || stale || processing} onClick={() => void retry()}>
+                  <RefreshCw size={17}/>{m.retryTranscription}
+                </button>
+              </div>
               <label className="staff-editor">
                 {m.text}
                 <textarea
@@ -271,11 +303,12 @@ export function StaffDetail({
                   rows={9}
                   value={text}
                   maxLength={10000}
-                  disabled={busy}
+                  disabled={busy || processing}
                   onChange={(event) => setText(event.target.value)}
                 />
                 <small>{Array.from(text).length} / 10000</small>
               </label>
+              </>
             ) : (
               <p className="staff-empty">
                 {recording && !recording.transcriptionConsent
@@ -330,6 +363,7 @@ export function StaffDetail({
             className="staff-action"
             disabled={
               busy ||
+              processing ||
               stale ||
               !task ||
               !recording?.transcriptionConsent ||
@@ -345,6 +379,7 @@ export function StaffDetail({
             className="staff-primary"
             disabled={
               busy ||
+              processing ||
               stale ||
               !task ||
               !recording?.transcriptionConsent ||

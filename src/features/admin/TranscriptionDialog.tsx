@@ -36,7 +36,7 @@ export function TranscriptionDialog({ repository, recordingId, label, locale, on
     } else if (code === 'VERSION_CONFLICT') {
       setStale(true);
       setError(m.stale);
-    } else setError(m.error);
+    } else setError(code === 'TRANSCRIPTION_IN_PROGRESS' ? m.processing : m.error);
   }
   async function load() {
     const value = await repository.getTranscription(recordingId);

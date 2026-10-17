@@ -91,6 +91,8 @@ Deno.test('unconfigured transcription retry does not call database and get repor
  }
 });
 Deno.test('transcription save validates plain text, publication and integer version before RPC',async()=>{
+ const inProgress=await fixture('operator',true,null,{code:'P0001',message:'TRANSCRIPTION_IN_PROGRESS private details'}).handler(request({action:'saveTranscription',recordingId:id,version:2,text:'Synthetic retained text',published:true}));
+ equal(inProgress.status,409);equal(await inProgress.json(),{code:'TRANSCRIPTION_IN_PROGRESS'});
  for(const fields of [
   {text:'\n\t\r',published:true,version:1},
   {text:' \u3000\u00a0 ',published:true,version:1},

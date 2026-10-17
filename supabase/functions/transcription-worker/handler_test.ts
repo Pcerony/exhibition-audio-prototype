@@ -18,13 +18,26 @@ Deno.test('worker sends multipart private bytes only to fixed endpoint and retur
   assert(input==='https://api.groq.com/openai/v1/audio/transcriptions');
   assert(init?.redirect==='error');
   const form=init?.body as FormData;
-  assert(form.get('model')==='whisper-large-v3-turbo');assert(form.get('file') instanceof File);assert(!String(form).includes('private/path'));
+  assert(form.get('model')==='whisper-large-v3-turbo');assert(form.get('language')==='ja');assert(form.get('file') instanceof File);assert(!String(form).includes('private/path'));
   return Response.json({text:'Private transcript'});
  });
  const response=await handler(new Request('https://local',{method:'POST',headers:{'x-maintenance-secret':'secret'}}));
  assert(response.ok);assert(!(await response.text()).includes('Private transcript'));
  const finish=rpcCalls.find(c=>c.name==='finish_transcription')?.args as Record<string,unknown>;
  assert(finish.p_text==='Private transcript');
+});
+Deno.test('worker constrains original-language transcription and omits language for auto', async () => {
+ for (const languageHint of ['ja','zh','en','ko','es','fr','de','it','pt','ru','vi','th','id','ar','hi','auto']) {
+  let sentLanguage:FormDataEntryValue|null|undefined;
+  const client={rpc:(name:string)=>Promise.resolve({data:name==='claim_transcription'?{recordingId:'id',objectPath:'private',mimeType:'audio/wav',sizeBytes:4,leaseToken:'lease',version:1,languageHint}:true,error:null}),storage:{from:()=>({download:()=>Promise.resolve({data:new Blob(['wave']),error:null})})}};
+  const handler=createHandler(()=>client as never,()=> 'secret',async(input,init)=>{
+   assert(input==='https://api.groq.com/openai/v1/audio/transcriptions');
+   sentLanguage=(init?.body as FormData).get('language');
+   return Response.json({text:'Original language'});
+  });
+  assert((await handler(new Request('https://local',{method:'POST',headers:{'x-maintenance-secret':'secret'}}))).ok);
+  assert(sentLanguage===(languageHint==='auto'?null:languageHint));
+ }
 });
 Deno.test('worker sanitizes provider errors and respects Retry-After without leaking response', async () => {
  let result:Record<string,unknown>={};

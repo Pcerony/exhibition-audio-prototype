@@ -664,6 +664,18 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
           m={m}
           onAuthError={failure}
           onClose={() => setDetail(null)}
+          onRetried={(languageHint) => {
+            setCards(current => current.map(card => {
+              if (card.id !== detail.card.id || !card.recording?.transcription || card.recording.id !== detail.card.recording?.id) return card;
+              return {...card, recording: {...card.recording, transcription: {
+                ...card.recording.transcription, status:'pending', published:false,
+                languageHint, version:(detail.card.recording?.transcription?.version ?? card.recording.transcription.version)+1,
+              }}};
+            }));
+            setDetail(null);
+            setNotice(m.retryQueued);
+            setRevision(v => v + 1);
+          }}
           onSaved={(published) => {
             setDetail(null);
             setNotice(published ? m.published : m.saved);

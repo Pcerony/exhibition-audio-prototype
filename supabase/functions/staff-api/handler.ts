@@ -1,5 +1,6 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import { json, preflight, readJson } from '../_shared/http.ts';
+import { isTranscriptionLanguage } from '../_shared/transcriptionLanguage.ts';
 
 const allowed = new Set([
   'session',
@@ -8,6 +9,7 @@ const allowed = new Set([
   'save',
   'playback',
   'activity',
+  'retryTranscription',
 ]);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const errors: Record<string, number> = {
@@ -19,9 +21,11 @@ const errors: Record<string, number> = {
   TRANSCRIPTION_NOT_FOUND: 404,
   TRANSCRIPTION_CONSENT_REQUIRED: 409,
   VERSION_CONFLICT: 409,
+  TRANSCRIPTION_RATE_LIMITED: 429,
+  TRANSCRIPTION_IN_PROGRESS: 409,
 };
 
-export function createHandler(getClient: () => SupabaseClient) {
+export function createHandler(getClient: () => SupabaseClient, isTranscriptionConfigured = () => !!Deno.env.get('GROQ_API_KEY')) {
   return async (request: Request): Promise<Response> => {
     const options = preflight(request);
     if (options) return options;
@@ -69,10 +73,11 @@ export function createHandler(getClient: () => SupabaseClient) {
         'text',
         'published',
         'event',
+        'languageHint',
       ]) {
         if (key in input) body[key] = input[key];
       }
-      if (['save', 'playback', 'activity'].includes(input.action)) {
+      if (['save', 'playback', 'activity', 'retryTranscription'].includes(input.action)) {
         if (
           typeof body.recordingId !== 'string' ||
           !uuid.test(body.recordingId) ||
@@ -120,6 +125,13 @@ export function createHandler(getClient: () => SupabaseClient) {
         return json({ code: 'REQUEST_INVALID' }, 400);
       if (input.action === 'activity' && body.event !== 'location_viewed')
         return json({ code: 'REQUEST_INVALID' }, 400);
+      if (input.action === 'retryTranscription') {
+        if (!Number.isSafeInteger(body.version) || (body.version as number) < 1 || !isTranscriptionLanguage(body.languageHint))
+          return json({ code: 'REQUEST_INVALID' }, 400);
+        if (!isTranscriptionConfigured()) return json({ code: 'TRANSCRIPTION_NOT_CONFIGURED' }, 503);
+        delete body.text;
+        delete body.published;
+      }
       const { data, error } = await client.rpc('staff_action', {
         p_operator: identity.user.id,
         p_body: body,
