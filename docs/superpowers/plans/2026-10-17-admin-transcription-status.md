@@ -23,19 +23,19 @@
 
 ## Task 1: Freeze the list contract
 
-- [ ] Add to `docs/API_CONTRACT.md` that admin `list` accepts `transcriptionState?: 'not_consented'|'pending'|'processing'|'draft'|'published'|'failed'`; a recording DTO may contain `transcriptionSummary: {consented:boolean,status:'pending'|'processing'|'ready'|'failed'|null,published:boolean}`; no `text`, `errorCode`, provider error, or location coordinates beyond the existing pin contract are added. `draft` means `ready && !published`; `published` means `ready && published`; absent task with consent is displayed as pending; no consent takes precedence over queue state. `REQUEST_INVALID` from list validation maps to HTTP 400.
-- [ ] Add `AdminTranscriptionSummary` and the exact string unions to `src/storage/adminRepository.ts`; define `ManagedRecording = NonNullable<Tag['recording']> & { transcriptionSummary?: AdminTranscriptionSummary }`, make `ManagedTag` use `ManagedRecording | null`, and add the optional filter to `TagQuery`.
-- [ ] Run `npm test -- --run src/features/admin/CloudAdminPage.test.tsx src/storage/cloudAdminRepository.test.ts`; expected: all existing tests remain green and the new type-only contract compiles.
-- [ ] Commit only `docs/API_CONTRACT.md`'s new feature section and `src/storage/adminRepository.ts` as `docs: define admin transcription list summary` (do not stage the unrelated local event-report edits already present in docs).
+- [x] Add to `docs/API_CONTRACT.md` that admin `list` accepts `transcriptionState?: 'not_consented'|'pending'|'processing'|'draft'|'published'|'failed'`; a recording DTO may contain `transcriptionSummary: {consented:boolean,status:'pending'|'processing'|'ready'|'failed'|null,published:boolean}`; no `text`, `errorCode`, provider error, or location coordinates beyond the existing pin contract are added. `draft` means `ready && !published`; `published` means `ready && published`; absent task with consent is displayed as pending; no consent takes precedence over queue state. `REQUEST_INVALID` from list validation maps to HTTP 400.
+- [x] Add `AdminTranscriptionSummary` and the exact string unions to `src/storage/adminRepository.ts`; define `ManagedRecording = NonNullable<Tag['recording']> & { transcriptionSummary?: AdminTranscriptionSummary }`, make `ManagedTag` use `ManagedRecording | null`, and add the optional filter to `TagQuery`.
+- [x] Run `npm test -- --run`; expected: all 149 existing tests remain green and the new type-only contract compiles.
+- [x] Commit only the feature contract/type/index docs as `docs: define admin transcription list summary`.
 
 ## Task 2: Add a private, globally filtered list RPC
 
-- [ ] Write SQL integration cases in `supabase/tests/admin_list.sql` for one unconsented recording, pending, processing, ready draft, published ready, failed, an unbound tag, and at least two pages; assert each state filter returns the correct global count and paged rows. Use the existing PGlite migration harness in `supabase/tests/transcription_test.ts` and wrap the fixtures/assertions in `do $$ ... $$;` as in `supabase/tests/transcription.sql`.
-- [ ] Run `npx --yes deno@2.9.6 test --node-modules-dir=none --no-lock --allow-read supabase/tests/admin_list_test.ts`; expected: the new test fails because the RPC/migration does not exist.
-- [ ] Add `admin_list(p_operator uuid,p_body jsonb)` in `supabase/migrations/202610170003_admin_list_api.sql`. It must validate the same search/status/category/date/uncategorized/sort/offset/limit inputs as the current `list` branch, filter from `recordings.transcription_consent` plus `recording_transcriptions.status/published` before counting and paging, preserve current ordering and `public.tag_dto(tag)` shape, and reject invalid status values with `REQUEST_INVALID`.
-- [ ] Revoke execution from `public`, `anon`, and `authenticated`; grant only to `service_role`. Keep table RLS unchanged and never include transcription text in this function's JSON.
-- [ ] Make the Deno test load all migrations through `202610170003_admin_list_api.sql`, execute `supabase/tests/admin_list.sql`, and assert with the Postgres `jsonb` result that the text sentinel never appears; run it again and expect all consent/status/page/privacy assertions to pass.
-- [ ] Commit the migration and SQL tests as `feat: add private filtered transcription list`.
+- [x] Write SQL integration cases in `supabase/tests/admin_list.sql` for one unconsented recording, pending, processing, ready draft, published ready, failed, an unbound tag, and at least two pages; assert each state filter returns the correct global count and paged rows. Use the existing PGlite migration harness in `supabase/tests/transcription_test.ts` and wrap the fixtures/assertions in `do $$ ... $$;` as in `supabase/tests/transcription.sql`.
+- [x] Run `npx --yes deno@2.9.6 test --node-modules-dir=none --no-lock --allow-read supabase/tests/admin_list_test.ts`; first confirmed failure was missing `admin_list(uuid,jsonb)`.
+- [x] Add `admin_list(p_operator uuid,p_body jsonb)` in `supabase/migrations/202610170003_admin_list_api.sql`. It validates existing list fields, filters consent/status before counting and paging, preserves ordering and `public.tag_dto(tag)`, and rejects invalid status values with `REQUEST_INVALID`.
+- [x] Revoke execution from `public`, `anon`, and `authenticated`; grant only to `service_role`. Keep table RLS unchanged and never include transcription text in this function's JSON.
+- [x] Load every migration through the new migration in the PGlite test, execute `supabase/tests/admin_list.sql`, and assert the text sentinel never appears; consent/status/page/privacy assertions pass.
+- [x] Add the test to `npm run test:backend`; all 34 backend tests pass.
 
 ## Task 3: Enrich authenticated list pages without text
 
