@@ -7,10 +7,11 @@ import android.nfc.tech.NdefFormatable
 
 object NfcReader {
     fun read(tag: Tag): InspectedTag {
-        val ndef = Ndef.get(tag) ?: return InspectedTag(if (NdefFormatable.get(tag) != null) "unformatted" else "unsupported")
+        val ndef = Ndef.get(tag) ?: return if (NdefFormatable.get(tag) != null) InspectedTag("unformatted", writable = true, fingerprint = "unformatted") else InspectedTag("unsupported")
         try {
             ndef.connect()
-            val records = ndef.ndefMessage?.records.orEmpty()
+            val message = ndef.ndefMessage
+            val records = message?.records.orEmpty()
             val decoded = records.take(32).map { record ->
                 val payload = record.payload
                 when {
@@ -23,7 +24,7 @@ object NfcReader {
                     else -> InspectedRecord("other", "TNF ${record.tnf}", payload.size)
                 }
             }
-            return InspectedTag(if (NfcInspection.isEmpty(decoded) && records.size <= 32) "empty" else "data", decoded, ndef.isWritable, records.size > 32)
+            return InspectedTag(if (NfcInspection.isEmpty(decoded) && records.size <= 32) "empty" else "data", decoded, ndef.isWritable, records.size > 32, SingleCardPolicy.fingerprint(message?.toByteArray() ?: byteArrayOf()))
         } finally { runCatching { ndef.close() } }
     }
 }

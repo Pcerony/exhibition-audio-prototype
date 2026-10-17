@@ -7,6 +7,18 @@ class Copy(requested: String = "ja") {
     fun category(category: Category) = if (category.code in listOf("A", "B", "C", "D")) "${category.code} · ${get("category${category.code}")}" else category.name
     companion object {
         private val entries = mapOf(
+            "singleReadFirst" to listOf("1枚操作 · まずNFC読取", "单张操作 · 先读取 NFC", "Single Card · Read NFC First"),
+            "chipOperationFailed" to listOf("タグの操作結果を確認できません。読み直して確認してください。", "无法确认芯片操作结果，请先重新读取核查。", "Tag Operation Could Not Be Confirmed. Read the Tag Again Before Retrying."),
+            "clearChip" to listOf("タグ内のデータを消去", "清空芯片内容", "Clear Tag Contents"),
+            "newChipUrl" to listOf("新しい展示URLを書き込む", "写入新的展览网址", "Write a New Exhibition URL"),
+            "restoreChipUrl" to listOf("元のURLを書き直す", "写回原展览网址", "Write Back the Original URL"),
+            "clearChipConfirm" to listOf("タグ内のURLなどを消去します。クラウドのカード・録音は削除しません。確認後、同じタグをもう一度かざしてください。", "只清空芯片里的网址等内容，不删除云端卡片或录音。确认后请再次触碰同一枚芯片。", "Clear Only the Tag Contents. Cloud Cards and Recordings Are Not Deleted. Confirm, Then Touch the Same Tag Again."),
+            "newChipConfirm" to listOf("新しいカードとURLを作成し、タグの内容を置き換えます。元の録音は削除しませんが、このタグからは開けなくなります。確認後、同じタグをかざしてください。", "创建新卡片和新网址，替换芯片内容。原录音不会删除，但这枚芯片将不再指向原录音。确认后请再次触碰同一枚芯片。", "Create a New Card and URL, Replacing Tag Contents. Original Audio Is Not Deleted, but This Tag Will No Longer Link to It. Touch the Same Tag Again After Confirming."),
+            "sameChip" to listOf("先ほど読み取った同じタグをかざしてください", "请再次触碰刚才读取的同一枚芯片", "Touch the Same Tag You Just Read"),
+            "chipChanged" to listOf("タグまたは内容が変わりました。まず読み直してください。", "芯片或内容已变化，本次操作已停止，请重新读取。", "Tag or Contents Changed. Operation Stopped. Read Again."),
+            "chipCleared" to listOf("タグ消去・読取確認済み。クラウド録音は変更していません。", "芯片已清空并读回核验，云端录音未修改。", "Tag Cleared and Read Back. Cloud Audio Unchanged."),
+            "recordingProtected" to listOf("録音あり、または停止中のカードです。元の録音は自動削除しません。", "这是已有录音或已停用的卡片，操作不会自动删除原录音。", "Recorded or Disabled Card. Original Audio Will Not Be Deleted Automatically."),
+            "singleReviewPreparation" to listOf("未完了の新URL準備を確認", "核查未完成的新网址准备", "Review Unfinished New URL Preparation"),
             "sound" to listOf("通知音", "提示音", "Sound"),
             "reviewPreparation" to listOf("実物を確認して準備をやり直す", "核查实体卡后重新准备", "Review Tag and Reset Preparation"),
             "preparing" to listOf("カードを準備中", "正在准备卡片", "Preparing Card"),

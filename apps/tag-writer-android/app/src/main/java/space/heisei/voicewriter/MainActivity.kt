@@ -52,6 +52,10 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private var inspectedTag: InspectedTag? = null
     private var inspectedCards = emptyList<InspectedCard>()
     private var queryingEpoch: Int? = null
+    @Volatile private var inspectedIdentity = ""
+    @Volatile private var singleMutation: SingleMutation? = null
+    @Volatile private var singleExpiresAt = 0L
+    @Volatile private var singleReviewed = emptyList<InspectedCard>()
     private var cards = emptyList<Card>()
     private var jobs = emptyList<Job>()
     private var total = 0
@@ -73,10 +77,11 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private fun prefs() = getSharedPreferences("operator-ui-v2", MODE_PRIVATE)
     private fun accountKey(suffix: String) = BuildConfig.SUPABASE_URL + ":" + api.userId + ":" + suffix
     private fun bulkKey() = OperatorPolicy.pendingKey(BuildConfig.SUPABASE_URL, api.userId)
-    private fun preparation(owner: String = api.userId): PreparationMemory {
-        val key = BuildConfig.SUPABASE_URL + ":" + owner + ":prepare"
+    private fun preparation(owner: String = api.userId, purpose: String = "prepare"): PreparationMemory {
+        val key = BuildConfig.SUPABASE_URL + ":" + owner + ":" + purpose
         return PreparationMemory({ prefs().getString(key, null) }, { prefs().edit().putString(key, it).commit() })
     }
+    private fun singlePreparation(owner: String = api.userId) = preparation(owner, "single-prepare")
     private fun showFeedback(value: WriteFeedback, expected: Int = epoch, detail: String = "") {
         if (!resumed || epoch != expected || api.token.isBlank()) return
         feedback.show(value, copy, lease?.job?.displayLabel.orEmpty(), detail) {
@@ -90,7 +95,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         copy = Copy(prefs().getString("language", "ja").orEmpty())
         feedback = WriteFeedbackDialog(this, { prefs().getBoolean("sound", true) }, { prefs().edit().putBoolean("sound", it).apply() })
         api = Api(SecureSession(this))
-        api.onRevoked = { overwritePermission.clear(); flow.pause(); epoch++; runOnUiThread { writeSession.reset(); lease = null; statusMessage = ""; feedback.close(); successGate.cancel(); scanArmed = false; inspectedTag = null; inspectedCards = emptyList(); reader(); stopPlayback(); cards = emptyList(); jobs = emptyList(); checked.clear(); pendingBulk = null; queue.clear(); loginScreen() } }
+        api.onRevoked = { singleMutation = null; inspectedIdentity = ""; overwritePermission.clear(); flow.pause(); epoch++; runOnUiThread { writeSession.reset(); lease = null; statusMessage = ""; feedback.close(); successGate.cancel(); scanArmed = false; inspectedTag = null; inspectedCards = emptyList(); reader(); stopPlayback(); cards = emptyList(); jobs = emptyList(); checked.clear(); pendingBulk = null; queue.clear(); loginScreen() } }
         adapter = NfcAdapter.getDefaultAdapter(this)
         shell = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.rgb(245, 248, 246)) }
         shell.setOnApplyWindowInsetsListener { view, insets ->
@@ -187,7 +192,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private fun navigate(destination: Screen) {
         pauseWriting(); stopPlayback(); checked.clear(); writeSession.retryJobId = null; offset = 0; screen = destination
         flow.choose(destination == Screen.AUTO)
-        if (destination == Screen.READ) {
+        if (destination in listOf(Screen.READ, Screen.SINGLE)) {
             inspectedTag = null; inspectedCards = emptyList(); scanArmed = true; statusMessage = ""
             executor.execute { releaseCurrent() }
             render(); return
@@ -206,7 +211,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private fun render() {
         if (api.token.isBlank()) { loginScreen(); return }
         header(t("app"), true)
-        if (screen == Screen.READ) { renderReader(); reader(); return }
+        if (screen in listOf(Screen.READ, Screen.SINGLE)) { renderReader(); reader(); return }
         pendingBulk?.takeIf { OperatorPolicy.requiresReview(it.optString("operation")) }?.let {
             text(content, t("historicalBulkSummary"), 14f, true)
             action(content, t("reviewHistoricalBulk")) { reviewHistoricalBulk() }
@@ -225,7 +230,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         reader()
     }
     private fun renderReader() {
-        text(content, t("readNfc"), 25f, true)
+        text(content, t(if (screen == Screen.SINGLE) "singleReadFirst" else "readNfc"), 25f, true)
         if (adapter?.isEnabled != true) {
             text(content, t("nfcOff"))
             action(content, t("nfc")) { startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) }
@@ -258,12 +263,13 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             }
             if (inspectedCards.isNotEmpty() && queryingEpoch != epoch) action(content, t("readRetry")) { lookupInspection() }
         }
+        if (screen == Screen.SINGLE) renderSingle()
         action(content, t("readAgain"), true) {
-            epoch++; stopPlayback(); inspectedTag = null; inspectedCards = emptyList(); scanArmed = true; statusMessage = ""; render()
+            pauseWriting(); executor.execute { releaseCurrent() }; stopPlayback(); inspectedTag = null; inspectedCards = emptyList(); scanArmed = true; statusMessage = ""; render()
         }
     }
     private fun inspectionCurrent(expectedEpoch: Int, owner: String) =
-        NfcInspection.current(resumed, screen == Screen.READ, expectedEpoch, epoch, owner, api.userId) && api.token.isNotBlank()
+        NfcInspection.current(resumed, screen in listOf(Screen.READ, Screen.SINGLE), expectedEpoch, epoch, owner, api.userId) && api.token.isNotBlank()
 
     private fun readTag(tag: Tag) {
         if (!resumed || !scanArmed || !busy.compareAndSet(false, true)) return
@@ -276,6 +282,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 ui {
                     if (inspectionCurrent(readEpoch, owner)) {
                         inspectedTag = snapshot
+                        inspectedIdentity = tag.id.joinToString("") { "%02x".format(it) }
                         inspectedCards = emptyList()
                         statusMessage = if (snapshot.kind == "lost") t("lost") else ""
                         lookupInspection()
@@ -373,26 +380,74 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         if (offset + cards.size < total) action(content, t("next")) { offset += 50; checked.clear(); reload() }
     }
     private fun renderSingle() {
-        text(content, t("single"), 25f, true)
-        renderWriteState()
-        jobs.filter { it.recordingStatus != "disabled" }.forEach { job ->
-            action(content, "${job.displayLabel} · ${t(job.status)} · ${t(if (job.recordingStatus == "bound") "recorded" else "empty")}") {
-                pauseWriting()
-                val selectionEpoch = epoch
-                val owner = api.userId
-                val allowed = { resumed && screen == Screen.SINGLE && epoch == selectionEpoch && api.userId == owner && owner.isNotBlank() }
-                AlertDialog.Builder(this).setTitle(job.displayLabel).setMessage(job.batchDate ?: job.batch)
-                    .setNegativeButton(t("cancel"), null)
-                    .setPositiveButton(t("write")) { _, _ -> if (allowed()) arm(job.id) }
-                    .setNeutralButton(t("overwrite")) { _, _ ->
-                        AlertDialog.Builder(this).setTitle("${t("overwrite")} · ${job.displayLabel}")
-                            .setMessage(t("overwriteConfirm"))
-                            .setNegativeButton(t("cancel"), null)
-                            .setPositiveButton(t("confirm")) { _, _ -> if (allowed()) arm(job.id, true) }.show()
-                    }.show()
-            }
+        val pending = singleMutation
+        if (pending != null) {
+            text(content, t("sameChip"), 18f, true)
+            lease?.let { text(content, it.job.displayLabel, 24f, true) }
+            return
         }
-        if (jobs.isEmpty()) text(content, t("noCards"))
+        val snapshot = inspectedTag ?: return
+        if (inspectedCards.any { it.card?.recordingId != null || it.card?.status == "disabled" }) text(content, t("recordingProtected"), 15f, true)
+        if (queue.isNotEmpty()) { text(content, t("unsynced"), 15f); action(content, t("review")) { reviewQueue() }; return }
+        if (!SingleCardPolicy.canChange(snapshot, inspectedCards) || inspectedIdentity.isBlank()) return
+        action(content, t("newChipUrl"), true) { confirmSingle(SingleOperation.NEW) }.isEnabled = !singlePreparation().physicalUncertain()
+        if (snapshot.kind == "data") action(content, t("clearChip")) { confirmSingle(SingleOperation.CLEAR) }
+        val original = inspectedCards.singleOrNull()?.card?.job
+        if (original != null && inspectedCards.single().card?.status != "disabled") action(content, t("restoreChipUrl")) { confirmSingle(SingleOperation.RESTORE) }
+        if (singlePreparation().jobId() != null) action(content, t("singleReviewPreparation")) {
+            val expectedEpoch = epoch
+            AlertDialog.Builder(this).setTitle(t("singleReviewPreparation")).setMessage(t("stale"))
+                .setNegativeButton(t("cancel"), null).setPositiveButton(t("confirm")) { _, _ ->
+                    if (resumed && screen == Screen.SINGLE && epoch == expectedEpoch) {
+                        runCatching { singlePreparation().resetReviewed() }.onSuccess { render() }.onFailure { message(t("saveFailed")) }
+                    }
+                }.show()
+        }
+    }
+    private fun confirmSingle(operation: SingleOperation) {
+        val snapshot = inspectedTag ?: return
+        if (!SingleCardPolicy.canChange(snapshot, inspectedCards) || inspectedIdentity.isBlank()) return
+        val expected = SingleMutation(inspectedIdentity, snapshot.fingerprint, operation)
+        val reviewed = inspectedCards.toList()
+        val selectionEpoch = epoch; val owner = api.userId
+        val key = when(operation) { SingleOperation.CLEAR -> "clearChip"; SingleOperation.NEW -> "newChipUrl"; SingleOperation.RESTORE -> "restoreChipUrl" }
+        val detail = if (operation == SingleOperation.CLEAR) "clearChipConfirm" else if (operation == SingleOperation.NEW) "newChipConfirm" else "overwriteConfirm"
+        AlertDialog.Builder(this).setTitle(t(key)).setMessage(t(detail) + "\n\n" + reviewed.joinToString("\n") { result ->
+            "${result.card?.displayLabel ?: t(result.state)} · ${t(if (result.card?.recordingId != null) "recorded" else if (result.state == "readMissing") "readMissing" else "empty") }"
+        }).setNegativeButton(t("cancel"), null).setPositiveButton(t("confirm")) { _, _ ->
+            if (resumed && screen == Screen.SINGLE && epoch == selectionEpoch && api.userId == owner && !busy.get()) prepareSingle(expected, reviewed)
+        }.show()
+    }
+    private fun verifyReviewed(reviewed: List<InspectedCard>) {
+        for (result in reviewed) {
+            val fresh = api.inspect(result.url)
+            if (!SingleCardPolicy.reviewMatches(result, fresh)) throw WriterException("CHIP_CHANGED")
+        }
+    }
+    private fun prepareSingle(expected: SingleMutation, reviewed: List<InspectedCard>) {
+        pauseWriting()
+        val startEpoch = epoch; val owner = api.userId
+        work {
+            releaseCurrent(); api.verify(); verifyReviewed(reviewed)
+            val acquired = if (expected.operation == SingleOperation.CLEAR) null else {
+                val target = if (expected.operation == SingleOperation.RESTORE) reviewed.single().card?.job ?: throw WriterException("CHIP_CHANGED") else {
+                    val memory = singlePreparation(owner)
+                    if (memory.physicalUncertain()) throw WriterException("JOB_INELIGIBLE")
+                    val id = memory.jobId()
+                    if (id == null) api.createSingle(memory.requestKey()).also { memory.accepted(it) }
+                    else api.jobs().find { it.id == id && memory.matches(it) && WriterSafety.autoRetry(it) } ?: throw WriterException("JOB_INELIGIBLE")
+                }
+                if (expected.operation == SingleOperation.NEW && reviewed.any { it.url == target.visitorUrl }) throw WriterException("CHIP_CHANGED")
+                api.lease(target.id, deviceId()) ?: throw WriterException("JOB_CONFLICT")
+            }
+            if (!resumed || epoch != startEpoch || screen != Screen.SINGLE || api.userId != owner) { acquired?.let { api.release(it) }; return@work }
+            lease = acquired
+            singleExpiresAt = acquired?.expiresAt ?: (System.currentTimeMillis() + 600000)
+            singleMutation = expected
+            singleReviewed = reviewed
+            if (acquired != null) { flow.choose(false); flow.start(acquired.job.id, acquired.token, acquired.expiresAt) }
+            ui { if (resumed && epoch == startEpoch) { statusMessage = t("sameChip"); render() } }
+        }
     }
     private fun renderAuto() {
         text(content, t("auto"), 25f, true)
@@ -450,7 +505,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             ui { if (resumed && startEpoch == epoch) { statusMessage = ""; render(); showFeedback(WriteFeedback.READY, startEpoch) } }
         }
     }
-    private fun pauseWriting() { overwritePermission.clear(); epoch++; flow.pause(); successGate.cancel(); feedback.close(); reader() }
+    private fun pauseWriting() { singleMutation = null; singleReviewed = emptyList(); inspectedIdentity = ""; overwritePermission.clear(); epoch++; flow.pause(); successGate.cancel(); feedback.close(); reader() }
     private fun releaseCurrent() {
         overwritePermission.clear()
         val old = lease ?: return
@@ -459,19 +514,26 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     }
     private fun reader() {
         adapter?.disableReaderMode(this)
-        if (resumed && api.token.isNotBlank() && ((screen == Screen.READ && scanArmed) || (screen != Screen.READ && flow.stage in listOf(WriterFlow.Stage.READY, WriterFlow.Stage.REMOVAL))) && adapter?.isEnabled == true) {
+        val scanning = screen in listOf(Screen.READ, Screen.SINGLE) && scanArmed
+        val clearing = screen == Screen.SINGLE && singleMutation?.operation == SingleOperation.CLEAR
+        val writing = screen != Screen.READ && flow.stage in listOf(WriterFlow.Stage.READY, WriterFlow.Stage.REMOVAL)
+        if (resumed && api.token.isNotBlank() && (scanning || clearing || writing) && adapter?.isEnabled == true) {
             val flags = NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_NFC_V
             adapter?.enableReaderMode(this, this, flags or if (screen == Screen.READ) 0 else NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS, null)
         }
     }
     override fun onTagDiscovered(tag: Tag) {
-        if (screen == Screen.READ) { readTag(tag); return }
+        if (screen == Screen.READ || (screen == Screen.SINGLE && scanArmed)) { readTag(tag); return }
+        if (screen == Screen.SINGLE && singleMutation?.operation == SingleOperation.CLEAR) { clearSingleTag(tag); return }
         val writeEpoch = epoch
+        val expectedSingle = if (screen == Screen.SINGLE) singleMutation ?: return else null
+        val reviewedSingle = singleReviewed
         val current = lease ?: return
         if (!resumed || !busy.compareAndSet(false, true)) return
         val chipId = tag.id.joinToString("") { "%02x".format(it) }
         if (!flow.begin(chipId)) { busy.set(false); return }
-        val overwriteConfirmed = overwritePermission.consume(current.job.id, current.token, screen != Screen.SINGLE)
+        singleMutation = null; inspectedIdentity = ""
+        val overwriteConfirmed = expectedSingle != null || overwritePermission.consume(current.job.id, current.token, screen != Screen.SINGLE)
         val writeOwner = api.userId
         val automaticWrite = screen == Screen.AUTO
         val reportKey = accountKey("reports")
@@ -482,12 +544,14 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 val fresh = api.jobs().find { it.id == current.job.id }
                 if (fresh == null || !WriterSafety.sameAssignment(current.job, fresh)) throw WriterException("JOB_CONFLICT")
                 if (!resumed || epoch != writeEpoch) throw WriterException("JOB_CONFLICT")
+                if (expectedSingle != null) verifyReviewed(reviewedSingle)
                 if (automaticWrite) preparation(writeOwner).beginPhysical(current.job.id)
+                if (expectedSingle?.operation == SingleOperation.NEW) singlePreparation(writeOwner).beginPhysical(current.job.id)
             } catch (e: Exception) {
                 flow.pause(); busy.set(false); ui { if (resumed && epoch == writeEpoch) { reader(); message(error(e)); showFeedback(WriteFeedback.ERROR, writeEpoch, error(e)) } }; return@execute
             }
             val report = try {
-                NfcWriter.writeAndRead(tag, current.job, overwriteConfirmed) { resumed && epoch == writeEpoch && System.currentTimeMillis() < current.expiresAt }
+                NfcWriter.writeAndRead(tag, current.job, overwriteConfirmed, expectedSingle) { resumed && epoch == writeEpoch && System.currentTimeMillis() < current.expiresAt }
             } catch (e: Exception) {
                 Provisioning.failure(current.job, when(e) { is TagLostException -> "TAG_LOST"; is WriterException -> e.code; is ApiException -> e.code; else -> "NFC_IO" })
             }.copy(leaseToken = current.token)
@@ -513,6 +577,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                     ui {
                         if (!resumed || epoch != writeEpoch) return@ui
                         message(t("remove"))
+                        if (expectedSingle != null) { inspectedTag = null; inspectedCards = emptyList() }
                         successGate.success(System.currentTimeMillis())
                         showFeedback(WriteFeedback.SUCCESS, writeEpoch)
                         // Android's ignore callback only fires once this physical tag has left the field.
@@ -537,12 +602,37 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             } finally { busy.set(false) }
         }
     }
+    private fun clearSingleTag(tag: Tag) {
+        val expectedEpoch = epoch
+        val mutation = singleMutation ?: return
+        val reviewed = singleReviewed
+        if (!resumed || !busy.compareAndSet(false, true)) return
+        singleMutation = null; inspectedIdentity = ""
+        val owner = api.userId
+        ui { if (resumed && epoch == expectedEpoch) { message(t("writing")); showFeedback(WriteFeedback.WRITING, expectedEpoch) } }
+        executor.execute {
+            var touchingChip = false
+            try {
+                api.verify(); verifyReviewed(reviewed)
+                touchingChip = true
+                NfcWriter.clearAndRead(tag, mutation) { resumed && epoch == expectedEpoch && api.userId == owner && System.currentTimeMillis() < singleExpiresAt }
+                ui { if (resumed && epoch == expectedEpoch && api.userId == owner) {
+                    inspectedTag = null; inspectedCards = emptyList(); scanArmed = true
+                    message(t("chipCleared")); render(); showFeedback(WriteFeedback.SUCCESS, expectedEpoch, t("chipCleared"))
+                    handler.postDelayed({ if (resumed && epoch == expectedEpoch && screen == Screen.SINGLE) { feedback.close(); render() } }, 1200)
+                } }
+            } catch (e: Exception) {
+                val failure = if (e is TagLostException) WriterException("TAG_LOST") else if (touchingChip && e !is WriterException) WriterException("NFC_IO") else e
+                ui { if (resumed && epoch == expectedEpoch) { message(error(failure)); render(); showFeedback(WriteFeedback.ERROR, expectedEpoch, error(failure)) } }
+            } finally { busy.set(false) }
+        }
+    }
     private fun awaitRemoval(expected: Int) {
         handler.postDelayed({
             if (!resumed || expected != epoch || flow.stage != WriterFlow.Stage.REMOVAL) return@postDelayed
             if (successGate.advance(System.currentTimeMillis()) && !busy.get()) {
                 feedback.close(); flow.removed(); lease = null
-                if (flow.readyForNext) arm(null) else reload()
+                if (flow.readyForNext) arm(null) else if (screen == Screen.SINGLE) { scanArmed = true; render() } else reload()
             } else awaitRemoval(expected)
         }, 100)
     }
@@ -572,6 +662,8 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 queue.remove(report)
                 try { persistQueue() } catch (e: Exception) { queue.add(report); throw e }
                 if (report.status == "verified") preparation().completed(report.jobId) else preparation().failedPhysical(report.jobId)
+                if (report.status == "verified") singlePreparation().completed(report.jobId)
+                else if (SingleCardPolicy.retryIsSafe(report.errorCode)) singlePreparation().failedPhysical(report.jobId)
             }
             catch (e: ApiException) {
                 if (e.code !in listOf("LEASE_EXPIRED", "LEASE_CONFLICT", "VERSION_CONFLICT", "JOB_CONFLICT", "JOB_INELIGIBLE")) throw e
@@ -589,7 +681,8 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     }
     private val checkLease = object : Runnable {
         override fun run() {
-            if (resumed && flow.expire(System.currentTimeMillis())) {
+            if (resumed && (flow.expire(System.currentTimeMillis()) || (singleMutation?.operation == SingleOperation.CLEAR && System.currentTimeMillis() >= singleExpiresAt))) {
+                singleMutation = null; inspectedIdentity = ""
                 reader()
                 statusMessage = t("expired")
                 render()
@@ -706,6 +799,8 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     }
     private fun error(e: Exception): String = t(when(e.message) {
         "AUTH_REQUIRED", "OPERATOR_REQUIRED", "invalid_credentials" -> "auth"
+        "CHIP_CHANGED" -> "chipChanged"
+        "NFC_IO" -> "chipOperationFailed"
         "CAPACITY" -> "capacity"; "READ_ONLY" -> "readOnly"; "FOREIGN_TAG" -> "foreign"
         "UNSUPPORTED" -> "unsupported"; "TAG_LOST" -> "lost"; "READBACK_MISMATCH", "INVALID_URL" -> "mismatch"
         "FORMATTED_RETRY" -> "formatted"; "LEASE_CONFLICT" -> "leased"; "CLIENT_UPGRADE_REQUIRED" -> "upgrade"
@@ -716,7 +811,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     override fun onResume() {
         super.onResume(); resumed = true; reader()
         if (::api.isInitialized && api.token.isNotBlank() && !busy.get()) {
-            if (screen == Screen.READ) render() else reload()
+            if (screen in listOf(Screen.READ, Screen.SINGLE)) render() else reload()
         }
     }
     override fun onPause() {
