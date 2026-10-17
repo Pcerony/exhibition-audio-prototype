@@ -19,6 +19,12 @@
 - 私有POST transcription-worker使用x-maintenance-secret=MAINTENANCE_SECRET，缺/错401，无Groq密钥503 TRANSCRIPTION_NOT_CONFIGURED且不领任务。每次最多1条；服务端私有对象下载后调用固定Groq端点及whisper-large-v3-turbo；密钥仅Edge Secrets。worker完成条件包括recording仍为有效tag当前录音、同意、租约token/version匹配。重置/删除级联取消，禁用期间不处理/不公开；编辑/重试撤销旧结果。API错误只返回稳定码，不含供应商原始错误或正文。
 - Groq原语言转写，非翻译；新文本默认不公开。审核发布只影响文本不影响音频。默认不开启自动cron，待GROQ_API_KEY配置后集成负责人执行独立Vault-backed调度脚本，不能在代码中写入密钥或自动开通付费。
 
+### 运营列表转写状态摘要
+
+- 认证`admin-api`的`list`可接收`transcriptionState?:'not_consented'|'pending'|'processing'|'draft'|'published'|'failed'`。筛选在服务端全量集合上先执行，再计数、排序和分页；所有现有搜索、录音状态、日期和排序行为保持不变。筛选只匹配已有录音，不匹配空卡。
+- Admin列表中的录音可包含`transcriptionSummary:{consented:boolean,status:'pending'|'processing'|'ready'|'failed'|null,published:boolean}`。无同意时展示未同意；已同意但任务缺失或pending时筛为待处理；ready且未发布为草稿待审核；ready且published为已发布。列表只取状态字段，不带正文、错误码或供应商错误。
+- 列表摘要仅由认证运营API返回；访客`public-tag`响应不变。既有单条`getTranscription`仍是唯一的运营端正文读取入口；CSV字段不新增转写状态或正文。非法筛选值返回HTTP 400 `REQUEST_INVALID`。
+
 ## 录音后分类 V3（当前契约）
 
 - 固定分类A/B/C/D，固定UUID依次`00000000-0000-4000-8000-000000000001`至`...0004`，名称美食/旅行/相遇/其他回忆。`categories`只返回这四项，nextNumber兼容字段不用于预分配；createCategory/renameCategory拒绝CATEGORIES_FIXED。
