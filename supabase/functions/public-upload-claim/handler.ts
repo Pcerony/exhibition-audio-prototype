@@ -2,12 +2,14 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import { json, preflight, readJson, sha256 } from '../_shared/http.ts';
 import { parseMemoryLocation } from '../../../src/domain/location.ts';
 import { classifyMapLocation } from '../../../src/domain/mapPieceAssignment.ts';
+import { isTranscriptionLanguage } from '../_shared/transcriptionLanguage.ts';
 
 export function createHandler(getClient: () => SupabaseClient) { return async (request: Request) => {
   const options = preflight(request);
   if (options) return options;
   if (request.method !== 'POST') return json({ code: 'METHOD_NOT_ALLOWED' }, 405);
   const body = await readJson(request);
+  if (body?.transcriptionLanguage !== undefined && !isTranscriptionLanguage(body.transcriptionLanguage)) return json({ code: 'REQUEST_INVALID' }, 400);
   if (body?.transcriptionConsent !== undefined && typeof body.transcriptionConsent !== 'boolean') return json({ code: 'REQUEST_INVALID' }, 400);
   const categoryCode = body?.categoryCode;
   if (categoryCode === undefined || categoryCode === null || categoryCode === '') return json({ code: 'CATEGORY_REQUIRED' }, 400);
@@ -58,6 +60,7 @@ export function createHandler(getClient: () => SupabaseClient) { return async (r
     p_location: location,
     p_category_code: categoryCode,
     p_transcription_consent: body?.transcriptionConsent === true,
+    p_language_hint: body?.transcriptionLanguage ?? 'ja',
   }).maybeSingle<{ claim_status: string; recording_id: string; recording_created_at: string }>();
   if (claimError) {
     const code = claimError.message.includes('CATEGORY_REQUIRED') ? 'CATEGORY_REQUIRED'

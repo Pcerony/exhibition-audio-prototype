@@ -5,6 +5,7 @@ import type { VisitorRepository } from '../../storage/repository';
 import { useRecorder } from './useRecorder';
 import { LanguageSwitch } from '../../i18n/LanguageSwitch';
 import { useI18n } from '../../i18n/I18nProvider';
+import { transcriptionLanguageForLocale } from '../../domain/transcriptionLanguage';
 import './visitor.css';
 import { memoryLocationUrl, type MapPoint, type MemoryLocation } from '../../domain/location';
 import { LocationPicker } from './LocationPicker';
@@ -16,7 +17,7 @@ import { isMemoryCategoryCode, type MemoryCategoryCode } from '../../domain/clas
 type Props = { repository: VisitorRepository; token: string };
 
 export function VisitorPage({ repository, token }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [stage, setStage] = useState<'intro' | 'theme' | 'map' | 'record'>('intro');
   const [theme, setTheme] = useState<MemoryCategoryCode | ''>('');
   const [mapVisited, setMapVisited] = useState(false);
@@ -99,7 +100,7 @@ export function VisitorPage({ repository, token }: Props) {
     setMessage('');
     try {
       const result = await repository.claim(token, {
-        id: crypto.randomUUID(), blob: recorder.blob, nickname: '', duration: recorder.duration, location, mapPoint, categoryCode: theme, transcriptionConsent,
+        id: crypto.randomUUID(), blob: recorder.blob, nickname: '', duration: recorder.duration, location, mapPoint, categoryCode: theme, transcriptionConsent, transcriptionLanguage: transcriptionLanguageForLocale(locale),
       });
       if (activeToken.current !== token) return;
       if (result.status === 'claimed' || result.status === 'already-bound') {

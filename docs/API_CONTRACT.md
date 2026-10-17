@@ -1,5 +1,9 @@
 # 跨端 API 契约
 
+## 语言提示与工作人员重新转写
+
+新录音`public-upload-claim`可带`transcriptionLanguage`（ja/zh/en/ko/es/fr/de/it/pt/ru/vi/th/id/ar/hi/auto），省略按ja；界面语言zh-CN/zh-TW均映射zh。工作人员`staff-api`新增`retryTranscription`，字段`recordingId/memberId/version/languageHint`；名单身份、同意、当前绑定、版本、每条一分钟限频及provider配置均在服务端验证。list的`transcription`增`languageHint`。重试保留旧文作参考、立即取消公开、撤销旧lease、版本+1并重新排队；相同版本并发仅一条成功，处理中不可重复。审计动作为`staff_retry_transcription`，保留署名/时间/语言，不记正文。新结果仍需人工确认。仅转写原语言，不调用翻译接口；既有20条不批量重跑。
+
 ## 现场工作人员网站（候选）
 
 `POST staff-api` 验证 Supabase JWT 和 `operator_profiles` 的 staff/operator/admin 角色；staff 仍不能访问 admin-api。共用一个受限 staff 登录账号，成员名单通过 session 返回，选中 memberId 本机按项目/账号记住。姓名是自报身份，不代替认证账号。

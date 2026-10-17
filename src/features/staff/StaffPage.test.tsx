@@ -73,6 +73,7 @@ function repository(): StaffRepository {
     signOut: vi.fn(async () => {}),
     list: vi.fn(async () => ({ cards: [card], total: 1 })),
     save: vi.fn(async () => {}),
+    retryTranscription: vi.fn(async () => {}),
     playback: vi.fn(async () => 'https://example.invalid/audio'),
     history: vi.fn(async () => [
       {
@@ -99,6 +100,60 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 describe('staff website', () => {
+  it('confirms a selected source language and requeues AI without approving it', async () => {
+    localStorage.setItem(memoryKey,'member-a');
+    vi.spyOn(window,'confirm').mockReturnValue(true);
+    const repo=repository(),user=userEvent.setup();show(repo);
+    await user.click(await screen.findByRole('button',{name:'审核 261017-A001'}));
+    expect(screen.getByLabelText('录音语言')).toHaveValue('ja');
+    await user.selectOptions(screen.getByLabelText('录音语言'),'ko');
+    await user.click(screen.getByRole('button',{name:'重新 AI 转写'}));
+    await waitFor(()=>expect(repo.retryTranscription).toHaveBeenCalledWith('recording-a','member-a',1,'ko'));
+    expect(repo.save).not.toHaveBeenCalled();
+    expect(await screen.findByText('已排队重新转写，完成后需要再次审核。')).toBeVisible();
+  });
+  it('does not requeue when confirmation is cancelled', async()=>{
+    localStorage.setItem(memoryKey,'member-a');vi.spyOn(window,'confirm').mockReturnValue(false);
+    const repo=repository(),user=userEvent.setup();show(repo);
+    await user.click(await screen.findByRole('button',{name:'审核 261017-A001'}));
+    await user.click(screen.getByRole('button',{name:'重新 AI 转写'}));
+    expect(repo.retryTranscription).not.toHaveBeenCalled();
+  });
+  it('immediately marks a retried card pending while the list refresh is still in flight',async()=>{
+    localStorage.setItem(memoryKey,'member-a');vi.spyOn(window,'confirm').mockReturnValue(true);
+    const repo=repository(),user=userEvent.setup();show(repo);
+    await user.click(await screen.findByRole('button',{name:'审核 261017-A001'}));
+    vi.mocked(repo.list).mockImplementation(()=>new Promise(()=>{}));
+    await user.click(screen.getByRole('button',{name:'重新 AI 转写'}));
+    await screen.findByText('已排队重新转写，完成后需要再次审核。');
+    await user.click(screen.getByRole('button',{name:'审核 261017-A001'}));
+    expect(screen.getByRole('button',{name:'确认并发布'})).toBeDisabled();
+    expect(screen.getByRole('button',{name:'重新 AI 转写'})).toBeDisabled();
+  });
+  it('retains edited text and language after a retry version conflict',async()=>{
+    localStorage.setItem(memoryKey,'member-a');vi.spyOn(window,'confirm').mockReturnValue(true);
+    const repo=repository();vi.mocked(repo.retryTranscription).mockRejectedValue(Error('VERSION_CONFLICT'));
+    const user=userEvent.setup();show(repo);
+    await user.click(await screen.findByRole('button',{name:'审核 261017-A001'}));
+    await user.clear(screen.getByLabelText('转写文字'));
+    await user.type(screen.getByLabelText('转写文字'),'Unsaved review');
+    await user.selectOptions(screen.getByLabelText('录音语言'),'es');
+    await user.click(screen.getByRole('button',{name:'重新 AI 转写'}));
+    expect(await screen.findByRole('alert')).toHaveTextContent('已被其他工作人员更新');
+    expect(screen.getByLabelText('转写文字')).toHaveValue('Unsaved review');
+    expect(screen.getByLabelText('录音语言')).toHaveValue('es');
+    expect(screen.getByRole('button',{name:'重新 AI 转写'})).toBeDisabled();
+  });
+  it('does not approve or requeue the retained old text while AI is processing',async()=>{
+    localStorage.setItem(memoryKey,'member-a');const repo=repository();
+    vi.mocked(repo.list).mockResolvedValue({cards:[{...card,recording:{...card.recording!,transcription:{...card.recording!.transcription!,status:'processing'}}}],total:1});
+    const user=userEvent.setup();show(repo);
+    await user.click(await screen.findByRole('button',{name:'审核 261017-A001'}));
+    expect(screen.getByLabelText('转写文字')).toHaveValue('Synthetic memory at the riverside.');
+    expect(screen.getByLabelText('转写文字')).toBeDisabled();
+    expect(screen.getByRole('button',{name:'确认并发布'})).toBeDisabled();
+    expect(screen.getByRole('button',{name:'重新 AI 转写'})).toBeDisabled();
+  });
   it('shared login asks only for one account then remembers the chosen member on that device', async () => {
     const repo = repository();
     vi.mocked(repo.getSession).mockResolvedValue(null);

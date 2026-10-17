@@ -1,6 +1,14 @@
 import { createHandler } from './handler.ts';
 import { sha256 } from '../_shared/http.ts';
 const request = (categoryCode?: unknown) => new Request('https://example.invalid', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({categoryCode})});
+Deno.test('invalid transcription language fails before lookup, invalidation or mutation', async () => {
+ let calls=0;const handler=createHandler(()=>{calls++;throw Error('cloud accessed');});
+ for(const transcriptionLanguage of [null,'zh-CN','jp','',1,{},'JA']) {
+  const response=await handler(new Request('https://example.invalid',{method:'POST',headers:{'x-upload-token':'test'},body:JSON.stringify({categoryCode:'A',uploadId:'30000000-0000-4000-8000-000000000001',durationSeconds:1,transcriptionLanguage})}));
+  if(response.status!==400 || (await response.json()).code!=='REQUEST_INVALID')throw Error('language accepted');
+ }
+ if(calls)throw Error('invalid language touched cloud');
+});
 Deno.test('claim requires a valid fixed category before touching cloud state', async () => {
  let calls=0;const handle=createHandler(()=>{calls++;throw new Error('must not touch cloud');});
  for (const value of [undefined,null,'']) {
@@ -48,6 +56,7 @@ Deno.test('claim remains successful when post-claim map assignment persistence f
  const result=await response.json();
  if(response.status!==200 || result.status!=='claimed')throw Error('map assignment failure changed a successful claim');
  const claim=calls.find(call=>call.name==='claim_recording_transcription');
+ if(claim?.args.p_language_hint!=='ja')throw Error('legacy language default missing');
  if(!claim || JSON.stringify(claim.args.p_location)!==JSON.stringify({source:'place',placeId:'synthetic-place'}))throw Error('transient place coordinates altered saved location');
  const assignment=calls.find(call=>call.name==='save_automatic_piece_assignment');
  if(!assignment || assignment.args.p_recording_id!=='40000000-0000-4000-8000-000000000001'
@@ -71,10 +80,14 @@ Deno.test('missing or invalid optional map coordinates become review metadata wi
   },
  };
  const handle=createHandler(()=>client as never);
+ for(const transcriptionLanguage of [undefined,'ja','zh','en','ko','es','fr','de','it','pt','ru','vi','th','id','ar','hi','auto']) {
+ calls.length=0;
  const response=await handle(new Request('https://example.invalid',{method:'POST',headers:{'content-type':'application/json','x-upload-token':token},body:JSON.stringify({
-  uploadId:'30000000-0000-4000-8000-000000000001',durationSeconds:1,categoryCode:'A',mapPoint:{lat:'invalid',lng:130.4},
+  uploadId:'30000000-0000-4000-8000-000000000001',durationSeconds:1,categoryCode:'A',mapPoint:{lat:'invalid',lng:130.4},transcriptionLanguage,
  })}));
  if(response.status!==200 || (await response.json()).status!=='claimed')throw Error('optional map point blocked claim');
  const assignment=calls.find(call=>call.name==='save_automatic_piece_assignment');
  if(assignment?.args.p_state!=='needs_review' || assignment.args.p_piece_code!==null)throw Error('invalid point was not marked for review');
+ if(calls.find(call=>call.name==='claim_recording_transcription')?.args.p_language_hint!==(transcriptionLanguage??'ja'))throw Error('claim language was not forwarded');
+ }
 });

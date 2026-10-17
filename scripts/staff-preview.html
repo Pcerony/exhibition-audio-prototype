@@ -218,6 +218,13 @@
             published ? 'staff_approve' : 'staff_save_draft',
           );
         },
+        retryTranscription: async (recordingId, memberId, version, languageHint) => {
+          await wait();
+          const card = cards.find(c => c.recording?.id === recordingId), q = card.recording.transcription;
+          if (q.version !== version) throw Error('VERSION_CONFLICT');
+          card.recording.transcription = {...q, status:'pending', published:false, version:version+1, languageHint};
+          card.recording.latestReview = audit(recordingId, memberId, 'staff_retry_transcription');
+        },
         playback: async (recordingId, memberId) => {
           audit(recordingId, memberId, 'staff_audio_opened');
           return audio;

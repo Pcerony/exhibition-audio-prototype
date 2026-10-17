@@ -3,7 +3,7 @@ import { json, sha256 } from '../_shared/http.ts';
 
 const MAX_AUDIO = 10 * 1024 * 1024;
 const ENDPOINT = 'https://api.groq.com/openai/v1/audio/transcriptions';
-type Task = {recordingId:string;objectPath:string;mimeType:string;sizeBytes:number;leaseToken:string;version:number};
+type Task = {recordingId:string;objectPath:string;mimeType:string;sizeBytes:number;leaseToken:string;version:number;languageHint?:string};
 
 export function createHandler(getClient:()=>SupabaseClient, env:(name:string)=>string|undefined = (name)=>Deno.env.get(name), providerFetch:typeof fetch = fetch) {
  return async(request:Request):Promise<Response>=>{
@@ -30,6 +30,8 @@ export function createHandler(getClient:()=>SupabaseClient, env:(name:string)=>s
      else {
       const extensions:Record<string,string>={'audio/wav':'wav','audio/webm':'webm','audio/mp4':'m4a','audio/ogg':'ogg','audio/aac':'aac'};
       const form=new FormData();form.set('model','whisper-large-v3-turbo');form.set('response_format','json');
+      const language=task.languageHint ?? 'ja';
+      if(language!=='auto')form.set('language',language);
       form.set('file',new Blob([audio],{type:task.mimeType}),`recording.${extensions[task.mimeType]??'wav'}`);
       const response=await providerFetch(ENDPOINT,{method:'POST',headers:{Authorization:`Bearer ${key}`},body:form,signal:controller.signal,redirect:'error'});
       if(!response.ok){

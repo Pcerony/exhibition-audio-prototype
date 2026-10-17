@@ -47,6 +47,10 @@ try {
  stage='private draft and list';
  assert.equal((await publicCard()).recording.transcript,null);
  const list=await endpoint('staff-api',{action:'list',tagId});assert.equal(list.status,200);assert.equal(list.body.total,1);assert.equal(list.body.cards[0].recording.transcription.text,'Synthetic staff review draft');
+ assert.equal(list.body.cards[0].recording.transcription.languageHint,'ja');
+ const retry={action:'retryTranscription',recordingId,memberId:session.body.members[0].id,version:999,languageHint:'es'};
+ assert.equal((await endpoint('staff-api',{...retry,languageHint:'invalid'})).status,400);
+ const staleRetry=await endpoint('staff-api',retry);assert.equal(staleRetry.status,409);assert.equal(staleRetry.body.code,'VERSION_CONFLICT');
  assert.equal(list.body.cards[0].recording.pieceAssignment.state,'pending');
  assert.ok(!JSON.stringify(list.body).includes(path));
  const memberId=session.body.members[0].id;

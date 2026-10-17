@@ -4,7 +4,7 @@ import { parseMemoryLocation, type MapPoint, type MemoryLocation } from '../doma
 import { MEMORY_CATEGORIES, formatMemorySerial, isMemoryCategoryCode, memoryBatchDate, type MemoryCategoryCode } from '../domain/classification';
 
 type NewTag = { id: string; token: string; label: string; batch?: string };
-export type NewRecording = { id: string; blob: Blob; nickname: string; duration: number; location?: MemoryLocation | null; mapPoint?: MapPoint | null; categoryCode?: MemoryCategoryCode; transcriptionConsent?: boolean };
+export type NewRecording = { id: string; blob: Blob; nickname: string; duration: number; location?: MemoryLocation | null; mapPoint?: MapPoint | null; categoryCode?: MemoryCategoryCode; transcriptionConsent?: boolean; transcriptionLanguage?: import('../domain/transcriptionLanguage').TranscriptionLanguage };
 export type ClaimResult = { status: 'claimed' | 'already-bound' | 'not-found'; tag: Tag | null };
 
 export interface TagRepository {

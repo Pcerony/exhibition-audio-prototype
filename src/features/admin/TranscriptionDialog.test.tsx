@@ -75,6 +75,14 @@ it('contains errors and preserves edits after failed saves', async () => {
   expect(field).toHaveValue('保存前');
   expect(screen.getByRole('button', { name: '下書き保存' })).toBeEnabled();
 });
+it('explains that retained reference text cannot be republished during AI retry', async () => {
+  const {repository} = setup();
+  const field = await screen.findByRole('textbox',{name:'文字'});
+  repository.saveTranscription.mockRejectedValueOnce(new Error('TRANSCRIPTION_IN_PROGRESS'));
+  fireEvent.click(screen.getByRole('button',{name:'公開'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('文字起こし中');
+  expect(field).toHaveValue('元の文章');
+});
 it('disallows blank publication but permits a blank hidden draft', async () => {
   setup();
   fireEvent.change(await screen.findByRole('textbox', { name: '文字' }), { target: { value: '  ' } });
