@@ -105,11 +105,12 @@ describe('staff website', () => {
     const user = userEvent.setup();
     const view = show(repo);
     await user.type(
-      await screen.findByLabelText('账号邮箱'),
-      'staff@example.invalid',
+      await screen.findByLabelText('账号名'),
+      'staff',
     );
     await user.type(screen.getByLabelText('密码'), 'secret');
     await user.click(screen.getByRole('button', { name: '登录' }));
+    expect(repo.signIn).toHaveBeenCalledWith('staff', 'secret');
     await user.selectOptions(
       await screen.findByLabelText('工作人员'),
       'member-a',

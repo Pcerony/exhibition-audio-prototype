@@ -35,9 +35,9 @@ describe('staff repository', () => {
     expect((await f.repository.getSession())?.members[0].name).toBe(
       'Test staff',
     );
-    await f.repository.signIn(' staff@example.invalid ', 'secret');
+    await f.repository.signIn(' STAFF ', 'secret');
     expect(f.auth.signIn).toHaveBeenCalledWith(
-      'staff@example.invalid',
+      'staff-portal@staff.invalid',
       'secret',
     );
     const [url, options] = f.fetcher.mock.calls[0] as unknown as [
@@ -49,6 +49,22 @@ describe('staff repository', () => {
       authorization: 'Bearer synthetic',
     });
     expect(options.body).not.toContain('secret');
+  });
+  it('rejects other usernames and email identifiers before authentication', async () => {
+    for (const name of ['other', 'admin@example.invalid', '']) {
+      const f = fixture();
+      await expect(f.repository.signIn(name, 'secret')).rejects.toThrow('LOGIN_FAILED');
+      expect(f.auth.signIn).not.toHaveBeenCalled();
+      expect(f.fetcher).not.toHaveBeenCalled();
+    }
+  });
+  it('signs out if the shared identifier was incorrectly granted elevated permissions', async () => {
+    const f = fixture();
+    f.fetcher.mockImplementation(async () => new Response(JSON.stringify({
+      userId: 'account', role: 'admin', members: [],
+    }), { status: 200 }));
+    await expect(f.repository.signIn('staff', 'secret')).rejects.toThrow('STAFF_REQUIRED');
+    expect(f.auth.signOut).toHaveBeenCalledOnce();
   });
   it('passes member selection and version but never grants admin operations', async () => {
     const f = fixture();

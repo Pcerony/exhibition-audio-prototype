@@ -4,6 +4,10 @@ import type { PieceAssignmentSummary } from './adminRepository';
 import type { MemoryLocation } from '../domain/location';
 import type { MemoryCategoryCode } from '../domain/classification';
 
+const STAFF_USERNAME = 'staff';
+// This is an Auth identifier, not a mailbox or a secret.
+const STAFF_AUTH_IDENTIFIER = 'staff-portal@staff.invalid';
+
 export type StaffMember = { id: string; name: string };
 export type StaffSession = {
   userId: string;
@@ -53,7 +57,7 @@ export type StaffHistory = StaffReview & { id: number };
 export interface StaffRepository {
   identityScope: string;
   getSession(): Promise<StaffSession | null>;
-  signIn(email: string, password: string): Promise<StaffSession>;
+  signIn(username: string, password: string): Promise<StaffSession>;
   signOut(): Promise<void>;
   list(query: StaffQuery): Promise<{ cards: StaffCard[]; total: number }>;
   save(
@@ -112,7 +116,7 @@ export function createCloudStaffRepository(config: {
     if (!(await config.auth.getSession())) return null;
     const session = await request<StaffSession>('session');
     if (
-      !['staff', 'operator', 'admin'].includes(session.role) ||
+      session.role !== 'staff' ||
       !Array.isArray(session.members)
     )
       throw Error('STAFF_REQUIRED');
@@ -121,12 +125,20 @@ export function createCloudStaffRepository(config: {
   return {
     identityScope: url,
     getSession,
-    async signIn(email, password) {
-      await config.auth.signIn(email.trim(), password);
+    async signIn(username, password) {
+      if (username.trim().toLowerCase() !== STAFF_USERNAME)
+        throw Error('LOGIN_FAILED');
+      await config.auth.signIn(STAFF_AUTH_IDENTIFIER, password);
       acceptedUserId = null;
-      const session = await getSession();
-      if (!session) throw Error('AUTH_REQUIRED');
-      return session;
+      try {
+        const session = await getSession();
+        if (!session) throw Error('AUTH_REQUIRED');
+        return session;
+      } catch (cause) {
+        await config.auth.signOut().catch(() => {});
+        acceptedUserId = null;
+        throw cause;
+      }
     },
     async signOut() {
       await config.auth.signOut();

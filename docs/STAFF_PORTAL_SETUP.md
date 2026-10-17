@@ -4,7 +4,9 @@
 
 ## 一个共享账号
 
-负责人在 Supabase Auth 控制台创建一个研究室共享邮箱/密码账号，安全地分发给工作人员，不为每个成员开账号，也不要把密码写入本仓库。将该账号的 Auth UUID 在 `public.operator_profiles` 中配置为 `staff` 角色。只在受控 SQL 控制台执行，例如：
+工作人员页面使用固定账号名 `staff` 和一个共享密码，不需要真实邮箱，不为每个成员开账号。页面将账号名映射到内部 Auth 标识 `staff-portal@staff.invalid`；该标识不是收件邮箱，不用于发信。其他账号名和邮箱不能通过此页面登录。密码仍由 Supabase Auth 验证，网页不保存明文密码。
+
+由集成负责人通过受控的 Supabase Auth Admin API 创建此唯一账号，设置 `email_confirm: true`，不发送邀请或确认邮件、不关闭整个项目的邮箱确认。生成的密码只写入仓库之外的本机私有交接文件（目录0700、文件0600），不可写入代码、日志或提交。将该账号的 Auth UUID 在 `public.operator_profiles` 中配置为 `staff` 角色。只在受控 SQL 控制台执行，例如：
 
 ```sql
 insert into public.operator_profiles(user_id, role)
@@ -12,7 +14,9 @@ values ('<共享账号的 Auth UUID>'::uuid, 'staff')
 on conflict (user_id) do update set role = excluded.role;
 ```
 
-不要将原最高权限账号改成 `staff`。既有 `admin`/`operator` 账号也可进入此页，便于负责人检查；提供给研究室的共享账号必须是 `staff`，否则仍拥有后台权限。
+不要将原最高权限账号改成 `staff`，也不要重用其密码。共享账号必须是独立的 `staff` 用户；页面也会拒绝恢复或登录 `admin`/`operator` 会话，防止把配置错误的高权限账号交给工作人员。后台API继续在服务端检查角色，隐藏网址不是访问控制。
+
+没有真实收件邮箱，因此不提供邮件找回密码；忘记密码由负责人在受控 Auth Admin 界面重设，随后重新验证角色。手机记住的是可续期会话，不是密码。
 
 登录后从八位研究室成员中选择名字。名单按负责人指定的[研究室成员页](https://www.sodes.org/ja/members.html)录入，排除張彦芳与Zoé Láscari。手机记住会话和所选成员，支持切换成员、退出登录；这是共享账号下自报身份，不是个人账号认证。
 

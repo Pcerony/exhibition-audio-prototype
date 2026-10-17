@@ -64,7 +64,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
     [checking, setChecking] = useState(true);
   const [memberId, setMemberId] = useState(''),
     [choice, setChoice] = useState('');
-  const [email, setEmail] = useState(''),
+  const [username, setUsername] = useState(''),
     [password, setPassword] = useState(''),
     [busy, setBusy] = useState(false);
   const [cards, setCards] = useState<StaffCard[]>([]),
@@ -246,7 +246,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
     setBusy(true);
     setError('');
     try {
-      const value = await repository.signIn(email, password);
+      const value = await repository.signIn(username, password);
       if (alive.current) {
         setPassword('');
         accept(value);
@@ -349,14 +349,17 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
           <h1>{m.loginTitle}</h1>
           <form onSubmit={(event) => void login(event)}>
             <label>
-              {m.email}
+              {m.username}
               <input
-                type="email"
+                type="text"
                 autoComplete="username"
-                value={email}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                value={username}
                 required
                 disabled={busy}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => setUsername(event.target.value)}
               />
             </label>
             <label>
