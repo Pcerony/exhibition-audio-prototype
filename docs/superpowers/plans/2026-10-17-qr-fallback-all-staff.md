@@ -46,5 +46,5 @@
 - [x] Update the cross-client API/security documentation to state that the staff QR page is a single-purpose interface using the existing account and site; no new role model is introduced.
 - [x] Run `npm test -- --run`, `npm run test:backend`, the independent PostgreSQL QR test, `npm run build`, `GITHUB_PAGES=true npm run build`, and `git diff --check`.
 - [x] Create a fresh encrypted production backup, confirm the remote migration dry-run lists only migration 008, then apply migration 008 and deploy `staff-api`.
-- [ ] Verify migration state and QR authorization without creating an untracked production QR entry; merge after review to publish Pages.
-- [ ] Verify `#/staff/qr` reaches the staff-login/QR screen while `#/staff`, `#/admin/qr`, visitor routes, and existing NFC writing remain unchanged.
+- [x] Verify migration state and QR authorization without creating an untracked production QR entry; merge after review to publish Pages.
+- [x] Verify `#/staff/qr` reaches the staff-login/QR screen while `#/staff`, `#/admin/qr`, visitor routes, and existing NFC writing remain unchanged.
