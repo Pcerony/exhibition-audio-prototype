@@ -2,8 +2,11 @@
 
 参观者触碰 NFC 展签，免安装打开网页，录制一段福冈回忆；之后触碰同一展签只播放该声音。日语默认，可切换中文。芯片只保存唯一网址，录音与绑定关系存于 Supabase 云端。
 
+卡片不足或参观者手机不能读取NFC时，可由工作人员签发独立二维码，扫码沿用同一录音/播放流程。二维码列表回看已上线；Android录音后补实体卡尚未实现，推荐向空白芯片补写原二维码的同一稳定URL，不迁移录音。已上线范围与候选规划见[二维码与NFC补卡工程说明](docs/QR_NFC_WORKFLOW.md)。
+
 - 参观者入口：<https://voice.heisei.space/>
 - 认证运营后台：<https://voice.heisei.space/#/admin>
+- 工作人员入口：<https://voice.heisei.space/#/staff>；独立二维码页：<https://voice.heisei.space/#/staff/qr>
 - [Android 写卡工程](apps/tag-writer-android/README.md)
 - [系统文档](docs/README.md)、[首次运营](docs/OPERATOR_SETUP.md)、[验证记录](docs/VERIFICATION.md)
 - [当前进度](docs/STATUS.md)、[下一阶段：三端体验优化](docs/EXPERIENCE_PHASE.md)
