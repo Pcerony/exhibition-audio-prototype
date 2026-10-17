@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "test": "vitest",
-    "test:backend": "node --test supabase/tests/backend.test.mjs && npx --yes deno@2.9.6 test --node-modules-dir=none --no-lock --allow-read supabase/functions/admin-api/handler_test.ts supabase/functions/public-upload-claim/handler_test.ts supabase/functions/_shared/maintenance_test.ts supabase/functions/public-tag/handler_test.ts supabase/functions/transcription-worker/handler_test.ts supabase/tests/transcription_test.ts supabase/tests/admin_list_test.ts supabase/tests/on_demand_writing_test.ts supabase/tests/map_piece_assignment_test.ts"
+    "test:backend": "node --test supabase/tests/backend.test.mjs && npx --yes deno@2.9.6 test --node-modules-dir=none --no-lock --allow-read supabase/functions/admin-api/handler_test.ts supabase/functions/public-upload-claim/handler_test.ts supabase/functions/_shared/maintenance_test.ts supabase/functions/public-tag/handler_test.ts supabase/functions/transcription-worker/handler_test.ts supabase/tests/transcription_test.ts supabase/tests/admin_list_test.ts supabase/tests/on_demand_writing_test.ts supabase/tests/map_piece_assignment_test.ts supabase/functions/staff-api/handler_test.ts supabase/tests/staff_portal_test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

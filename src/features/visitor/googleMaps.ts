@@ -100,6 +100,7 @@ export async function mountLocationMap(options: {
 
 export async function mountMemoryLocationMap(options: {
   mapElement: HTMLElement; location: MemoryLocation; language: string; onReady: () => void; onError: () => void;
+  onPoint?: (point:MapPointWgs84)=>void;
 }): Promise<() => void> {
   await loadMaps(options.language);
   let disposed = false;
@@ -111,7 +112,7 @@ export async function mountMemoryLocationMap(options: {
     disableDefaultUI: true, clickableIcons: false, gestureHandling: 'none',
   });
 
-  if (options.location.source === 'pin') options.onReady();
+  if (options.location.source === 'pin') {options.onReady();options.onPoint?.(point);}
   else {
     const place = new google.maps.places.Place({ id: options.location.placeId });
     void place.fetchFields({ fields: ['location'] }).then(() => {
@@ -119,6 +120,7 @@ export async function mountMemoryLocationMap(options: {
       if (place.location) {
         map.setCenter(place.location);
         map.setZoom(16);
+        options.onPoint?.({lat:place.location.lat(),lng:place.location.lng()});
         options.onReady();
       } else options.onError();
     }).catch(() => { if (!disposed) options.onError(); });

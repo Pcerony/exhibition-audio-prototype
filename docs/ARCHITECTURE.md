@@ -2,16 +2,19 @@
 
 ## 系统边界
 
-单一单体仓库、三个客户端、一个共享云后端：
+单一单体仓库、四个客户端、一个共享云后端：
 
 ```text
 参观者 iPhone/Android 浏览器 ─┐
 运营管理 Web ────────────────┼── HTTPS API ── Supabase Postgres + 私有 Storage
+现场工作人员 Web (#/staff) ──┤
 运营者 Android 写卡 App ─────┘                  ├─ Edge Functions / 原子数据库操作
                                                 └─ Auth + RLS + 审计记录
 ```
 
 前端静态资源继续部署在 GitHub Pages 和 `voice.heisei.space`。Supabase 承载云数据库、私有音频对象、认证和受控 API。GitHub Pages 不存放服务端密钥，也不承载音频对象。
+
+现场端在现有 Vite 应用中独立懒加载，使用专用 `staff-api` 与 `staff_action`，不是把完整后台按钮隐藏。共享 Auth 账号使用 `staff` 角色，成员仅为操作时选择的署名；仅能查询、试听、查看地点、修改转写和审核发布，不能创建/写卡/重置/删除。地图复用既有73板算法与轮廓。详见[工作人员接入](STAFF_PORTAL_SETUP.md)。
 
 ## 核心 NFC 决策
 

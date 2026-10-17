@@ -4,6 +4,11 @@ function equal(actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${JSON.stringify(actual)} != ${JSON.stringify(expected)}`);
 }
 const id = '00000000-0000-4000-8000-000000000001';
+Deno.test('shared staff credentials cannot access the full admin API', async () => {
+ for (const action of ['session','list','reset','createCards','bulkApply','saveTranscription','setPieceAssignment','prepareWrite']) {
+  const f=fixture('staff');equal((await f.handler(request({action}))).status,403);equal(f.calls,[]);
+ }
+});
 Deno.test('prepareWrite validates required fields and normalizes lease expiry', async () => {
  const body={action:'prepareWrite',deviceId:'writer',requestKey:id,protocolVersion:3};
  const data={job:{id},leaseToken:'synthetic',expiresAt:'2026-10-16T01:11:25.65647+00:00'};

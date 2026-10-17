@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>Staff portal · synthetic preview</title>
+  </head>
+  <body>
+    <div
+      style="
+        padding: 7px 14px;
+        background: #fff0c9;
+        color: #73550c;
+        font: 12px Arial;
+        text-align: center;
+      "
+    >
+      合成测试数据 / SYNTHETIC PREVIEW
+    </div>
+    <div id="root"></div>
+    <script type="module">
+      import React from 'react';
+      import { createRoot } from 'react-dom/client';
+      import '/src/styles.css';
+      import '/src/features/admin/admin.css';
+      import '/src/features/admin/cloud-admin.css';
+      import '/src/features/visitor/visitor.css';
+      import { I18nProvider } from '/src/i18n/I18nProvider.tsx';
+      import { StaffPage } from '/src/features/staff/StaffPage.tsx';
+
+      if (!import.meta.env.DEV) throw Error('Development preview only');
+      const members = [
+        { id: 'chen-feixue', name: '陳霏雪' },
+        { id: 'wang-heisei', name: '王 平成' },
+        { id: 'mina', name: 'アフザール ミナヘル' },
+        { id: 'senda-tatsuki', name: '千田 尚輝' },
+        { id: 'hayashida-nodoka', name: '林田 和郁' },
+        { id: 'liu-xinying', name: '劉心影' },
+        { id: 'arin-soukoule', name: 'Arin Soukoule' },
+        { id: 'pei-boyu', name: 'PEI BOYU' },
+      ];
+      const session = { userId: 'synthetic-shared', role: 'staff', members };
+      const examples = [
+        [
+          '天神の川沿いを歩いていると、屋台の声が聞こえてきます。夕方の散歩で聞いた音が、今でもいちばん好きです。',
+          'ready',
+          false,
+          'C3',
+          33.588,
+          130.401,
+        ],
+        [
+          '博多駅で家族を迎えたときのことです。改札の音と「おかえり」という声をよく覚えています。',
+          'ready',
+          false,
+          'C9',
+          33.59,
+          130.421,
+        ],
+        [
+          '初めてこの街に来た日、友人と公園でお弁当を食べました。子どもたちの笑い声が印象に残っています。',
+          'ready',
+          true,
+          'F3',
+          33.582,
+          130.4,
+        ],
+        [null, 'processing', false, null, 33.589, 130.407],
+        [null, 'failed', false, 'B4', 33.594, 130.405],
+      ];
+      let cards = examples.map(
+        ([text, status, published, pieceCode, lat, lng], index) => ({
+          id: `synthetic-card-${index}`,
+          label: `TEST-${index % 2 ? 'B' : 'A'}00${index + 1}`,
+          inventoryLabel: `TEST-U00${index + 1}`,
+          status: 'bound',
+          categoryCode: ['A', 'B', 'C', 'D', 'A'][index],
+          createdAt: '2026-10-16T00:00:00Z',
+          recording: {
+            id: `synthetic-recording-${index}`,
+            duration: 2,
+            createdAt: `2026-10-17T06:${String(45 - index * 3).padStart(2, '0')}:12Z`,
+            location: { source: 'pin', lat, lng },
+            transcriptionConsent: true,
+            transcription: {
+              text,
+              status,
+              published,
+              version: 1,
+              updatedAt: '2026-10-17T06:46:00Z',
+            },
+            pieceAssignment: {
+              pieceCode,
+              state: pieceCode ? 'assigned' : 'pending',
+              source: pieceCode ? 'automatic' : null,
+              mapVersion: 'fukuoka-road-73-v13',
+              version: 1,
+              updatedAt: null,
+            },
+            latestReview: published
+              ? {
+                  memberName: 'テストスタッフ',
+                  action: 'staff_approve',
+                  createdAt: '2026-10-17T06:40:00Z',
+                }
+              : null,
+          },
+        }),
+      );
+      cards.push({
+        id: 'synthetic-empty',
+        label: 'TEST-U006',
+        inventoryLabel: 'TEST-U006',
+        status: 'unbound',
+        createdAt: '2026-10-17T01:10:00Z',
+        recording: null,
+      });
+      const history = [];
+      let signedIn = true;
+      const wait = () => new Promise((resolve) => setTimeout(resolve, 120));
+      function audit(recordingId, memberId, action) {
+        const card = cards.find((c) => c.recording?.id === recordingId);
+        const entry = {
+          id: history.length + 1,
+          tagId: card.id,
+          memberName: members.find((m) => m.id === memberId).name,
+          action,
+          createdAt: new Date().toISOString(),
+        };
+        history.unshift(entry);
+        return entry;
+      }
+      function syntheticAudio() {
+        const n = 32000,
+          buffer = new ArrayBuffer(44 + n * 2),
+          view = new DataView(buffer);
+        const write = (offset, text) =>
+          [...text].forEach((c, i) =>
+            view.setUint8(offset + i, c.charCodeAt(0)),
+          );
+        write(0, 'RIFF');
+        view.setUint32(4, 36 + n * 2, true);
+        write(8, 'WAVE');
+        write(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, 16000, true);
+        view.setUint32(28, 32000, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);
+        write(36, 'data');
+        view.setUint32(40, n * 2, true);
+        for (let i = 0; i < n; i++)
+          view.setInt16(
+            44 + i * 2,
+            Math.sin((i * 2 * Math.PI * 220) / 16000) * 1800,
+            true,
+          );
+        return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
+      }
+      const audio = syntheticAudio();
+      const repository = {
+        identityScope: 'synthetic-preview',
+        getSession: async () => (signedIn ? session : null),
+        signIn: async () => {
+          signedIn = true;
+          return session;
+        },
+        signOut: async () => {
+          signedIn = false;
+        },
+        list: async (query = {}) => {
+          await wait();
+          let rows = cards.filter(
+            (c) =>
+              (!query.tagId || c.id === query.tagId) &&
+              (!query.search ||
+                `${c.label} ${c.recording?.transcription?.text ?? ''}`
+                  .toLowerCase()
+                  .includes(query.search.toLowerCase())) &&
+              (!query.categoryCode || c.categoryCode === query.categoryCode) &&
+              (!query.batchDate ||
+                c.recording?.createdAt.startsWith(query.batchDate)),
+          );
+          if (query.reviewState === 'empty')
+            rows = rows.filter((c) => !c.recording);
+          if (query.reviewState === 'approved')
+            rows = rows.filter((c) => c.recording?.transcription?.published);
+          if (query.reviewState === 'unreviewed')
+            rows = rows.filter(
+              (c) => c.recording && !c.recording.transcription?.published,
+            );
+          return structuredClone({
+            cards: rows.slice(
+              query.offset ?? 0,
+              (query.offset ?? 0) + (query.limit ?? 30),
+            ),
+            total: rows.length,
+          });
+        },
+        save: async (recordingId, memberId, version, text, published) => {
+          await wait();
+          const card = cards.find((c) => c.recording?.id === recordingId),
+            q = card.recording.transcription;
+          if (q.version !== version) throw Error('VERSION_CONFLICT');
+          card.recording.transcription = {
+            ...q,
+            text,
+            published,
+            status: 'ready',
+            version: version + 1,
+          };
+          card.recording.latestReview = audit(
+            recordingId,
+            memberId,
+            published ? 'staff_approve' : 'staff_save_draft',
+          );
+        },
+        playback: async (recordingId, memberId) => {
+          audit(recordingId, memberId, 'staff_audio_opened');
+          return audio;
+        },
+        history: async (tagId) =>
+          history.filter((entry) => entry.tagId === tagId),
+        viewLocation: async (recordingId, memberId) => {
+          audit(recordingId, memberId, 'staff_location_viewed');
+        },
+      };
+      createRoot(document.getElementById('root')).render(
+        React.createElement(
+          I18nProvider,
+          null,
+          React.createElement(StaffPage, { repository }),
+        ),
+      );
+    </script>
+  </body>
+</html>

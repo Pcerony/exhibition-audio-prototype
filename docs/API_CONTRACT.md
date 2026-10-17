@@ -1,8 +1,20 @@
 # 跨端 API 契约
 
+## 现场工作人员网站（候选）
+
+`POST staff-api` 验证 Supabase JWT 和 `operator_profiles` 的 staff/operator/admin 角色；staff 仍不能访问 admin-api。共用一个受限 staff 登录账号，成员名单通过 session 返回，选中 memberId 本机按项目/账号记住。姓名是自报身份，不代替认证账号。
+
+- `session` -> `{userId,role,members:[{id,name}]}`。
+- `list` 接受 `{tagId?,search?,reviewState?:'all'|'unreviewed'|'approved'|'empty',categoryCode?:'A'|'B'|'C'|'D',batchDate?,offset?,limit?}`，limit 1–50，search最多120字符。录音提交时间倒序、空卡最后、ID次排序；类别/状态/日期过滤与检索均在分页之前。返回 `{cards,total}`。卡片含 categoryCode（未分类历史卡为null），只含 id/label/inventoryLabel/status/createdAt/categoryCode/recording，不含 token、provisioning、Storage path。录音含 id/duration/createdAt/location/transcriptionConsent/transcription/pieceAssignment/latestReview。专用认证 DTO 的 transcription 含 status/text/published/version/updatedAt，不含供应商错误。既有 admin list/CSV 继续不含正文，匿名接口只读 ready 且 published 的文字。
+- `save` 接受 `{recordingId,memberId,version,text,published}`。纯文本最多10000字符；published=true 必须非空，保存 ready、递增 version、撤销 AI 租约。需有效当前启用录音、转写同意、既有任务和版本。保存草稿隐藏文本；确认发布后访客可见。并发旧版本返回409 VERSION_CONFLICT，禁用/删除/重置返回404 RECORDING_NOT_FOUND。更新和审计同事务。
+- `playback` 接受 `{recordingId,memberId}`，短期签名网址120秒；`activity` 接受 `{recordingId,memberId,event:'location_viewed'}`；`history` 接受 `{tagId}` 返回该卡最近100项 `{id,action,memberName,createdAt}`。
+- 审计保留认证账号、名单ID/姓名快照、当前录音ID、动作和服务时间；不得包含文本/音频/访客token/签名URL。成员ID由服务器名册验证，客户端不得传审计姓名或时间。
+- `staff_action(uuid,jsonb)` 仅 service_role 可执行；staff 角色不获得任何表直读、旧管理RPC或写卡权限。成员名册私有表启用RLS，不允许公开注册自行获得staff角色。
+- AI成功写回新文字也递增转写version，以拒绝AI完成前打开的旧编辑器。旧finish RPC的内部实现不对service_role开放，调用路径仍为原有 `finish_transcription` 名称/参数。
+
 ## 工作人员界面边界（2026-10-17）
 
-固定A/B/C/D是参观者主题，空卡无主题，提交录音后自动赋号。新版网页/Android管理界面不提供分类侧栏、分类筛选、创建/改名/移动分类，按batchDate/search/status/sort管理；卡号、只读元数据和CSV保留主题。为兼容历史客户端，本轮不删除categoryId/uncategorized/move等服务端契约、不迁移或清除数据，但新版不发送这些操作。Android历史待处理move必须人工核查丢弃，禁止新版重发。
+固定A/B/C/D是参观者主题，空卡无主题，提交录音后自动赋号。完整后台和Android不提供分类编辑；工作人员审核列表可按A/B/C/D筛选，但不能创建/改名/移动分类。工作人员的`staff-api list`支持`categoryCode?:'A'|'B'|'C'|'D'`，过滤发生在检索和分页之前。为兼容历史客户端，本轮不删除categoryId/uncategorized/move等服务端契约、不迁移或清除数据。Android历史待处理move必须人工核查丢弃，禁止新版重发。
 
 ## 按需写卡（已部署，旧nextJob语义不变）
 

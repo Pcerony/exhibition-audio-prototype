@@ -84,28 +84,33 @@ it('keeps a resolved search result as a place rather than converting it to a pin
 
 it('centers a read-only memory map on a manually selected point', async () => {
   const { mountMemoryLocationMap } = await import('./googleMaps');
+  const onPoint=vi.fn();
   const result = mountMemoryLocationMap({
     mapElement: document.createElement('div'), language: 'ja',
-    location: { source: 'pin', lat: 33.6, lng: 130.42 }, onReady: vi.fn(), onError: vi.fn(),
+    location: { source: 'pin', lat: 33.6, lng: 130.42 }, onReady: vi.fn(), onError: vi.fn(),onPoint,
   });
   (window as unknown as Record<string, () => void>).__voiceMapsReady();
   const dispose = await result;
 
   expect(mapOptions.center).toEqual({ lat: 33.6, lng: 130.42 });
   expect(mapOptions.gestureHandling).toBe('none');
+  expect(onPoint).toHaveBeenCalledWith({lat:33.6,lng:130.42});
   dispose();
 });
 
 it('resolves a selected place ID to a map center without requesting or storing its name', async () => {
   const { mountMemoryLocationMap } = await import('./googleMaps');
+  const onPoint=vi.fn(),before=JSON.stringify(localStorage);
   const result = mountMemoryLocationMap({
     mapElement: document.createElement('div'), language: 'ja',
-    location: { source: 'place', placeId: 'selected-place' }, onReady: vi.fn(), onError: vi.fn(),
+    location: { source: 'place', placeId: 'selected-place' }, onReady: vi.fn(), onError: vi.fn(),onPoint,
   });
   (window as unknown as Record<string, () => void>).__voiceMapsReady();
   const dispose = await result;
   await vi.waitFor(() => expect(center).toEqual({ lat: 33.61, lng: 130.43 }));
 
   expect(placeFields).toEqual(['location']);
+  expect(onPoint).toHaveBeenCalledWith({lat:33.61,lng:130.43});
+  expect(JSON.stringify(localStorage)).toBe(before);
   dispose();
 });

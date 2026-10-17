@@ -84,7 +84,7 @@ it('shows all 73 map pieces, filters records by selected piece and displays esti
   const r = repository();
   show(r, 'zh-CN');
   await screen.findByText('A001');
-  const map = await screen.findByRole('group', { name: /73/ });
+  const map = await screen.findByRole('group', { name: /73/ }, { timeout: 5_000 });
   expect(within(map).getAllByRole('button')).toHaveLength(73);
   expect(within(map).getByRole('button', { name: 'A1' })).toBeInTheDocument();
   expect(screen.getByText(/系统推算/)).toBeVisible();

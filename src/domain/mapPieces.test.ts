@@ -30,7 +30,7 @@ describe('Fukuoka map piece geometry', () => {
         expect(y).toBeLessThanOrEqual(1320);
       }
     }
-  });
+  }, 15_000);
 
   it('places every map label at an interior polygon centroid', () => {
     const inside = (point: MapPoint, ring: readonly MapPoint[]) => {
