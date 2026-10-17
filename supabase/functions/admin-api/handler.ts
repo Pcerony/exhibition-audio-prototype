@@ -6,6 +6,7 @@ import { parseMemoryLocation } from '../../../src/domain/location.ts';
 const actions = new Set(['session', 'list', 'createBatch', 'createQrEntry', 'reset', 'setEnabled', 'playback', 'jobs', 'provision', 'audit', 'maintenance', 'categories', 'createCategory', 'renameCategory', 'createCards', 'bulkPreview', 'bulkApply', 'leaseJob', 'nextJob', 'releaseJob', 'getTranscription', 'retryTranscription', 'saveTranscription']);
 actions.add('prepareWrite');
 actions.add('setPieceAssignment');
+for (const action of ['qrCards','qrJobs','prepareQrAttachment','beginQrAttachment','provisionQrAttachment','releaseQrAttachment']) actions.add(action);
 const transcriptionStates = new Set(['not_consented', 'pending', 'processing', 'draft', 'published', 'failed']);
 const mapPieceCode = /^(?:[ABDEFGH][1-9]|C(?:[1-9]|10))$/;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -17,6 +18,7 @@ const errors: Record<string, number> = {
   TRANSCRIPTION_CONSENT_REQUIRED: 409, TRANSCRIPTION_NOT_FOUND: 404, TRANSCRIPTION_RATE_LIMITED: 429,
   TRANSCRIPTION_IN_PROGRESS: 409,
   MAP_ASSIGNMENT_INVALID: 400,
+  CHIP_CONFLICT: 409,
 };
 
 export function createHandler(getClient: () => SupabaseClient, isTranscriptionConfigured = () => !!Deno.env.get('GROQ_API_KEY')) {
@@ -47,6 +49,15 @@ export function createHandler(getClient: () => SupabaseClient, isTranscriptionCo
       if (body.action === 'createQrEntry' && (typeof body.requestKey !== 'string' || !uuid.test(body.requestKey))) {
         return json({ code: 'REQUEST_INVALID' }, 400);
       }
+      if (body.action === 'prepareQrAttachment' && (
+        typeof body.tagId !== 'string' || !uuid.test(body.tagId) || !Number.isSafeInteger(body.expectedVersion) || body.expectedVersion < 1
+        || typeof body.deviceId !== 'string' || !body.deviceId.trim() || body.deviceId.length > 120
+      )) return json({code:'REQUEST_INVALID'},400);
+      if (['beginQrAttachment','provisionQrAttachment','releaseQrAttachment'].includes(body.action) && (
+        typeof body.jobId !== 'string' || !uuid.test(body.jobId) || typeof body.leaseToken !== 'string' || !uuid.test(body.leaseToken)
+      )) return json({code:'REQUEST_INVALID'},400);
+      if (['prepareQrAttachment','beginQrAttachment','provisionQrAttachment'].includes(body.action) && body.protocolVersion !== 3) return json({code:'CLIENT_UPGRADE_REQUIRED'},426);
+      if (body.action === 'beginQrAttachment' && (typeof body.chipHash !== 'string' || !/^[a-f0-9]{64}$/.test(body.chipHash))) return json({code:'REQUEST_INVALID'},400);
       if (body.action === 'prepareWrite' && (
         typeof body.deviceId !== 'string' || !body.deviceId.trim() || body.deviceId.length > 120
         || typeof body.requestKey !== 'string' || !uuid.test(body.requestKey)
@@ -78,7 +89,7 @@ export function createHandler(getClient: () => SupabaseClient, isTranscriptionCo
         return json({ code }, errors[code] ?? 503);
       }
       if (body.action === 'getTranscription') return json({ ...data, configured: isTranscriptionConfigured() });
-      if (['leaseJob', 'nextJob', 'prepareWrite'].includes(body.action) && data?.job) {
+      if (['leaseJob', 'nextJob', 'prepareWrite', 'prepareQrAttachment'].includes(body.action) && data?.job) {
         const expiresAt = typeof data.expiresAt === 'string' ? Date.parse(data.expiresAt) : NaN;
         if (!Number.isFinite(expiresAt)) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);
         // Older Android Instant.parse requires Z, not PostgreSQL's +00:00 offset.

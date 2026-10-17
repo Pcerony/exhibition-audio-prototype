@@ -9,6 +9,14 @@ import android.nfc.tech.NdefFormatable
 class WriterException(val code: String) : Exception(code)
 
 object NfcWriter {
+    fun qrPreflight(tag: Tag, job: Job): SingleMutation {
+        val snapshot = NfcReader.read(tag)
+        if (!QrAttachmentPolicy.accepts(snapshot, job.visitorUrl)) throw WriterException("FOREIGN_TAG")
+        val required = NdefMessage(arrayOf(NdefRecord.createUri(job.visitorUrl))).toByteArray().size
+        if (snapshot.capacity != null && snapshot.capacity < required) throw WriterException("CAPACITY")
+        if (tag.id.isEmpty()) throw WriterException("CHIP_CHANGED")
+        return SingleMutation(identity(tag), snapshot.fingerprint, SingleOperation.RESTORE)
+    }
     fun writeAndRead(tag: Tag, job: Job, overwriteConfirmed: Boolean = false, expected: SingleMutation? = null, stillAllowed: () -> Boolean): Report {
         if (!Provisioning.validUrl(job.visitorUrl)) throw WriterException("INVALID_URL")
         val message = NdefMessage(arrayOf(NdefRecord.createUri(job.visitorUrl)))

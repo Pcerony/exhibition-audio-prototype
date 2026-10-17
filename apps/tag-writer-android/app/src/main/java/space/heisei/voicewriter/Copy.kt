@@ -7,6 +7,13 @@ class Copy(requested: String = "ja") {
     fun category(category: Category) = if (category.code in listOf("A", "B", "C", "D")) "${category.code} · ${get("category${category.code}")}" else category.name
     companion object {
         private val entries = mapOf(
+            "qrAttach" to listOf("QR補充", "二维码补卡", "QR to NFC"),
+            "qrWaiting" to listOf("NFC未発行", "待补实体卡", "NFC Pending"),
+            "qrAttached" to listOf("NFC発行済み", "已补实体卡", "NFC Attached"),
+            "qrWrite" to listOf("この録音を空タグに書く", "将此录音写入空白芯片", "Write This Recording to a Blank Tag"),
+            "qrConfirm" to listOf("番号と録音を確認しましたか？元のURLを空のNFCタグ1枚に書き込みます。録音は変更しません。", "请先核对编号和试听录音。将原网址写入一枚空白 NFC 芯片，不改变录音或编号。", "Confirm the number and listen first. Write the original URL to one blank NFC tag. The recording and number stay unchanged."),
+            "qrSameCard" to listOf("空タグを1枚かざしてください。再試行は必ず同じタグを使ってください。他の内容は上書きしません。", "请触碰一枚空白芯片。重试必须使用同一枚芯片，不会覆盖其他内容。", "Touch one blank tag. Retry only with that same tag. Other contents will not be overwritten."),
+            "qrChipConflict" to listOf("別のタグ、または他の録音用タグです。最初の同じタグで再試行してください。", "芯片与首次登记不同，或已分配给其他录音。请用最初那枚芯片重试。", "Different tag, or already assigned to another recording. Retry with the original tag."),
             "updateCheck" to listOf("更新を確認", "检查更新", "Check for Updates"),
             "updateBusy" to listOf("書き込みを停止し、未送信の結果を同期してから更新してください。", "请先停止写卡并同步待上传结果，再进行更新。", "Stop writing and sync pending results before updating."),
             "updateChecking" to listOf("更新を確認中…", "正在检查更新…", "Checking for updates…"),

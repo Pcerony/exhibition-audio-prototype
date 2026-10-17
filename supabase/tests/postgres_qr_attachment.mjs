@@ -1,0 +1,60 @@
+import assert from 'node:assert/strict';
+import {readFile,readdir} from 'node:fs/promises';
+import {createRequire} from 'node:module';
+import {randomUUID} from 'node:crypto';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+
+const runtime=process.env.EMBEDDED_PG_RUNTIME;
+if(!runtime) throw Error('Set EMBEDDED_PG_RUNTIME containing embedded-postgres and pg');
+const require=createRequire(join(runtime,'package.json'));
+const EmbeddedPostgres=require('embedded-postgres').default,{Pool}=require('pg');
+const password=randomUUID(),port=Number(process.env.TEST_POSTGRES_PORT??55449);
+const server=new EmbeddedPostgres({databaseDir:join(tmpdir(),`qr-attachment-${randomUUID()}`),user:'postgres',password,port,persistent:false,postgresFlags:['-h','127.0.0.1'],onLog(){},onError(){}});
+let pool;
+try {
+ await server.initialise();await server.start();
+ pool=new Pool({host:'127.0.0.1',port,user:'postgres',password,database:'postgres',max:16});
+ await pool.query('create role anon;create role authenticated;create role service_role;create schema auth;create schema storage;create schema extensions;create table auth.users(id uuid primary key);create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);');
+ for(const file of (await readdir('supabase/migrations')).filter(x=>x.endsWith('.sql')).sort()) await pool.query(await readFile(`supabase/migrations/${file}`,'utf8'));
+ const op=randomUUID(),other=randomUUID();
+ await pool.query('insert into auth.users(id) values($1),($2)',[op,other]);
+ await pool.query("insert into public.operator_profiles(user_id,role) values($1,'operator'),($2,'operator')",[op,other]);
+ const admin=async(body,user=op)=>(await pool.query('select public.admin_action($1::uuid,$2::jsonb) r',[user,body])).rows[0].r;
+ async function recordedQr() {
+  const qr=await admin({action:'createQrEntry',requestKey:randomUUID()});
+  const upload=randomUUID(),recording=randomUUID();
+  await pool.query("insert into public.upload_sessions(id,tag_id,object_path,claim_token_hash,mime_type,size_bytes,expires_at) values($1,$2,$3,'fake','audio/wav',12,now()+interval '1 hour')",[upload,qr.id,upload]);
+  await pool.query("insert into public.recordings(id,tag_id,upload_session_id,object_path,mime_type,size_bytes,duration_seconds) values($1,$2,$3::uuid,$3::text,'audio/wav',12,1)",[recording,qr.id,upload]);
+  const version=(await pool.query("update public.tags set status='bound' where id=$1 returning version",[qr.id])).rows[0].version;
+  return {...qr,version:Number(version),recording};
+ }
+ const qr=await recordedQr();
+ const prepare={action:'prepareQrAttachment',tagId:qr.id,expectedVersion:qr.version,deviceId:'same-device',protocolVersion:3};
+ const leases=await Promise.all(Array.from({length:12},()=>admin(prepare)));
+ assert.equal(new Set(leases.map(x=>x.job.id)).size,1);assert.equal(new Set(leases.map(x=>x.leaseToken)).size,1);
+ const lease=leases[0];
+ await assert.rejects(admin({...prepare,deviceId:'other-device'},other),/LEASE_CONFLICT/);
+ const begin={action:'beginQrAttachment',jobId:lease.job.id,leaseToken:lease.leaseToken,chipHash:'a'.repeat(64),protocolVersion:3};
+ await Promise.all(Array.from({length:6},()=>admin(begin)));
+ await assert.rejects(admin({...begin,chipHash:'b'.repeat(64)}),/CHIP_CONFLICT/);
+ const second=await recordedQr();
+ const otherLease=await admin({...prepare,tagId:second.id,expectedVersion:second.version,deviceId:'second'});
+ await assert.rejects(admin({...begin,jobId:otherLease.job.id,leaseToken:otherLease.leaseToken}),/CHIP_CONFLICT/);
+ await pool.query("update public.qr_card_attachments set lease_expires_at=now()-interval '1 hour' where id=$1",[lease.job.id]);
+ await assert.rejects(admin(begin),/LEASE_EXPIRED/);
+ const renewed=await admin({...prepare,deviceId:'recovery'},other);
+ assert.equal(renewed.job.id,lease.job.id);
+ await assert.rejects(admin({...begin,leaseToken:renewed.leaseToken,chipHash:'b'.repeat(64)},other),/CHIP_CONFLICT/);
+ await admin({...begin,leaseToken:renewed.leaseToken},other);
+ const report={action:'provisionQrAttachment',jobId:renewed.job.id,leaseToken:renewed.leaseToken,version:renewed.job.version,visitorUrl:qr.visitorUrl,status:'verified',protocolVersion:3};
+ await Promise.all(Array.from({length:8},()=>admin(report,other)));
+ assert.equal(Number((await pool.query("select count(*) from public.audit_log where tag_id=$1 and action='qr_attach_verified'",[qr.id])).rows[0].count),1);
+ await assert.rejects(admin(prepare),/JOB_INELIGIBLE/);
+ const normal=await admin({action:'prepareWrite',requestKey:randomUUID(),deviceId:'normal',protocolVersion:3});
+ assert.notEqual(normal.job.tagId,qr.id);assert.notEqual(normal.job.tagId,second.id);
+ await pool.query('delete from public.recordings where id=$1',[second.recording]);
+ await assert.rejects(admin({...prepare,tagId:second.id,expectedVersion:second.version}),/JOB_INELIGIBLE/);
+ assert.equal(Number((await pool.query('select count(*) from public.qr_card_attachments')).rows[0].count),2);
+ console.log('PASS: independent PG sessions serialize QR preparation/reports, preserve identity, reject changed chips, isolate regular stock, and invalidate changed recordings');
+} finally {await pool?.end();await server.stop();}

@@ -24,7 +24,7 @@ object NfcReader {
                     else -> InspectedRecord("other", "TNF ${record.tnf}", payload.size)
                 }
             }
-            return InspectedTag(if (NfcInspection.isEmpty(decoded) && records.size <= 32) "empty" else "data", decoded, ndef.isWritable, records.size > 32, SingleCardPolicy.fingerprint(message?.toByteArray() ?: byteArrayOf()))
+            return InspectedTag(if (NfcInspection.isEmpty(decoded) && records.size <= 32) "empty" else "data", decoded, ndef.isWritable, records.size > 32, SingleCardPolicy.fingerprint(message?.toByteArray() ?: byteArrayOf()), ndef.maxSize)
         } finally { runCatching { ndef.close() } }
     }
 }

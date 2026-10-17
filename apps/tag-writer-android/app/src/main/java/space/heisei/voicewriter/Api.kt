@@ -81,7 +81,27 @@ class Api(private val store: SecureSession) {
             check(array.length() > 0 || jobs.size >= total) { "JOBS_INCOMPLETE" }
             for (i in 0 until array.length()) jobs.add(parseJob(array.getJSONObject(i)))
         } while (jobs.size < total)
+        var qrOffset = 0
+        do {
+            val response = admin(JSONObject().put("action", "qrJobs").put("offset", qrOffset).put("limit", 500))
+            val array = response.getJSONArray("jobs"); val total = response.getInt("total")
+            check(array.length() > 0 || qrOffset >= total) { "JOBS_INCOMPLETE" }
+            for (i in 0 until array.length()) jobs.add(parseJob(array.getJSONObject(i)))
+            qrOffset += array.length()
+        } while (qrOffset < total)
         return jobs
+    }
+    fun qrCards(search: String, sort: String, offset: Int, status: String, batchDate: String): Pair<List<Card>, Int> {
+        val response = admin(JSONObject().put("action", "qrCards").put("search",search).put("sort",sort).put("offset",offset).put("limit",50).put("status",status).put("batchDate",batchDate))
+        val rows = response.getJSONArray("tags")
+        return (0 until rows.length()).map { parseCard(rows.getJSONObject(it)) } to response.getInt("total")
+    }
+    fun prepareQr(card: Card, deviceId: String): Lease {
+        val result = admin(JSONObject().put("action","prepareQrAttachment").put("tagId",card.id).put("expectedVersion",card.version).put("deviceId",deviceId).put("protocolVersion",3))
+        return Lease(parseJob(result.getJSONObject("job")), result.getString("leaseToken"), Instant.parse(result.getString("expiresAt")).toEpochMilli())
+    }
+    fun beginQr(lease: Lease, chipHash: String) {
+        check(admin(JSONObject().put("action","beginQrAttachment").put("jobId",lease.job.id).put("leaseToken",lease.token).put("chipHash",chipHash).put("protocolVersion",3)).optBoolean("ok")) { "JOB_CONFLICT" }
     }
     fun lease(jobId: String?, deviceId: String): Lease? {
         val response = admin(leaseRequest(jobId, deviceId)); val job = response.optJSONObject("job") ?: return null
@@ -92,7 +112,7 @@ class Api(private val store: SecureSession) {
         return Lease(parseJob(response.getJSONObject("job")), response.getString("leaseToken"), Instant.parse(response.getString("expiresAt")).toEpochMilli())
     }
     fun createSingle(requestKey: String): Job = parseJob(admin(singleCreateRequest(requestKey)).getJSONArray("tags").getJSONObject(0).getJSONObject("provisioning"))
-    fun release(lease: Lease) { admin(JSONObject().put("action", "releaseJob").put("jobId", lease.job.id).put("leaseToken", lease.token)) }
+    fun release(lease: Lease) { admin(JSONObject().put("action", if(lease.job.jobKind == "qr") "releaseQrAttachment" else "releaseJob").put("jobId", lease.job.id).put("leaseToken", lease.token)) }
     fun inspect(url: String): Card? {
         val token = NfcInspection.token(url) ?: return null
         val job = jobs().find { it.visitorUrl == url }
@@ -102,7 +122,7 @@ class Api(private val store: SecureSession) {
     }
     fun report(r: Report) {
         check(Provisioning.canSync(r)) { "CLIENT_UPGRADE_REQUIRED" }
-        check(admin(reportJson(r).put("action", "provision")).optBoolean("ok")) { "REPORT_REJECTED" }
+        check(admin(provisionRequest(r)).optBoolean("ok")) { "REPORT_REJECTED" }
     }
     private fun request(path: String, body: JSONObject?, authenticated: Boolean): JSONObject {
         val base = BuildConfig.SUPABASE_URL.trimEnd('/')
@@ -129,8 +149,9 @@ fun singleCreateRequest(requestKey: String) = JSONObject().put("action", "create
 fun leaseRequest(jobId: String?, deviceId: String) = JSONObject().put("action", if (jobId == null) "nextJob" else "leaseJob").put("deviceId", deviceId).put("protocolVersion", 3).apply { jobId?.let { put("jobId", it) } }
 fun parseCard(c: JSONObject): Card {
     val r = c.optJSONObject("recording")
-    return Card(c.getString("id"), c.getString("label"), c.nullableString("categoryId"), c.nullableString("batch").orEmpty(), c.optInt("version"), c.optString("status", "unbound"), r?.nullableString("id"), r?.nullableString("nickname").orEmpty(), r?.nullableString("createdAt"), c.optJSONObject("provisioning")?.let(::parseJob), c.nullableString("inventoryLabel").orEmpty(), c.nullableString("categoryCode"), c.nullableString("batchDate"), c.nullableString("serialNumber"))
+    return Card(c.getString("id"), c.getString("label"), c.nullableString("categoryId"), c.nullableString("batch").orEmpty(), c.optInt("version"), c.optString("status", "unbound"), r?.nullableString("id"), r?.nullableString("nickname").orEmpty(), r?.nullableString("createdAt"), (c.optJSONObject("attachment") ?: c.optJSONObject("provisioning"))?.let(::parseJob), c.nullableString("inventoryLabel").orEmpty(), c.nullableString("categoryCode"), c.nullableString("batchDate"), c.nullableString("serialNumber"), c.optString("entryChannel","nfc"))
 }
-fun parseReport(r: JSONObject) = Report(r.getString("jobId"), r.getInt("version"), r.getString("visitorUrl"), r.getString("status"), r.nullableString("errorCode"), r.optString("leaseToken"), r.optInt("protocolVersion", 2))
-fun parseJob(j: JSONObject) = Job(j.getString("id"), j.getString("tagId"), j.getString("label"), j.nullableString("batch").orEmpty(), j.getString("visitorUrl"), j.getInt("version"), j.getString("status"), j.nullableString("errorCode"), j.nullableString("categoryId"), j.optString("recordingStatus", "unbound"), j.optInt("tagVersion"), j.nullableString("writtenAt"), j.nullableString("inventoryLabel").orEmpty(), j.nullableString("categoryCode"), j.nullableString("batchDate"), j.nullableString("serialNumber"))
-fun reportJson(r: Report) = JSONObject().put("jobId", r.jobId).put("version", r.version).put("visitorUrl", r.visitorUrl).put("status", r.status).put("protocolVersion", r.protocolVersion).put("leaseToken", r.leaseToken).apply { r.errorCode?.let { put("errorCode", it) } }
+fun parseReport(r: JSONObject) = Report(r.getString("jobId"), r.getInt("version"), r.getString("visitorUrl"), r.getString("status"), r.nullableString("errorCode"), r.optString("leaseToken"), r.optInt("protocolVersion", 2), r.optString("jobKind","nfc"))
+fun parseJob(j: JSONObject) = Job(j.getString("id"), j.getString("tagId"), j.getString("label"), j.nullableString("batch").orEmpty(), j.getString("visitorUrl"), j.getInt("version"), j.getString("status"), j.nullableString("errorCode"), j.nullableString("categoryId"), j.optString("recordingStatus", "unbound"), j.optInt("tagVersion"), j.nullableString("writtenAt"), j.nullableString("inventoryLabel").orEmpty(), j.nullableString("categoryCode"), j.nullableString("batchDate"), j.nullableString("serialNumber"), j.optString("jobKind","nfc"))
+fun reportJson(r: Report) = JSONObject().put("jobId", r.jobId).put("version", r.version).put("visitorUrl", r.visitorUrl).put("status", r.status).put("protocolVersion", r.protocolVersion).put("leaseToken", r.leaseToken).apply { if(r.jobKind != "nfc") put("jobKind",r.jobKind); r.errorCode?.let { put("errorCode", it) } }
+fun provisionRequest(r: Report) = reportJson(r).apply { remove("jobKind"); put("action",if(r.jobKind == "qr") "provisionQrAttachment" else "provision") }

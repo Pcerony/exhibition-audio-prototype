@@ -4,6 +4,18 @@ function equal(actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${JSON.stringify(actual)} != ${JSON.stringify(expected)}`);
 }
 const id = '00000000-0000-4000-8000-000000000001';
+Deno.test('QR attachment validates required fields and normalizes lease expiry', async () => {
+ const body={action:'prepareQrAttachment',tagId:id,expectedVersion:1,deviceId:'writer',protocolVersion:3};
+ const data={job:{id},leaseToken:'synthetic',expiresAt:'2026-10-18T01:11:25.65647+00:00'};
+ const response=await fixture('operator',true,data).handler(request(body));
+ equal(response.status,200);equal(await response.json(),{...data,expiresAt:'2026-10-18T01:11:25.656Z'});
+ for(const patch of [{tagId:undefined},{expectedVersion:0},{expectedVersion:'1'},{deviceId:''},{deviceId:' '.repeat(2)}]) {
+  const f=fixture();equal((await f.handler(request({...body,...patch}))).status,400);equal(f.calls,[]);
+ }
+ const f=fixture();equal((await f.handler(request({...body,protocolVersion:2}))).status,426);equal(f.calls,[]);
+ const bad=fixture();equal((await bad.handler(request({action:'beginQrAttachment',jobId:id,leaseToken:id,chipHash:'bad',protocolVersion:3}))).status,400);equal(bad.calls,[]);
+ equal((await fixture('staff').handler(request(body))).status,403);
+});
 Deno.test('shared staff credentials cannot access the full admin API', async () => {
  for (const action of ['session','list','reset','createCards','bulkApply','saveTranscription','setPieceAssignment','prepareWrite']) {
   const f=fixture('staff');equal((await f.handler(request({action}))).status,403);equal(f.calls,[]);

@@ -1,5 +1,20 @@
 # 跨端 API 契约
 
+## 二维码录音补实体卡（Android 3.4）
+
+仅认证 admin-api 的 operator/admin 可用，不扩展共享 staff 角色。所有操作不创建 tag/token/录音，不改变原 URL，不进入普通写卡池。
+
+- `qrCards {search?,status?,batchDate?,sort?,offset?,limit?}` → `{tags,total}`，仅 QR 身份，tag DTO 增 `attachment:job|null`，保留 entryChannel。按编号/库存号/id搜索，日本录音日筛选；sort=recorded_desc/recorded_asc/number，默认最新，limit≤50。
+- `qrJobs {offset?,limit?}` → `{jobs,total}`，专用补卡 Job DTO 增 `jobKind:'qr'`；不含租约 token/芯片 hash。
+- `prepareQrAttachment {tagId,expectedVersion,deviceId,protocolVersion:3}` → `{job,leaseToken,expiresAt}`。仅有效且已录音的 QR 身份；每 tag 一任务，绑定原 recording ID/tag version。同账号/设备有效租约重放返回原任务；其他有效租约冲突，过期只恢复原任务。已完成、禁用、删除或录音改变拒绝。
+- `beginQrAttachment {jobId,leaseToken,chipHash,protocolVersion:3}` → `{ok:true}`，写前登记64位小写hex的SHA256 UID。只接受第一次登记的芯片，同hash不能给其他记录补卡；不是公开身份，不写日志/审计。
+- `provisionQrAttachment {jobId,leaseToken,version,visitorUrl,status:'verified'|'failed',errorCode?,protocolVersion:3}` → `{ok:true}`。原录音、完整URL、版本/租约校验；verified须已登记芯片。原报告可跨期限幂等重放，不允许failed降级或另开实体卡。
+- `releaseQrAttachment {jobId,leaseToken}` → `{ok:true}`，原租约操作者释放，保留任务和芯片登记。
+
+错误沿用 REQUEST_INVALID/JOB_CONFLICT/JOB_INELIGIBLE/LEASE_CONFLICT/LEASE_EXPIRED/CLIENT_UPGRADE_REQUIRED；新增 CHIP_CONFLICT（409，换芯片或已分配其他记录）。Android本地报告增jobKind，旧记录默认nfc，发送时只用于选择端点，不传到旧provision。
+
+专用私有租约收据保留原账号/任务及已登记芯片的写前授权，因此首次结果迟到、甚至同任务已被另一设备续租后，原操作者仍可提交原有效 verified 报告；写前 begin 始终要求当前未过期租约。过期不会授权新的物理写入。晚到 failed 不覆盖另一设备的新尝试，也不能降级 verified。客户端看到完全匹配任务/网址/版本已 verified 时，持久移除被成功结果取代的 QR failed 报告，避免堵塞后续补卡。
+
 ## 语言提示与工作人员重新转写
 
 新录音`public-upload-claim`可带`transcriptionLanguage`（ja/zh/en/ko/es/fr/de/it/pt/ru/vi/th/id/ar/hi/auto），省略按ja；界面语言zh-CN/zh-TW均映射zh。工作人员`staff-api`新增`retryTranscription`，字段`recordingId/memberId/version/languageHint`；名单身份、同意、当前绑定、版本、每条一分钟限频及provider配置均在服务端验证。list的`transcription`增`languageHint`。重试保留旧文作参考、立即取消公开、撤销旧lease、版本+1并重新排队；相同版本并发仅一条成功，处理中不可重复。审计动作为`staff_retry_transcription`，保留署名/时间/语言，不记正文。新结果仍需人工确认。仅转写原语言，不调用翻译接口；既有20条不批量重跑。
