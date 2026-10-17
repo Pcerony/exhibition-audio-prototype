@@ -50,6 +50,7 @@ class SuccessGate {
     private var absent = false
     fun success(now: Long) { since = now; absent = false }
     fun removed() { absent = true }
+    fun observeIgnoreResult(accepted: Boolean) { if (!accepted) removed() }
     fun advance(now: Long) = since?.let { absent && now - it >= 1000 } ?: false
     fun cancel() { since = null; absent = false }
 }
@@ -61,4 +62,15 @@ enum class WriteFeedback(val title: String, val body: String, val icon: String) 
     SUCCESS("writeSuccess", "remove", "✓"),
     ERROR("failed", "failureBody", "!"),
     PENDING("pendingCloud", "pendingCloudBody", "↑")
+}
+
+object FeedbackVibration {
+    fun pattern(value: WriteFeedback, interruptionsAllowed: Boolean, silent: Boolean): LongArray? {
+        if (!interruptionsAllowed || silent) return null
+        return when (value) {
+            WriteFeedback.SUCCESS -> longArrayOf(0, 80, 60, 120)
+            WriteFeedback.ERROR, WriteFeedback.PENDING -> longArrayOf(0, 220)
+            else -> null
+        }
+    }
 }

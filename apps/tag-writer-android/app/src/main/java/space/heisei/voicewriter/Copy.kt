@@ -85,7 +85,7 @@ class Copy(requested: String = "ja") {
             "remaining" to listOf("対象カード", "待写卡", "Eligible Cards"), "completed" to listOf("今回の完了", "本次已完成", "Completed This Session"),
             "selectCard" to listOf("カードを選択", "请选择卡片", "Select a Card"),
             "nfcOff" to listOf("NFCが無効、または非対応です", "NFC 未开启或设备不支持", "NFC Is Off or Unavailable"),
-            "foreign" to listOf("別の内容があります。1枚書き込みで「既存内容を上書き」を選択してください。", "芯片已有其他内容。请在单张写卡中选择“覆盖已有内容”。", "This Tag Contains Other Data. Choose Overwrite Existing Data in Single Write."),
+            "foreign" to listOf("別の内容があるため書き込みませんでした。まずNFC読取で番号と録音を確認してください。", "芯片已有其他内容，本次未写入。请先读取 NFC，核对原卡号和录音，再决定是否覆盖。", "Other Data Found. Nothing Was Written. Read NFC to Check the Original Card and Recording Before Overwriting."),
             "overwrite" to listOf("既存内容を上書き", "覆盖已有内容", "Overwrite Existing Data"),
             "overwriteConfirm" to listOf("次にかざすタグの内容を、このカードのURLに置き換えます。元のタグ内容は失われます。元のクラウド録音は削除されません。書込禁止タグは上書きできません。", "下一次触碰的芯片，其已有内容将被替换为这张卡片的网址，原芯片内容会丢失。不会删除原云端录音。只读或已锁定芯片无法覆盖。", "The Next Tag Will Be Replaced With This Card's URL. Existing Tag Data Will Be Lost. Original Cloud Recordings Are Not Deleted. Read-only or Locked Tags Cannot Be Overwritten."),
             "overwriteReady" to listOf("上書き待機中 · 対象のタグをかざしてください", "等待覆盖，请触碰要替换内容的芯片", "Overwrite Armed · Hold the Intended Tag Near"),

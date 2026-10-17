@@ -1,5 +1,11 @@
 # 管理手机应用V3：安装与验收
 
+## 3.1.2连续写卡与成功振动修复
+
+修正云端确认完成前芯片已经移开时被错误暂停的问题：成功反馈至少停留1秒后自动准备下一张，不再要求每张暂停/开始；仍在场则等待移开。成功改用事件型短双振，失败节奏不同，静音/勿扰和设备振动设置仍有效；提示音开关独立。
+
+芯片已有未录音网址也不是空芯片。普通/连续模式拒绝覆盖不同网址，已有录音同样保护；只有单张明确确认覆盖才替换网址，不自动删除原云端录音。先“读取 NFC”核查，详细对照见 [芯片已有内容与现场对策](ANDROID_CARD_SAFETY_ZH.md)。
+
 ## 3.1.1工作人员界面简化
 
 工作人员不再手动分类：网页与安卓移除分类侧栏、分类筛选、未分类入口及移动分类。用录音日期区分当天活动，配合搜索、录音状态和排序管理；保留试听、转写审核（网页）、重置/删除与写卡。
@@ -28,12 +34,12 @@ Android工作人员应用本轮升级为3.1.1，保留无需网页提前开卡�
 
 APK是调试签名试用包，不是应用商店正式发行。只支持Android工作人员手机；参观者仍用iPhone/Android浏览器，无需安装。
 
-[下载安卓3.1.1试用包](https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.1.1-rc1/voice-writer-v3.1.1-candidate.apk)；[网页后台](https://voice.heisei.space/#/admin)。3.1按需准备使用prepareWrite；建议统一升级到3.1.1使用简化管理界面。早于3.0的协议仍受升级保护。
+[下载安卓3.1.2试用包](https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.1.2-rc1/voice-writer-v3.1.2-candidate.apk)；[网页后台](https://voice.heisei.space/#/admin)。3.1按需准备使用prepareWrite；建议统一升级到3.1.2。早于3.0的协议仍受升级保护。
 
 ## 安装前
 
 1. 结束旧版写卡，确认没有待同步结果。本次负责人已确认可以统一升级。
-2. 下载本次发布的 `voice-writer-v3.1.1-candidate.apk`，在Android允许所用浏览器安装此来源的应用，然后安装。
+2. 下载本次发布的 `voice-writer-v3.1.2-candidate.apk`，在Android允许所用浏览器安装此来源的应用，然后安装。
 3. 优先覆盖安装，保留同一签名包的数据。如果系统提示签名冲突，不强行覆盖；先再次确认旧版没有待同步结果，再卸载旧版并安装新版。云端卡片和录音不因卸载而删除。
 4. 用已有运营账号登录，不要用Google/Supabase控制台账号代替展览运营账号。首次登录后，应用在设备安全存储中保存加密续期会话，不保存明文密码。
 
@@ -63,7 +69,7 @@ APK是调试签名试用包，不是应用商店正式发行。只支持Android�
 
 ## 版本校验
 
-- 包名：`space.heisei.voicewriter`；版本：3.1.1，versionCode 7，Release `v3.1.1-rc1`。
+- 包名：`space.heisei.voicewriter`；版本：3.1.2，versionCode 8，Release `v3.1.2-rc1`。
 - APK校验和见同一GitHub Release附带的SHA256文件。
 - 签名：Android Debug；证书SHA256 `48a52ba6a1cdc413f5ee828b11cd922a4604951299547b7cea37c2e901d04b3d`。
 - 当前自动化测试不代替上述实体NFC与iPhone麦克风验收。旧APP将收到需要升级提示，不能继续旧协议写卡。
