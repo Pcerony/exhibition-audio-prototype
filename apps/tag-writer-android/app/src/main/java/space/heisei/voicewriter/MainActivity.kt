@@ -28,7 +28,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : Activity(), NfcAdapter.ReaderCallback {
-    private enum class Screen { CARDS, READ, SINGLE, AUTO, EDIT }
+    private enum class Screen { CARDS, READ, SINGLE, AUTO, EDIT, QR }
     private val executor = Executors.newSingleThreadExecutor()
     private val readExecutor = Executors.newSingleThreadExecutor()
     private val lookupExecutor = Executors.newSingleThreadExecutor()
@@ -137,11 +137,11 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             setOnClickListener { settings() }
         }, LinearLayout.LayoutParams(dp(48), dp(48)))
         if (navigation) {
-            listOf(listOf(Screen.CARDS, Screen.READ), listOf(Screen.SINGLE, Screen.AUTO, Screen.EDIT)).forEach { destinations ->
+            listOf(listOf(Screen.CARDS, Screen.READ, Screen.QR), listOf(Screen.SINGLE, Screen.AUTO, Screen.EDIT)).forEach { destinations ->
                 val nav = LinearLayout(this).apply { shell.addView(this) }
                 destinations.forEach { destination ->
                     nav.addView(Button(this).apply {
-                        val key = when(destination) { Screen.CARDS -> "cards"; Screen.READ -> "readNfc"; Screen.SINGLE -> "single"; Screen.AUTO -> "auto"; Screen.EDIT -> "edit" }
+                        val key = when(destination) { Screen.CARDS -> "cards"; Screen.READ -> "readNfc"; Screen.SINGLE -> "single"; Screen.AUTO -> "auto"; Screen.EDIT -> "edit"; Screen.QR -> "qrAttach" }
                         text = t(key); textSize = 12f; isAllCaps = false; minHeight = dp(56); maxLines = 2
                         setTextColor(if (screen == destination) Color.WHITE else green)
                         backgroundTintList = android.content.res.ColorStateList.valueOf(if (screen == destination) green else Color.WHITE)
@@ -206,8 +206,8 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     }
     private fun load() {
         api.verify(); sync()
-        if (screen == Screen.CARDS || screen == Screen.EDIT) {
-            val page = api.cards("", search, sort, offset, statusFilter, batchDate)
+        if (screen in listOf(Screen.CARDS, Screen.EDIT, Screen.QR)) {
+            val page = if(screen == Screen.QR) api.qrCards(search,sort,offset,statusFilter,batchDate) else api.cards("", search, sort, offset, statusFilter, batchDate)
             cards = page.first; total = page.second
         }
         jobs = api.jobs()
@@ -228,7 +228,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         when(screen) {
             Screen.AUTO -> renderAuto()
             Screen.SINGLE -> renderSingle()
-            Screen.CARDS, Screen.EDIT -> renderCards()
+            Screen.CARDS, Screen.EDIT, Screen.QR -> renderCards()
             Screen.READ -> Unit
         }
         reader()
@@ -324,6 +324,17 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         }
     }
     private fun renderCards() {
+        if(screen == Screen.QR) {
+            text(content,t("qrAttach"),22f,true)
+            val current = lease
+            if(current?.job?.jobKind == "qr" && flow.stage in listOf(WriterFlow.Stage.READY, WriterFlow.Stage.WRITING, WriterFlow.Stage.REMOVAL)) {
+                text(content,current.job.displayLabel,26f,true)
+                text(content,t("qrSameCard"),16f)
+                renderWriteState()
+                action(content,t("pause")) { pauseWriting(); work { releaseCurrent(); load(); ui { render() } } }
+                return
+            }
+        }
         val dateQuery = EditText(this).apply { hint = t("batchDate"); setSingleLine(); setText(batchDate); inputType = InputType.TYPE_CLASS_DATETIME or InputType.TYPE_DATETIME_VARIATION_DATE; content.addView(this) }
         action(content, t("filterDate")) {
             val value = dateQuery.text.toString().trim()
@@ -373,15 +384,36 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 })
             } else text(panel, card.displayLabel, 23f, true)
             text(panel, cardMetadata(card), 13f)
-            val job = jobs.find { it.tagId == card.id }
-            text(panel, "${t(if (card.status == "disabled") "disabled" else if (card.recordingId == null) "empty" else "recorded")} · ${t(job?.status ?: "pending")}", 14f, true)
+            val job = card.job ?: jobs.find { it.tagId == card.id }
+            val provisionState = if(card.entryChannel == "qr") if(job?.status == "verified") "qrAttached" else "qrWaiting" else job?.status ?: "pending"
+            text(panel, "${t(if (card.status == "disabled") "disabled" else if (card.recordingId == null) "empty" else "recorded")} · ${t(provisionState)}", 14f, true)
             if (card.nickname.isNotBlank()) text(panel, card.nickname, 14f)
             card.recordedAt?.let { text(panel, "${t("recordedAt")} · ${date(it)}", 13f) }
             job?.writtenAt?.let { text(panel, "${t("writtenAt")} · ${date(it)}", 13f) }
             if (card.recordingId != null) action(panel, t("play")) { play(card.recordingId) }
+            if(screen == Screen.QR && QrAttachmentPolicy.canPrepare(card)) action(panel,t("qrWrite"),true) { confirmQr(card) }
+            if(screen == Screen.CARDS && card.entryChannel == "qr") action(panel,t("qrAttach")) { search=card.displayLabel;offset=0;statusFilter="";batchDate="";navigate(Screen.QR) }
         }
         if (offset > 0) action(content, t("previous")) { offset = (offset - 50).coerceAtLeast(0); checked.clear(); reload() }
         if (offset + cards.size < total) action(content, t("next")) { offset += 50; checked.clear(); reload() }
+    }
+    private fun confirmQr(card: Card) {
+        if(queue.isNotEmpty()) { message(t("unsynced"));return }
+        if(adapter?.isEnabled != true) { message(t("nfcOff"));return }
+        val selectionEpoch=epoch;val owner=api.userId
+        AlertDialog.Builder(this).setTitle(t("qrWrite")).setMessage("${card.displayLabel}\n${card.recordedAt?.let(::date).orEmpty()}\n\n${t("qrConfirm")}")
+            .setNegativeButton(t("cancel"),null).setPositiveButton(t("confirm")) { _,_ ->
+                if(!resumed || screen != Screen.QR || epoch != selectionEpoch || api.userId != owner || busy.get()) return@setPositiveButton
+                pauseWriting();val expected=epoch
+                work {
+                    releaseCurrent();api.verify()
+                    val acquired=api.prepareQr(card,deviceId())
+                    check(acquired.job.jobKind == "qr" && acquired.job.tagId == card.id && Provisioning.validUrl(acquired.job.visitorUrl)) { "JOB_CONFLICT" }
+                    if(!resumed || epoch != expected || api.userId != owner || screen != Screen.QR) { api.release(acquired);return@work }
+                    lease=acquired;flow.choose(false);flow.start(acquired.job.id,acquired.token,acquired.expiresAt)
+                    ui { if(resumed && epoch == expected) { statusMessage="";render();showFeedback(WriteFeedback.READY,expected) } }
+                }
+            }.show()
     }
     private fun renderSingle() {
         val pending = singleMutation
@@ -396,7 +428,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         if (!SingleCardPolicy.canChange(snapshot, inspectedCards) || inspectedIdentity.isBlank()) return
         action(content, t("newChipUrl"), true) { confirmSingle(SingleOperation.NEW) }.isEnabled = !singlePreparation().physicalUncertain()
         if (snapshot.kind == "data") action(content, t("clearChip")) { confirmSingle(SingleOperation.CLEAR) }
-        val original = inspectedCards.singleOrNull()?.card?.job
+        val original = inspectedCards.singleOrNull()?.card?.job?.takeIf { it.jobKind == "nfc" }
         if (original != null && inspectedCards.single().card?.status != "disabled") action(content, t("restoreChipUrl")) { confirmSingle(SingleOperation.RESTORE) }
         if (singlePreparation().jobId() != null) action(content, t("singleReviewPreparation")) {
             val expectedEpoch = epoch
@@ -543,19 +575,25 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         val reportKey = accountKey("reports")
         ui { if (resumed && epoch == writeEpoch) { message(t("writing")); showFeedback(WriteFeedback.WRITING, writeEpoch) } }
         executor.execute {
+            var qrMutation: SingleMutation? = null
             try {
                 api.verify()
                 val fresh = api.jobs().find { it.id == current.job.id }
                 if (fresh == null || !WriterSafety.sameAssignment(current.job, fresh)) throw WriterException("JOB_CONFLICT")
                 if (!resumed || epoch != writeEpoch) throw WriterException("JOB_CONFLICT")
                 if (expectedSingle != null) verifyReviewed(reviewedSingle)
+                if (current.job.jobKind == "qr") {
+                    qrMutation = NfcWriter.qrPreflight(tag, current.job)
+                    api.beginQr(current, QrAttachmentPolicy.chipHash(tag.id))
+                    if (!resumed || epoch != writeEpoch || System.currentTimeMillis() >= current.expiresAt) throw WriterException("JOB_CONFLICT")
+                }
                 if (automaticWrite) preparation(writeOwner).beginPhysical(current.job.id)
                 if (expectedSingle?.operation == SingleOperation.NEW) singlePreparation(writeOwner).beginPhysical(current.job.id)
             } catch (e: Exception) {
                 flow.pause(); busy.set(false); ui { if (resumed && epoch == writeEpoch) { reader(); message(error(e)); showFeedback(WriteFeedback.ERROR, writeEpoch, error(e)) } }; return@execute
             }
             val report = try {
-                NfcWriter.writeAndRead(tag, current.job, overwriteConfirmed, expectedSingle) { resumed && epoch == writeEpoch && System.currentTimeMillis() < current.expiresAt }
+                NfcWriter.writeAndRead(tag, current.job, overwriteConfirmed || qrMutation != null, expectedSingle ?: qrMutation) { resumed && epoch == writeEpoch && System.currentTimeMillis() < current.expiresAt }
             } catch (e: Exception) {
                 Provisioning.failure(current.job, when(e) { is TagLostException -> "TAG_LOST"; is WriterException -> e.code; is ApiException -> e.code; else -> "NFC_IO" })
             }.copy(leaseToken = current.token)
@@ -660,7 +698,13 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         for (report in queue.toList()) {
             if (!Provisioning.canSync(report)) continue
             val job = authoritative.find { it.id == report.jobId }
-            if (job == null || !Provisioning.matches(report, job) || Provisioning.superseded(report, job)) continue
+            if (job == null || !Provisioning.matches(report, job)) continue
+            if (Provisioning.canDiscardSuperseded(report, job)) {
+                queue.remove(report)
+                try { persistQueue() } catch (e: Exception) { queue.add(report); throw e }
+                continue
+            }
+            if (Provisioning.superseded(report, job)) continue
             try {
                 api.report(report)
                 queue.remove(report)
@@ -809,6 +853,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         "UNSUPPORTED" -> "unsupported"; "TAG_LOST" -> "lost"; "READBACK_MISMATCH", "INVALID_URL" -> "mismatch"
         "FORMATTED_RETRY" -> "formatted"; "LEASE_CONFLICT" -> "leased"; "CLIENT_UPGRADE_REQUIRED" -> "upgrade"
         "CATEGORY_UNASSIGNED" -> "emptyMove"
+        "CHIP_CONFLICT" -> "qrChipConflict"
         "JOB_CONFLICT", "VERSION_CONFLICT", "GROUP_CONFLICT", "JOB_INELIGIBLE", "LEASE_EXPIRED" -> "conflict"
         "LOCAL_SAVE_FAILED" -> "saveFailed"; else -> "error"
     })

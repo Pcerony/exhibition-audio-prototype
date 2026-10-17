@@ -1,0 +1,5 @@
+{
+  "ja": "QRで参加した録音にNFCタグを後から発行できます。「QR補充」で番号・録音日から検索し、試聴後に空タグへ元のURLを書き込みます。同じ録音の二重発行、別タグでの誤再試行、既存内容の上書きを防止します。アプリ内更新も継続対応。",
+  "zh": "新增二维码补卡：按编号和录音日查找、试听后，将原网址写入空白NFC芯片，保留原录音和编号。防止重复补卡、换芯片误重试和覆盖已有内容；支持断网迟到结果同步。继续支持应用内更新。",
+  "en": "Added QR to NFC: find a QR recording by number/date, listen to confirm, then write its original URL to one blank tag. Keeps the recording and number, rejects duplicate cards and different-tag retries, protects existing contents, and supports late offline reports. In-app updates remain available."
+}
