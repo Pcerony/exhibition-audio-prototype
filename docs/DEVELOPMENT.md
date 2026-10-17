@@ -13,7 +13,7 @@
 
 - `codex/admin-transcription-status` 在独立 worktree 实现了运营列表转写状态摘要和73块拼装板地图。迁移`202610170004_map_piece_assignment.sql`、Admin API/UI和地点坐标估算仍是未发布候选；不得据此认定生产后台已有这些功能。
 - 地图估算使用版本`fukuoka-road-73-v13`。独立站点核验只支持标记为“系统推算”的查找线索；真实卡片位置必须由运营人员核对/修正。地点计算在录音/地点 claim 成功之后执行，失效或RPC失败不得反向失败录音提交。Places坐标不进入持久化、日志、CSV或响应。
-- 该隔离分支包含阶段回退标签：`checkpoint-admin-transcription-status-2026-10-17`、`checkpoint-admin-map-geometry-2026-10-17`、`checkpoint-admin-map-transform-2026-10-17`、`checkpoint-admin-map-persistence-2026-10-17`、`checkpoint-admin-map-claim-2026-10-17`，以及完成后的集成标签`checkpoint-admin-map-piece-assignment-2026-10-17`。标签都是不可变提交锚点；恢复步骤沿用上方worktree示例，禁止重置或强推共享分支。
+- 该隔离分支包含阶段回退标签：`checkpoint-admin-transcription-status-2026-10-17`、`checkpoint-admin-map-geometry-2026-10-17`、`checkpoint-admin-map-transform-2026-10-17`、`checkpoint-admin-map-persistence-2026-10-17`、`checkpoint-admin-map-claim-2026-10-17`，以及集成标签`checkpoint-admin-map-piece-assignment-2026-10-17`和最终文档同步标签`checkpoint-admin-map-piece-assignment-final-2026-10-17`。标签都是不可变提交锚点；恢复步骤沿用上方worktree示例，禁止重置或强推共享分支。
 - 生产查询/导出、migration dry-run/apply、Edge部署和Pages发布没有包含在本地候选开发授权内。需先取得单独授权并完成备份、兼容/回滚审查和生产验收。
 
 ## 前端
