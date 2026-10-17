@@ -54,18 +54,24 @@ Deno.test('v2 errors do not leak database details and category identities are UU
   }
   const f=fixture();equal((await f.handler(request({action:'createCards',categoryId:'not-a-uuid'}))).status,400);equal(f.calls,[]);
 });
-function fixture(role: string | null = 'operator', valid = true, rpcData: unknown = { ok: true }, rpcError: { code: string; message: string } | null = null, configured = false) {
+function fixture(role: string | null = 'operator', valid = true, rpcData: unknown = { ok: true }, rpcError: { code: string; message: string } | null = null, configured = false, listRows: { recordings?: unknown[]; transcriptions?: unknown[] } = {}) {
   const calls: unknown[] = [];
+  const selections: { table: string; columns: string }[] = [];
   const client = {
     auth: { getUser: async (token: string) => ({ data: { user: valid && token === 'valid-jwt' ? { id } : null }, error: valid ? null : {} }) },
-    from: (table: string) => ({ select: () => ({
-      eq: () => ({ maybeSingle: async () => ({ data: role ? { role } : null, error: null }) }),
-      in: async (_field: string, ids: string[]) => ({ data: ids.map((id) => ({ id, location: { source: 'place', placeId: 'synthetic-place' } })), error: null }),
-    }) }),
+    from: (table: string) => ({ select: (columns: string) => {
+      selections.push({ table, columns });
+      return {
+        eq: () => ({ maybeSingle: async () => ({ data: role ? { role } : null, error: null }) }),
+        in: async (_field: string, ids: string[]) => ({ data: table === 'recordings'
+          ? listRows.recordings ?? ids.map((id) => ({ id, location: { source: 'place', placeId: 'synthetic-place' }, transcription_consent: false }))
+          : listRows.transcriptions ?? [], error: null }),
+      };
+    } }),
     rpc: async (name: string, args: unknown) => { calls.push({ name, args }); return { data: rpcData, error: rpcError }; },
     storage: { from: () => ({ createSignedUrl: async () => ({ data: { signedUrl: 'https://example.invalid/audio' }, error: null }) }) },
   };
-  return { handler: createHandler(() => client as never, () => configured), calls };
+  return { handler: createHandler(() => client as never, () => configured), calls, selections };
 }
 Deno.test('unconfigured transcription retry does not call database and get reports configuration truthfully',async()=>{
  const f=fixture();
@@ -102,6 +108,31 @@ Deno.test('authenticated list includes recording location without exposing objec
   equal(response.status, 200);
   const body = await response.json();
   equal(body.tags[0].recording.location, { source: 'place', placeId: 'synthetic-place' });
+});
+Deno.test('admin list includes transcription status but never the transcript body', async () => {
+  const f = fixture('operator', true, { tags: [{ recording: { id, nickname: '' } }], total: 1 }, null, false, {
+    recordings: [{ id, location: { source: 'place', placeId: 'synthetic-place' }, transcription_consent: true }],
+    transcriptions: [{ recording_id: id, status: 'ready', published: false, text: 'private-sentinel' }],
+  });
+  const response = await f.handler(request({ action: 'list' }));
+  equal(response.status, 200);
+  const body = await response.json();
+  equal(body.tags[0].recording.transcriptionSummary, { consented: true, status: 'ready', published: false });
+  if (JSON.stringify(body).includes('private-sentinel') || JSON.stringify(body).includes('errorCode')) throw new Error('private transcription data leaked');
+  equal(f.selections.find((item) => item.table === 'recording_transcriptions')?.columns, 'recording_id,status,published');
+});
+Deno.test('admin list rejects an unknown transcription filter before querying', async () => {
+  const f = fixture();
+  const response = await f.handler(request({ action: 'list', transcriptionState: 'ready' }));
+  equal(response.status, 400);
+  equal(await response.json(), { code: 'REQUEST_INVALID' });
+  equal(f.calls, []);
+});
+Deno.test('admin list uses the verified operator identity for its dedicated RPC', async () => {
+  const f = fixture('operator', true, { tags: [], total: 0 });
+  const response = await f.handler(request({ action: 'list', transcriptionState: 'failed', userId: 'forged' }));
+  equal(response.status, 200);
+  equal(f.calls, [{ name: 'admin_list', args: { p_operator: id, p_body: { action: 'list', transcriptionState: 'failed', userId: 'forged' } } }]);
 });
 function request(body: unknown, token = 'valid-jwt') {
   return new Request('https://example.invalid/admin-api', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

@@ -4,6 +4,7 @@ import { runMaintenance } from '../_shared/maintenance.ts';
 
 const actions = new Set(['session', 'list', 'createBatch', 'reset', 'setEnabled', 'playback', 'jobs', 'provision', 'audit', 'maintenance', 'categories', 'createCategory', 'renameCategory', 'createCards', 'bulkPreview', 'bulkApply', 'leaseJob', 'nextJob', 'releaseJob', 'getTranscription', 'retryTranscription', 'saveTranscription']);
 actions.add('prepareWrite');
+const transcriptionStates = new Set(['not_consented', 'pending', 'processing', 'draft', 'published', 'failed']);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const errors: Record<string, number> = {
   REQUEST_INVALID: 400, OPERATOR_REQUIRED: 403, TAG_NOT_FOUND: 404,
@@ -31,6 +32,8 @@ export function createHandler(getClient: () => SupabaseClient, isTranscriptionCo
       if (!profile || !['operator', 'admin'].includes(profile.role)) return json({ code: 'OPERATOR_REQUIRED' }, 403);
       const body = await readJson(request);
       if (!body || typeof body !== 'object' || Array.isArray(body) || !actions.has(body.action)) return json({ code: 'REQUEST_INVALID' }, 400);
+      if (body.action === 'list' && body.transcriptionState !== undefined
+        && (typeof body.transcriptionState !== 'string' || !transcriptionStates.has(body.transcriptionState))) return json({ code: 'REQUEST_INVALID' }, 400);
       for (const field of ['tagId', 'recordingId', 'jobId', 'requestKey', 'categoryId', 'targetCategoryId']) {
         if (field in body && (typeof body[field] !== 'string' || !uuid.test(body[field]))) return json({ code: 'REQUEST_INVALID' }, 400);
       }
@@ -45,7 +48,7 @@ export function createHandler(getClient: () => SupabaseClient, isTranscriptionCo
       )) return json({ code: 'REQUEST_INVALID' }, 400);
       if (body.action === 'maintenance') return json(await runMaintenance(client));
       if (body.action === 'retryTranscription' && !isTranscriptionConfigured()) return json({ code: 'TRANSCRIPTION_NOT_CONFIGURED' }, 503);
-      const { data, error } = await client.rpc('admin_action', { p_operator: identity.user.id, p_body: body });
+      const { data, error } = await client.rpc(body.action === 'list' ? 'admin_list' : 'admin_action', { p_operator: identity.user.id, p_body: body });
       if (error) {
         const code = Object.keys(errors).find((value) => error.message.includes(value))
           ?? (['22P02', '22003', '22007', '22008', '22023', '23502'].includes(error.code) ? 'REQUEST_INVALID' : 'SERVICE_UNAVAILABLE');
@@ -66,10 +69,24 @@ export function createHandler(getClient: () => SupabaseClient, isTranscriptionCo
       if (body.action === 'list' && Array.isArray(data?.tags)) {
         const ids = data.tags.flatMap((tag: { recording?: { id: string } | null }) => tag.recording ? [tag.recording.id] : []);
         if (ids.length) {
-          const { data: locations, error: locationError } = await client.from('recordings').select('id,location').in('id', ids);
-          if (locationError) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);
-          const byId = new Map((locations ?? []).map((recording) => [recording.id, recording.location]));
-          for (const tag of data.tags) if (tag.recording) tag.recording.location = byId.get(tag.recording.id) ?? null;
+          const [recordingsResult, transcriptionResult] = await Promise.all([
+            client.from('recordings').select('id,location,transcription_consent').in('id', ids),
+            client.from('recording_transcriptions').select('recording_id,status,published').in('recording_id', ids),
+          ]);
+          if (recordingsResult.error || transcriptionResult.error) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);
+          const byRecordingId = new Map((recordingsResult.data ?? []).map((recording) => [recording.id, recording]));
+          const byTranscriptionId = new Map((transcriptionResult.data ?? []).map((transcription) => [transcription.recording_id, transcription]));
+          for (const tag of data.tags) if (tag.recording) {
+            const recording = byRecordingId.get(tag.recording.id);
+            const consented = recording?.transcription_consent === true;
+            const transcription = consented ? byTranscriptionId.get(tag.recording.id) : null;
+            tag.recording.location = recording?.location ?? null;
+            tag.recording.transcriptionSummary = {
+              consented,
+              status: transcription?.status ?? null,
+              published: transcription?.published === true,
+            };
+          }
         }
       }
       return json(data);
