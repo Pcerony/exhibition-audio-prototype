@@ -12,6 +12,7 @@ import './styles.css';
 import { PolicyLinks, PolicyPage } from './features/visitor/PolicyPage';
 import { VisitorPreviewPage } from './features/visitor/VisitorPreviewPage';
 const StaffEntry=lazy(()=>import('./features/staff/StaffEntry'));
+const StaffQrEntry = lazy(() => import('./features/staff/StaffQrEntry'));
 const QrFallbackPage = lazy(() => import('./features/admin/QrFallbackPage').then(({ QrFallbackPage: page }) => ({ default: page })));
 
 const repository = createBrowserRepository();
@@ -51,12 +52,16 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.lang = ['admin', 'qr', 'staff'].includes(resolveAppRoute(route.pathname, route.hash).type) ? operatorLocale(locale) : locale;
+    document.documentElement.lang = ['admin', 'qr', 'staff', 'staffQr'].includes(resolveAppRoute(route.pathname, route.hash).type) ? operatorLocale(locale) : locale;
     document.title = t('app.title');
   }, [locale, t, route.pathname, route.hash]);
 
   if (!ready) return <main className="outdoor-loading" role="status"><span className="loading-ring" aria-hidden="true" /><p>{t('app.loading')}</p></main>;
   const resolvedRoute = resolveAppRoute(route.pathname, route.hash);
+  if (resolvedRoute.type === 'staffQr') {
+    if (!cloudConfigured) return <main className="visitor-shell"><p className="visitor-intro">{t('app.cloudMissing')}</p></main>;
+    return <Suspense fallback={<main className="outdoor-loading" role="status">{t('app.loading')}</main>}><StaffQrEntry /></Suspense>;
+  }
   if(resolvedRoute.type==='staff') {
     if(!cloudConfigured)return <main className="visitor-shell"><p>{t('app.cloudMissing')}</p></main>;
     return <Suspense fallback={<main className="outdoor-loading" role="status">{t('app.loading')}</main>}><StaffEntry/></Suspense>;
@@ -96,8 +101,9 @@ export function resolveTagToken(pathname: string, hash: string) {
   return activePath.match(/^\/t\/([^/]+)\/?$/)?.[1] ?? null;
 }
 
-export function resolveAppRoute(pathname: string, hash: string): { type: 'tag'; token: string } | { type: 'admin' | 'qr' | 'staff' | 'preview' } | { type: 'welcome' } | { type: 'privacy' | 'terms' } {
+export function resolveAppRoute(pathname: string, hash: string): { type: 'tag'; token: string } | { type: 'admin' | 'qr' | 'staff' | 'staffQr' | 'preview' } | { type: 'welcome' } | { type: 'privacy' | 'terms' } {
   const activePath = hash.startsWith('#/') ? hash.slice(1) : pathname;
+  if (activePath === '/staff/qr' || activePath === '/staff/qr/') return { type: 'staffQr' };
   if(activePath==='/staff'||activePath==='/staff/')return {type:'staff'};
   if (activePath === '/preview' || activePath === '/preview/') return { type: 'preview' };
   if (activePath === '/privacy') return { type: 'privacy' };

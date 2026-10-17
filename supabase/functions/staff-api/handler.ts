@@ -10,6 +10,7 @@ const allowed = new Set([
   'playback',
   'activity',
   'retryTranscription',
+  'createQrEntry',
 ]);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const errors: Record<string, number> = {
@@ -23,6 +24,7 @@ const errors: Record<string, number> = {
   VERSION_CONFLICT: 409,
   TRANSCRIPTION_RATE_LIMITED: 429,
   TRANSCRIPTION_IN_PROGRESS: 409,
+  REQUEST_KEY_CONFLICT: 409,
 };
 
 export function createHandler(getClient: () => SupabaseClient, isTranscriptionConfigured = () => !!Deno.env.get('GROQ_API_KEY')) {
@@ -74,9 +76,15 @@ export function createHandler(getClient: () => SupabaseClient, isTranscriptionCo
         'published',
         'event',
         'languageHint',
+        'requestKey',
       ]) {
         if (key in input) body[key] = input[key];
       }
+      if (
+        input.action === 'createQrEntry' &&
+        (typeof body.requestKey !== 'string' || !uuid.test(body.requestKey))
+      )
+        return json({ code: 'REQUEST_INVALID' }, 400);
       if (['save', 'playback', 'activity', 'retryTranscription'].includes(input.action)) {
         if (
           typeof body.recordingId !== 'string' ||

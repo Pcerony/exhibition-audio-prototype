@@ -32,19 +32,34 @@ try {
 
   const operator = randomUUID();
   const otherOperator = randomUUID();
+  const staffUser = randomUUID();
   const requestKey = randomUUID();
-  await pool.query('insert into auth.users(id) values ($1),($2)', [operator, otherOperator]);
-  await pool.query("insert into public.operator_profiles(user_id,role) values ($1,'operator'),($2,'operator')", [operator, otherOperator]);
+  await pool.query('insert into auth.users(id) values ($1),($2),($3)', [operator, otherOperator, staffUser]);
+  await pool.query("insert into public.operator_profiles(user_id,role) values ($1,'operator'),($2,'operator'),($3,'staff')", [operator, otherOperator, staffUser]);
 
   const admin = async (body, userId = operator) => (await pool.query(
     'select public.admin_action($1::uuid,$2::jsonb) as result', [userId, body],
   )).rows[0].result;
+  const staff = async (body, userId = staffUser) => (await pool.query(
+    'select public.staff_action($1::uuid,$2::jsonb) as result', [userId, body],
+  )).rows[0].result;
   const body = { action: 'createQrEntry', requestKey };
   const parallel = await Promise.all(Array.from({ length: 16 }, () => admin(body)));
   assert.ok(parallel.every((result) => result.id === parallel[0].id && result.visitorUrl === parallel[0].visitorUrl));
+  const crossApi = await Promise.all(Array.from({ length: 16 }, (_, index) => index % 2 ? admin(body) : staff(body, operator)));
+  assert.ok(crossApi.every((result) => result.id === parallel[0].id && result.visitorUrl === parallel[0].visitorUrl));
   assert.equal(Number((await pool.query('select count(*) from public.tags')).rows[0].count), 1);
   assert.equal(Number((await pool.query('select count(*) from public.audit_log where action = $1', ['qr_issue'])).rows[0].count), 1);
   assert.equal(Number((await pool.query('select count(*) from public.provisioning_jobs where tag_id = $1', [parallel[0].id])).rows[0].count), 0);
+
+  const staffBody = { action: 'createQrEntry', requestKey: randomUUID() };
+  const staffIssued = await staff(staffBody);
+  const staffReplay = await staff(staffBody);
+  assert.equal(staffReplay.id, staffIssued.id);
+  assert.equal(staffIssued.entryChannel, 'qr');
+  assert.equal(Number((await pool.query('select count(*) from public.audit_log where action = $1 and tag_id=$2', ['qr_issue', staffIssued.id])).rows[0].count), 1);
+  assert.equal(Number((await pool.query('select count(*) from public.provisioning_jobs where tag_id = $1', [staffIssued.id])).rows[0].count), 0);
+  await assert.rejects(admin({ action: 'createQrEntry', requestKey: randomUUID() }, staffUser), /OPERATOR_REQUIRED/);
 
   await assert.rejects(admin(body, otherOperator), /REQUEST_KEY_CONFLICT/);
   await assert.rejects(admin({ ...body, extra: true }), /REQUEST_KEY_CONFLICT/);
@@ -58,9 +73,10 @@ try {
     action: 'prepareWrite', deviceId: 'qr-fallback-test', requestKey: randomUUID(), protocolVersion: 3,
   });
   assert.notEqual(physical.job.tagId, parallel[0].id);
+  assert.notEqual(physical.job.tagId, staffIssued.id);
   const physicalTag = await pool.query('select entry_channel from public.tags where id = $1', [physical.job.tagId]);
   assert.equal(physicalTag.rows[0].entry_channel, 'nfc');
-  console.log('PASS: independent PostgreSQL sessions serialize same-key QR issuance and keep QR identities out of NFC provisioning');
+  console.log('PASS: independent PostgreSQL sessions serialize QR issuance across admin/staff APIs and keep QR identities out of NFC provisioning');
 } finally {
   await pool?.end();
   await server.stop();

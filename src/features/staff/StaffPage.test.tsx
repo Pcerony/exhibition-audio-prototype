@@ -71,6 +71,12 @@ function repository(): StaffRepository {
     getSession: vi.fn(async () => session),
     signIn: vi.fn(async () => session),
     signOut: vi.fn(async () => {}),
+    createQrEntry: vi.fn(async () => ({
+      id: 'qr-tag',
+      label: 'U000010',
+      entryChannel: 'qr' as const,
+      visitorUrl: 'https://voice.heisei.space/#/t/opaque-token',
+    })),
     list: vi.fn(async () => ({ cards: [card], total: 1 })),
     save: vi.fn(async () => {}),
     retryTranscription: vi.fn(async () => {}),
@@ -100,6 +106,13 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 describe('staff website', () => {
+  it('offers the isolated QR page to authenticated staff before member selection', async () => {
+    const repo = repository();
+    show(repo);
+    const link = await screen.findByRole('link', { name: '二维码备用入口' });
+    expect(link).toHaveAttribute('href', '#/staff/qr');
+    expect(repo.list).not.toHaveBeenCalled();
+  });
   it('confirms a selected source language and requeues AI without approving it', async () => {
     localStorage.setItem(memoryKey,'member-a');
     vi.spyOn(window,'confirm').mockReturnValue(true);

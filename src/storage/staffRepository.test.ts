@@ -35,6 +35,27 @@ describe('staff repository', () => {
     await f.repository.retryTranscription('recording','member',3,'ja');
     expect(JSON.parse(String((f.fetcher.mock.calls.at(-1) as unknown as [string,RequestInit])[1].body))).toEqual({action:'retryTranscription',recordingId:'recording',memberId:'member',version:3,languageHint:'ja'});
   });
+  it('creates a QR entry through the authenticated staff API without forwarding other fields', async () => {
+    const f = fixture();
+    f.fetcher.mockImplementationOnce(async () => new Response(JSON.stringify({
+      id: 'qr-tag',
+      label: 'U000010',
+      entryChannel: 'qr',
+      visitorUrl: 'https://voice.heisei.space/#/t/opaque-token',
+    }), { status: 200 }));
+    await expect(f.repository.createQrEntry('10000000-0000-4000-8000-000000000011')).resolves.toEqual({
+      id: 'qr-tag',
+      label: 'U000010',
+      entryChannel: 'qr',
+      visitorUrl: 'https://voice.heisei.space/#/t/opaque-token',
+    });
+    const [url, options] = f.fetcher.mock.calls.at(-1) as unknown as [string, RequestInit];
+    expect(url).toBe('https://example.invalid/functions/v1/staff-api');
+    expect(JSON.parse(String(options.body))).toEqual({
+      action: 'createQrEntry',
+      requestKey: '10000000-0000-4000-8000-000000000011',
+    });
+  });
   it('restores the authorized shared session and signs in without storing passwords', async () => {
     const f = fixture();
     expect((await f.repository.getSession())?.members[0].name).toBe(

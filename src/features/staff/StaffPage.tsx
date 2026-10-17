@@ -8,6 +8,7 @@ import {
   LogOut,
   MapPin,
   Play,
+  QrCode,
   RefreshCw,
   Search,
   UserRound,
@@ -311,6 +312,16 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
               </button>
             ))}
           </div>
+          {session && (
+            <a
+              className="staff-icon"
+              href="#/staff/qr"
+              title={m.qrFallback}
+              aria-label={m.qrFallback}
+            >
+              <QrCode size={18} />
+            </a>
+          )}
           {member && (
             <button
               className="staff-person"

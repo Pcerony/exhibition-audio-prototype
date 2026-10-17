@@ -21,13 +21,14 @@ Deno.test('QR entries replay the same identity and never enter the NFC writer po
     const operator = '10000000-0000-4000-8000-000000000001';
     const otherOperator = '10000000-0000-4000-8000-000000000002';
     const unlistedOperator = '10000000-0000-4000-8000-000000000003';
+    const staff = '10000000-0000-4000-8000-000000000004';
     const requestKey = '20000000-0000-4000-8000-000000000001';
-    await db.query('insert into auth.users(id) values ($1),($2),($3)', [operator, otherOperator, unlistedOperator]);
-    await db.query("insert into public.operator_profiles(user_id,role) values ($1,'operator'),($2,'operator')", [operator, otherOperator]);
+    await db.query('insert into auth.users(id) values ($1),($2),($3),($4)', [operator, otherOperator, unlistedOperator, staff]);
+    await db.query("insert into public.operator_profiles(user_id,role) values ($1,'operator'),($2,'operator'),($3,'staff')", [operator, otherOperator, staff]);
 
-    async function createQr(userId: string, body: Record<string, unknown>) {
+    async function createQr(userId: string, body: Record<string, unknown>, api = 'admin_action') {
       const result = await db.query<{ result: Record<string, unknown> }>(
-        'select public.admin_action($1::uuid,$2::jsonb) as result',
+        `select public.${api}($1::uuid,$2::jsonb) as result`,
         [userId, JSON.stringify(body)],
       );
       return result.rows[0].result;
@@ -41,6 +42,17 @@ Deno.test('QR entries replay the same identity and never enter the NFC writer po
     const tagId = String(created.id);
     const replay = await createQr(operator, body);
     if (JSON.stringify(replay) !== JSON.stringify(created)) throw new Error('request replay changed the QR identity');
+    const replayFromStaffApi = await createQr(operator, body, 'staff_action');
+    if (JSON.stringify(replayFromStaffApi) !== JSON.stringify(created)) throw new Error('staff API replay changed the operator QR identity');
+
+    const staffKey = '20000000-0000-4000-8000-000000000004';
+    const staffBody = { action: 'createQrEntry', requestKey: staffKey };
+    const staffCreated = await createQr(staff, staffBody, 'staff_action');
+    if (staffCreated.entryChannel !== 'qr' || typeof staffCreated.visitorUrl !== 'string') {
+      throw new Error(`staff QR entry response was invalid: ${JSON.stringify(staffCreated)}`);
+    }
+    const staffReplay = await createQr(staff, staffBody, 'staff_action');
+    if (JSON.stringify(staffReplay) !== JSON.stringify(staffCreated)) throw new Error('staff request replay changed the QR identity');
 
     const concurrentKey = '20000000-0000-4000-8000-000000000002';
     const concurrentBody = { action: 'createQrEntry', requestKey: concurrentKey };
@@ -85,6 +97,29 @@ Deno.test('QR entries replay the same identity and never enter the NFC writer po
       denied = String(error);
     }
     if (!denied.includes('OPERATOR_REQUIRED')) throw new Error(`expected operator authorization failure, received ${denied}`);
+    let adminDenied = '';
+    try {
+      await createQr(staff, { action: 'createQrEntry', requestKey: '20000000-0000-4000-8000-000000000005' });
+    } catch (error) {
+      adminDenied = String(error);
+    }
+    if (!adminDenied.includes('OPERATOR_REQUIRED')) throw new Error(`expected admin API to reject staff, received ${adminDenied}`);
+    let staffDenied = '';
+    try {
+      await createQr(unlistedOperator, { action: 'createQrEntry', requestKey: '20000000-0000-4000-8000-000000000006' }, 'staff_action');
+    } catch (error) {
+      staffDenied = String(error);
+    }
+    if (!staffDenied.includes('STAFF_REQUIRED')) throw new Error(`expected staff API authorization failure, received ${staffDenied}`);
+
+    const privileges = await db.query<{ wrapper: boolean; anonymous: boolean; helper: boolean }>(
+      "select has_function_privilege('service_role','public.staff_action(uuid,jsonb)','EXECUTE') wrapper, " +
+      "has_function_privilege('authenticated','public.staff_action(uuid,jsonb)','EXECUTE') anonymous, " +
+      "has_function_privilege('service_role','public.issue_qr_entry_internal(uuid,jsonb)','EXECUTE') helper",
+    );
+    if (!privileges.rows[0].wrapper || privileges.rows[0].anonymous || privileges.rows[0].helper) {
+      throw new Error('staff QR wrapper or internal helper execution grants are unsafe');
+    }
 
     const prepared = await createQr(operator, {
       action: 'prepareWrite',
