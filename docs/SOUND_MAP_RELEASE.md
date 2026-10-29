@@ -2,6 +2,8 @@
 
 ## 用户确认后的正式发布（2026-10-29）
 
+PR [#32](https://github.com/Pcerony/exhibition-audio-prototype/pull/32)已合并，Pages运行[40818693243](https://github.com/Pcerony/exhibition-audio-prototype/actions/runs/40818693243)成功。正式域名已返回新地图资源，手机视口显示49条目录、真实3D画布和街道标注。随后补充开始页直接可见的自动转写告知（保留默认开启、不新增确认步骤），236项完整前端回归通过；后续正式验证记录在该修正PR验收评论。
+
 负责人已确认本地效果，并授权将地图与此前未发布的用户端录音流程修改一起上线。正式集成从最新`origin/main`（86f81c4）创建`codex/sound-map-production`，不覆盖旧主目录的未提交工作，不回退工作人员/QR补卡/录音剪辑等既有功能。
 
 本次保留新main的临时mapPoint、原语言提示与所有staff/QR入口，合入本地进度条、录音确认页布局、页脚语言切换、物理范围选点、默认转写告知与按需文字翻译。地图目录时长读取当前主音频版本，与既有剪辑一致。6条place-only仍只在列表，不补写坐标。

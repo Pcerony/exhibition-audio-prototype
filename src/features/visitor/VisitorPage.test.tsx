@@ -55,7 +55,7 @@ describe('visitor page', () => {
     } });
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
     expect(await screen.findByRole('link', { name: copy['policy.groqPrivacy'] })).toHaveAttribute('href', 'https://groq.com/privacy-policy/');
-    expect(screen.queryByText(copy['transcription.notice'])).not.toBeInTheDocument();
+    expect(screen.getByText(copy['transcription.notice'])).toBeVisible();
     expect(screen.queryByText(copy['flow.introBody'])).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: copy['flow.begin'] })).toBeEnabled();
@@ -87,6 +87,7 @@ describe('visitor page', () => {
     expect(await screen.findByRole('button', { name: '开始' })).toBeVisible();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Groq 隐私政策' })).toBeVisible();
+    expect(screen.getByText(visitorMessages['zh-CN']['transcription.notice'])).toBeVisible();
     expect(screen.queryByText('分享一段属于你与这座城市的记忆。')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '开始' })).toBeEnabled();
     expect(screen.getByTestId('visitor-tag-number')).toHaveTextContent('展签 01');
