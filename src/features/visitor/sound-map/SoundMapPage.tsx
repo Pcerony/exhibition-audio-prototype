@@ -7,7 +7,7 @@ import { memoryLocationUrl } from '../../../domain/location';
 import { VisitorAudioPlayer } from '../VisitorAudioPlayer';
 import { modelPoint, inSoundMap, type MapPoint } from './geography';
 import { mountSoundMap, topicColors, type SoundMapScene } from './scene';
-import { soundMapMessages } from './soundMapMessages';
+import { describeSoundMapEntry, soundMapMessages } from './soundMapMessages';
 import './sound-map.css';
 
 type Props = { repository: SoundMapRepository; onClose: () => void; onContinue?: () => void; focusRecordingId?: string };
@@ -45,7 +45,7 @@ export function SoundMapPage({ repository, onClose, onContinue, focusRecordingId
   }, [entries]);
   useEffect(() => {
     let active = true; setSceneReady(false); setSceneFailed(false); focused.current = false;
-    void mountSoundMap({ surface: surface.current!, markers: markers.current!, labels: labels.current!, copy,
+    void mountSoundMap({ surface: surface.current!, markers: markers.current!, labels: labels.current!, copy, locale,
       reserved: () => Array.from(shell.current?.querySelectorAll<HTMLElement>('[data-map-reserved]') ?? [])
         .filter(el => !el.hidden && el.getBoundingClientRect().width > 0).map(el => el.getBoundingClientRect()),
       onSelect: chooseGroup, onUnavailable: () => { if (active) setSceneFailed(true); },
@@ -54,7 +54,7 @@ export function SoundMapPage({ repository, onClose, onContinue, focusRecordingId
       scene.current = value; setSceneReady(true);
     }).catch(() => { if (active) setSceneFailed(true); });
     return () => { active = false; scene.current?.dispose(); scene.current = null; };
-  }, [copy, chooseGroup]);
+  }, [copy, locale, chooseGroup]);
   const voices = useMemo(() => (entries ?? []).flatMap(entry => {
     const point = points.get(entry.id); return point && inSoundMap(point) ? [{ entry, point }] : [];
   }), [entries, points]);
@@ -84,19 +84,14 @@ export function SoundMapPage({ repository, onClose, onContinue, focusRecordingId
     return () => { document.body.style.overflow = previous; };
   }, []);
   const topics = { A: copy.food, B: copy.travel, C: copy.encounter, D: copy.other };
-  const topic = (entry: SoundMapEntry) => entry.categoryCode ? topics[entry.categoryCode] : copy.unknown;
   const showList = listOpen || sceneFailed;
   function closePanel() { setSelected(null); setGroup(null); }
-  function date(entry: SoundMapEntry) {
-    const value = new Date(entry.createdAt);
-    return Number.isNaN(value.getTime()) ? '' : new Intl.DateTimeFormat(locale, { month: 'numeric', day: 'numeric', timeZone: 'Asia/Tokyo' }).format(value);
-  }
   function entryButton(entry: SoundMapEntry) {
     const point = points.get(entry.id);
     const hint = !entry.location ? copy.unlocated : entry.location.source === 'place' ? copy.externalPlace : !point || !inSoundMap(point) ? copy.unresolved : '';
     return <button key={entry.id} type="button" className="sm-entry" onClick={() => { if (point && inSoundMap(point)) scene.current?.focus(entry.id); setGroup(null); setSelected(entry); setListOpen(false); }}>
       <span className="sm-entry-dot" style={{ background: topicColors[entry.categoryCode ?? ''] ?? '#69796f' }} />
-      <span className="sm-entry-copy"><strong>{entry.label}</strong><small>{topic(entry)} · {Math.round(entry.durationSeconds)} {copy.seconds} · {date(entry)}{hint && ` · ${hint}`}</small></span><Play size={17} aria-hidden="true" />
+      <span className="sm-entry-copy"><strong>{describeSoundMapEntry(entry, locale)}</strong><small>{Math.round(entry.durationSeconds)} {copy.seconds}{hint && ` · ${hint}`}</small></span><Play size={17} aria-hidden="true" />
     </button>;
   }
   return <main ref={shell} tabIndex={-1} className="sound-map-shell" aria-label={copy.title} onKeyDown={event => { if (event.key === 'Escape') { if (selected || group || listOpen) { closePanel(); setListOpen(false); } else onClose(); } }}>
@@ -115,10 +110,10 @@ export function SoundMapPage({ repository, onClose, onContinue, focusRecordingId
     <p className="sm-credit" data-map-reserved><a href="https://www.mlit.go.jp/plateau/site-policy/" target="_blank" rel="noreferrer">Project PLATEAU / 福岡市</a> · 簡略化・高さ調整 · 建物調査 2022</p>
     <div className="sm-legend" data-map-reserved>{Object.entries(topics).map(([code, text]) => <span key={code}><i style={{ background: topicColors[code] }}/>{text}</span>)}</div>
     <button className="sm-continue" data-map-reserved onClick={onContinue ?? onClose}>{onContinue ? copy.leave : copy.back}<ArrowRight size={20}/></button>
-    {(showList || group || selected) && <section className={`sm-panel${showList ? ' is-list' : ''}`} aria-label={selected?.label ?? copy.list}>
-      <div className="sm-panel-heading"><h2>{selected?.label ?? (group ? `${copy.group} · ${group.length}` : copy.list)}</h2><button className="sm-icon" title={copy.close} aria-label={copy.close} onClick={() => { if (sceneFailed && !selected && !group) { onClose(); return; } closePanel(); setListOpen(false); }}><X size={20}/></button></div>
+    {(showList || group || selected) && <section className={`sm-panel${showList ? ' is-list' : ''}`} aria-label={selected ? describeSoundMapEntry(selected, locale) : copy.list}>
+      <div className="sm-panel-heading"><h2>{selected ? describeSoundMapEntry(selected, locale) : (group ? `${copy.group} · ${group.length}` : copy.list)}</h2><button className="sm-icon" title={copy.close} aria-label={copy.close} onClick={() => { if (sceneFailed && !selected && !group) { onClose(); return; } closePanel(); setListOpen(false); }}><X size={20}/></button></div>
       {sceneFailed && <p className="sm-fallback">{copy.fallback}</p>}
-      {selected ? <><p className="sm-audio-meta">{topic(selected)} · {Math.round(selected.durationSeconds)} {copy.seconds} · {date(selected)}</p>
+      {selected ? <><p className="sm-audio-meta">{Math.round(selected.durationSeconds)} {copy.seconds}</p>
         {selected.location?.source === 'place' && <a className="sm-place-link" href={memoryLocationUrl(selected.location)!} target="_blank" rel="noreferrer"><ExternalLink size={16}/>{copy.externalPlace}</a>}
         {audioFailed ? <div role="alert"><p>{copy.unavailable}</p><button className="sm-retry" onClick={() => setPlaybackRevision(v => v + 1)}><RefreshCw size={18}/>{copy.retry}</button></div>
           : audioUrl ? <VisitorAudioPlayer key={`${selected.id}:${playbackRevision}`} src={audioUrl} purpose="recording" onPlaybackError={() => setAudioFailed(true)} /> : <p role="status">{copy.loadingAudio}</p>}

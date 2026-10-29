@@ -17,3 +17,6 @@
 .sm-panel .visitor-audio-time{font-size:11px}.sm-panel .visitor-audio-timeline input{accent-color:#264f43}
 .sm-credit a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 .sm-scene-layer{position:absolute;inset:0;pointer-events:none}
+.sm-glyph{flex:none;overflow:hidden;contain:paint}.sm-flag{animation:sm-marker-sway 3.2s ease-in-out var(--sway-delay,0s) infinite;transform-origin:50% 100%}.sm-pin:hover .sm-flag,.sm-pin[aria-pressed=true] .sm-flag{animation-play-state:paused}
+@keyframes sm-marker-sway{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-3px) rotate(2deg)}}
+@media(prefers-reduced-motion:reduce){.sm-flag{animation:none}}
