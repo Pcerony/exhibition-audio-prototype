@@ -36,6 +36,8 @@ jobs:
         run: npm test -- --run
       - name: Run backend contract tests
         run: npm run test:backend
+      - name: Run audio version authorization and concurrency tests
+        run: npm run test:audio-backend
       - name: Build for GitHub Pages
         run: npm run build
         env:

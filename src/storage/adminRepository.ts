@@ -36,6 +36,7 @@ export type QrEntry = { id: string; label: string; visitorUrl: string; entryChan
 export type TagQuery = { search?: string; status?: 'unbound' | 'bound' | 'disabled'; transcriptionState?: AdminTranscriptionState; pieceCode?: string; offset?: number; limit?: number; categoryId?: string; batchDate?: string; uncategorized?: boolean; sort?: 'recorded_desc' | 'recorded_asc' | 'number' };
 export type AuditEntry = { id: string | number; operatorId: string; action: string; tagId: string | null; createdAt: string; details?: Record<string, unknown> | null };
 export interface AdminRepository {
+  audio?: import('./audioAdminRepository').AudioAdminRepository;
   getTranscription(recordingId: string): Promise<TranscriptionResult>;
   retryTranscription(recordingId: string, version: number): Promise<void>;
   saveTranscription(recordingId: string, version: number, text: string, published: boolean): Promise<void>;

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import { json, preflight, readJson } from '../_shared/http.ts';
 import { runMaintenance } from '../_shared/maintenance.ts';
+import { primaryAudio } from '../_shared/primaryAudio.ts';
 import { parseMemoryLocation } from '../../../src/domain/location.ts';
 
 const actions = new Set(['session', 'list', 'createBatch', 'createQrEntry', 'reset', 'setEnabled', 'playback', 'jobs', 'provision', 'audit', 'maintenance', 'categories', 'createCategory', 'renameCategory', 'createCards', 'bulkPreview', 'bulkApply', 'leaseJob', 'nextJob', 'releaseJob', 'getTranscription', 'retryTranscription', 'saveTranscription']);
@@ -96,7 +97,8 @@ export function createHandler(getClient: () => SupabaseClient, isTranscriptionCo
         return json({ ...data, expiresAt: new Date(expiresAt).toISOString() });
       }
       if (body.action === 'playback') {
-        const { data: signed, error: signError } = await client.storage.from('recordings').createSignedUrl(data.objectPath, 120);
+        const audio = await primaryAudio(client, body.recordingId, data.objectPath);
+        const { data: signed, error: signError } = await client.storage.from('recordings').createSignedUrl(audio.path, 120);
         if (signError || !signed) return json({ code: 'PLAYBACK_UNAVAILABLE' }, 503);
         return json({ url: signed.signedUrl, expiresInSeconds: 120 });
       }

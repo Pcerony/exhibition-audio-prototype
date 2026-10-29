@@ -1,5 +1,6 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import { json, preflight } from '../_shared/http.ts';
+import { primaryAudio } from '../_shared/primaryAudio.ts';
 
 export function createHandler(getClient: () => SupabaseClient) { return async (request: Request) => {
   const options = preflight(request);
@@ -19,6 +20,11 @@ export function createHandler(getClient: () => SupabaseClient) { return async (r
   const recording = Array.isArray(tag.recordings) ? tag.recordings[0] ?? null : tag.recordings ?? null;
   const topic = Array.isArray(tag.memory_topics) ? tag.memory_topics[0] ?? null : tag.memory_topics ?? null;
   let transcript: string | null = null;
+  let duration = recording?.duration_seconds;
+  if (tag.status === 'bound' && recording) {
+    try { duration = (await primaryAudio(client, recording.id, '')).duration ?? duration; }
+    catch { return json({ code: 'SERVICE_UNAVAILABLE' }, 503); }
+  }
   if (tag.status === 'bound' && recording?.transcription_consent) {
     const { data, error: transcriptError } = await client.from('recording_transcriptions').select('text')
       .eq('recording_id', recording.id).eq('status', 'ready').eq('published', true).maybeSingle();
@@ -39,7 +45,7 @@ export function createHandler(getClient: () => SupabaseClient) { return async (r
     recording: recording && tag.status === 'bound' ? {
       id: recording.id,
       nickname: recording.nickname,
-      durationSeconds: recording.duration_seconds,
+      durationSeconds: duration,
       createdAt: recording.created_at,
       location: recording.location,
       transcriptionConsent: recording.transcription_consent,

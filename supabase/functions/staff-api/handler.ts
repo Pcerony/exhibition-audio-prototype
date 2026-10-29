@@ -1,4 +1,5 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
+import { primaryAudio } from '../_shared/primaryAudio.ts';
 import { json, preflight, readJson } from '../_shared/http.ts';
 import { isTranscriptionLanguage } from '../_shared/transcriptionLanguage.ts';
 
@@ -155,9 +156,10 @@ export function createHandler(getClient: () => SupabaseClient, isTranscriptionCo
       if (input.action === 'playback') {
         if (typeof data?.objectPath !== 'string')
           return json({ code: 'PLAYBACK_UNAVAILABLE' }, 503);
+        const audio = await primaryAudio(client, input.recordingId, data.objectPath);
         const { data: signed, error: signError } = await client.storage
           .from('recordings')
-          .createSignedUrl(data.objectPath, 120);
+          .createSignedUrl(audio.path, 120);
         if (signError || !signed)
           return json({ code: 'PLAYBACK_UNAVAILABLE' }, 503);
         return json({ url: signed.signedUrl, expiresInSeconds: 120 });

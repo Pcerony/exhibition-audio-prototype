@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { createAudioAdminRepository } from './audioAdminRepository';
 import type { TranscriptionResult } from '../domain/transcription';
 import type { AdminRepository, AuditEntry, Category, ManagedTag, OperatorSession, PieceAssignmentSummary, PieceAssignmentUpdate, ProvisioningJob, QrEntry } from './adminRepository';
 export type AdminAuth = {
@@ -29,6 +30,7 @@ export function createCloudAdminRepository(config: { url: string; key: string; a
     return { ...membership, email: session.email };
   }
   return {
+    audio: createAudioAdminRepository({ url: config.url, key: config.key, getToken: async () => (await config.auth.getSession())?.accessToken, fetcher }),
     getTranscription: (recordingId) => request<TranscriptionResult>('getTranscription', { recordingId }),
     async retryTranscription(recordingId, version) { await request('retryTranscription', { recordingId, version }); },
     async saveTranscription(recordingId, version, text, published) { await request('saveTranscription', { recordingId, version, text, published }); },

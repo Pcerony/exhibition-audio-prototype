@@ -81,6 +81,16 @@ function repository(): AdminRepository {
   };
 }
 
+it('offers audio review only to the highest admin role', async () => {
+  const r = repository(); r.audio = { list: vi.fn(), detail: vi.fn(), measure: vi.fn(), save: vi.fn(), restore: vi.fn() };
+  const view = show(r, 'zh-CN');
+  await screen.findByRole('button', { name: '录音审核与剪辑 / 音声レビュー' });
+  view.unmount();
+  vi.mocked(r.getSession).mockResolvedValue({ userId: 'operator', role: 'operator' });
+  show(r, 'zh-CN'); await screen.findByText('A001');
+  expect(screen.queryByRole('button', { name: '录音审核与剪辑 / 音声レビュー' })).not.toBeInTheDocument();
+});
+
 it('offers the isolated QR fallback subpage from the existing operator console', async () => {
   show(repository(), 'zh-CN');
   await screen.findByText('A001');
@@ -181,7 +191,7 @@ it('saves an operator-selected map piece with the observed assignment version', 
 });
 function show(r: AdminRepository, locale?: string) {
   if (locale) localStorage.setItem('exhibition-audio-language-v2', locale);
-  render(
+  return render(
     <I18nProvider>
       <CloudAdminPage repository={r} baseUrl="https://example.test" />
     </I18nProvider>,

@@ -1,5 +1,9 @@
 # 系统架构
 
+## 管理员音频版本（2026-10-29）
+
+Web最高admin的录音审核使用独立admin-audio Edge API。浏览器通过Web Audio解码、显示波形、裁切并输出规范单声道PCM WAV；服务端验证实际字节和时长。recording_audio_state保存revision/主版本和测量结果，recording_audio_versions保存不可变剪辑对象；recordings始终指向原版，不改变tag/token/编号。访客、operator、staff播放共同解析主版本；转写claim在同一数据库锁顺序下选择当前版本。旧签名URL仍最多存活120秒。前端异常阈值仅给人工复核线索，不自动删除录音。
+
 ## 系统边界
 
 单一单体仓库、四个客户端、一个共享云后端：
