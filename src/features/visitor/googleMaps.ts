@@ -1,4 +1,5 @@
 import type { MemoryLocation } from '../../domain/location';
+import { isWithinPhysicalMap, physicalMapBounds, physicalMapPolygon } from './physicalMapBounds';
 
 export type MapPointWgs84 = { lat: number; lng: number };
 export type LocationSelection = { location: MemoryLocation; mapPoint: MapPointWgs84 };
@@ -29,42 +30,68 @@ function loadMaps(language: string): Promise<void> {
   return loading;
 }
 
+function coordinatesOf(location: google.maps.LatLng | google.maps.LatLngLiteral) {
+  const lat = location.lat;
+  const lng = location.lng;
+  return {
+    lat: typeof lat === 'number' ? lat : lat.call(location),
+    lng: typeof lng === 'number' ? lng : lng.call(location),
+  };
+}
+
 export async function mountLocationMap(options: {
   mapElement: HTMLElement; searchElement: HTMLElement; language: string;
   onSelect: (selection: LocationSelection | null) => void; onError: () => void;
 }): Promise<() => void> {
   await loadMaps(options.language);
-  const center = { lat: 33.5902, lng: 130.4017 };
+  const center = {
+    lat: (physicalMapBounds.north + physicalMapBounds.south) / 2,
+    lng: (physicalMapBounds.east + physicalMapBounds.west) / 2,
+  };
   const map = new google.maps.Map(options.mapElement, {
     center, zoom: 13, mapTypeControl: false, streetViewControl: false,
     fullscreenControl: false, clickableIcons: false, gestureHandling: 'greedy',
   });
+  const boundary = new google.maps.Polygon({
+    paths: physicalMapPolygon,
+    strokeColor: '#526d20', strokeOpacity: 0.95, strokeWeight: 3,
+    fillColor: '#b2d249', fillOpacity: 0.12, clickable: false,
+  });
+  boundary.setMap(map);
   let disposed = false;
+  let mapInitialized = false;
   let selectionRevision = 0;
   let programmatic = false;
   let lastCenter = center;
   const selectCenter = () => {
     selectionRevision++;
     const point = map.getCenter();
-    if (point && !disposed) {
-      const mapPoint = { lat: point.lat(), lng: point.lng() };
-      options.onSelect({ location: { source: 'pin', ...mapPoint }, mapPoint });
-    }
+    if (!point || disposed) return;
+    const mapPoint = { lat: point.lat(), lng: point.lng() };
+    options.onSelect(isWithinPhysicalMap(mapPoint) ? { location: { source: 'pin', ...mapPoint }, mapPoint } : null);
   };
   const drag = map.addListener('dragend', selectCenter);
+  const idle = map.addListener('idle', () => { mapInitialized = true; });
   const centerChange = map.addListener('center_changed', () => {
     const point = map.getCenter();
     if (!point) return;
     const next = { lat: point.lat(), lng: point.lng() };
     const changed = Math.abs(next.lat - lastCenter.lat) > 1e-9 || Math.abs(next.lng - lastCenter.lng) > 1e-9;
     lastCenter = next;
-    if (changed && !programmatic) selectCenter();
+    if (changed && mapInitialized && !programmatic) selectCenter();
   });
   const click = map.addListener('click', (event: google.maps.MapMouseEvent) => {
-    if (event.latLng) { map.setCenter(event.latLng); selectCenter(); }
+    if (!event.latLng) return;
+    const coordinates = { lat: event.latLng.lat(), lng: event.latLng.lng() };
+    if (!isWithinPhysicalMap(coordinates)) { options.onSelect(null); return; }
+    programmatic = true;
+    lastCenter = coordinates;
+    try { map.setCenter(event.latLng); }
+    finally { programmatic = false; }
+    selectCenter();
   });
   const search = new google.maps.places.PlaceAutocompleteElement({
-    locationBias: { center, radius: 25000 },
+    locationRestriction: physicalMapBounds,
   });
   options.searchElement.append(search);
   const choose = async (event: Event) => {
@@ -75,14 +102,17 @@ export async function mountLocationMap(options: {
       await place.fetchFields({ fields: ['location'] });
       if (disposed || revision !== selectionRevision) return;
       if (!place.location || !place.id) throw new Error('PLACE_UNAVAILABLE');
+      const coordinates = coordinatesOf(place.location);
+      if (!isWithinPhysicalMap(coordinates)) return;
       programmatic = true;
+      lastCenter = coordinates;
       try {
         map.setCenter(place.location);
         map.setZoom(16);
       } finally { programmatic = false; }
       options.onSelect({
         location: { source: 'place', placeId: place.id },
-        mapPoint: { lat: place.location.lat(), lng: place.location.lng() },
+        mapPoint: coordinates,
       });
     } catch { if (!disposed && revision === selectionRevision) options.onError(); }
   };
@@ -91,7 +121,8 @@ export async function mountLocationMap(options: {
   search.addEventListener('gmp-error', error);
   return () => {
     disposed = true;
-    drag.remove(); click.remove(); centerChange.remove();
+    drag.remove(); idle.remove(); click.remove(); centerChange.remove();
+    boundary.setMap(null);
     search.removeEventListener('gmp-select', choose);
     search.removeEventListener('gmp-error', error);
     search.remove();

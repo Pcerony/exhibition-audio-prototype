@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 let center = { lat: 33.5902, lng: 130.4017 };
-let listeners: Record<string, () => void>;
+let listeners: Record<string, (...args: unknown[]) => void>;
 let mapOptions: google.maps.MapOptions;
 let placeFields: string[];
+let autocompleteOptions: google.maps.places.PlaceAutocompleteElementOptions;
+let polygonOptions: google.maps.PolygonOptions;
+let polygonDetached: boolean;
 beforeEach(() => {
   vi.resetModules();
   vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', 'test-key');
@@ -11,6 +14,9 @@ beforeEach(() => {
   center = { lat: 33.5902, lng: 130.4017 };
   mapOptions = {};
   placeFields = [];
+  autocompleteOptions = {};
+  polygonOptions = {};
+  polygonDetached = false;
   vi.stubGlobal('google', { maps: {
     Map: class {
       constructor(_element: HTMLElement, options: google.maps.MapOptions) {
@@ -18,7 +24,7 @@ beforeEach(() => {
         center = options.center as typeof center;
       }
       getCenter() { return { lat: () => center.lat, lng: () => center.lng }; }
-      addListener(name: string, callback: () => void) { listeners[name] = callback; return { remove() {} }; }
+      addListener(name: string, callback: (...args: unknown[]) => void) { listeners[name] = callback; return { remove() {} }; }
       setCenter(value: typeof center | { lat: () => number; lng: () => number }) {
         if (typeof (value as { lat: unknown }).lat === 'function') {
           const point = value as { lat: () => number; lng: () => number };
@@ -28,8 +34,12 @@ beforeEach(() => {
       }
       setZoom() {}
     },
+    Polygon: class {
+      constructor(options: google.maps.PolygonOptions) { polygonOptions = options; }
+      setMap(map: google.maps.Map | null) { if (!map) polygonDetached = true; }
+    },
     places: {
-      PlaceAutocompleteElement: class { constructor() { return document.createElement('div'); } },
+      PlaceAutocompleteElement: class { constructor(options: google.maps.places.PlaceAutocompleteElementOptions) { autocompleteOptions = options; return document.createElement('div'); } },
       Place: class {
         location = { lat: () => 33.61, lng: () => 130.43 };
         constructor(_options: { id: string }) {}
@@ -51,18 +61,78 @@ async function mount() {
 
 it('tracks keyboard/camera center movement without selecting the initial center', async () => {
   const map = await mount();
+  center = { lat: 33.59, lng: 130.42 };
+  listeners.center_changed?.();
+  expect(map.onSelect).not.toHaveBeenCalled();
   listeners.idle?.();
   expect(map.onSelect).not.toHaveBeenCalled();
-  center = { lat: 33.6, lng: 130.42 };
+  center = { lat: 33.591, lng: 130.421 };
   listeners.center_changed?.();
   listeners.idle?.();
   expect(map.onSelect).toHaveBeenLastCalledWith({ location: { source: 'pin', ...center }, mapPoint: center });
   map.dispose();
 });
 
+it('keeps the physical boundary visible and restricts place search without clamping map movement', async () => {
+  const map = await mount();
+  const { isWithinPhysicalMap, physicalMapBounds, physicalMapPolygon } = await import('./physicalMapBounds');
+
+  expect(physicalMapBounds).toEqual({
+    north: 33.59750820115585,
+    south: 33.57515436521987,
+    east: 130.42562375513583,
+    west: 130.3951457652568,
+  });
+  expect(mapOptions.restriction).toBeUndefined();
+  expect(mapOptions.zoom).toBe(13);
+  expect(autocompleteOptions).toEqual({ locationRestriction: physicalMapBounds });
+  expect(polygonOptions.paths).toEqual(physicalMapPolygon);
+  expect(isWithinPhysicalMap(physicalMapPolygon[0])).toBe(true);
+  expect(isWithinPhysicalMap({ lat: 33.586, lng: 130.41 })).toBe(true);
+  expect(isWithinPhysicalMap({ lat: 33.5975, lng: 130.4256 })).toBe(false);
+  map.dispose();
+  expect(polygonDetached).toBe(true);
+});
+
+it('allows panning beyond the footprint but selects only points inside its edge', async () => {
+  const map = await mount();
+  const { physicalMapPolygon } = await import('./physicalMapBounds');
+  listeners.idle?.();
+  center = { lat: 33.6, lng: 130.41 };
+  listeners.center_changed?.();
+  expect(map.onSelect).toHaveBeenLastCalledWith(null);
+
+  center = physicalMapPolygon[0];
+  listeners.center_changed?.();
+
+  expect(map.onSelect).toHaveBeenLastCalledWith({ location: { source: 'pin', ...physicalMapPolygon[0] }, mapPoint: physicalMapPolygon[0] });
+  map.dispose();
+});
+
+it('does not select map clicks outside the physical map footprint', async () => {
+  const map = await mount();
+  const outside = { lat: () => 33.5975, lng: () => 130.4256 } as google.maps.LatLng;
+  listeners.click?.({ latLng: outside } as google.maps.MapMouseEvent);
+
+  expect(map.onSelect).toHaveBeenLastCalledWith(null);
+  expect(center).toEqual({ lat: 33.58633128318786, lng: 130.41038476019634 });
+  map.dispose();
+});
+
+it('ignores a place result outside the physical map footprint', async () => {
+  const map = await mount();
+  const event = Object.assign(new Event('gmp-select'), { placePrediction: { toPlace: () => ({
+    id: 'outside-place', location: { lat: 33.5975, lng: 130.4256 }, fetchFields: async () => {},
+  }) } });
+  map.search.firstElementChild!.dispatchEvent(event);
+  await vi.waitFor(() => expect(map.onSelect).toHaveBeenLastCalledWith(null));
+  expect(center).toEqual({ lat: 33.58633128318786, lng: 130.41038476019634 });
+  map.dispose();
+});
+
 it('invalidates the previous point while a search result is loading', async () => {
   const map = await mount();
-  center = { lat: 33.6, lng: 130.42 };
+  center = { lat: 33.59, lng: 130.42 };
   listeners.dragend?.();
   const event = Object.assign(new Event('gmp-select'), { placePrediction: { toPlace: () => ({ fetchFields: () => new Promise(() => {}) }) } });
   map.search.firstElementChild!.dispatchEvent(event);
@@ -73,11 +143,11 @@ it('invalidates the previous point while a search result is loading', async () =
 it('keeps a resolved search result as a place rather than converting it to a pin', async () => {
   const map = await mount();
   const event = Object.assign(new Event('gmp-select'), { placePrediction: { toPlace: () => ({
-    id: 'synthetic-place', location: { lat: () => 33.61, lng: () => 130.43 }, fetchFields: async () => {},
+    id: 'synthetic-place', location: { lat: () => 33.59, lng: () => 130.42 }, fetchFields: async () => {},
   }) } });
   map.search.firstElementChild!.dispatchEvent(event);
   await vi.waitFor(() => expect(map.onSelect).toHaveBeenLastCalledWith({
-    location: { source: 'place', placeId: 'synthetic-place' }, mapPoint: { lat: 33.61, lng: 130.43 },
+    location: { source: 'place', placeId: 'synthetic-place' }, mapPoint: { lat: 33.59, lng: 130.42 },
   }));
   map.dispose();
 });

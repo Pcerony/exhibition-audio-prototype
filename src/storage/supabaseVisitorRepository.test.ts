@@ -43,3 +43,16 @@ it('sends a selected Place coordinate only as a transient map point, not as pers
   expect(claim.mapPoint).toEqual({ lat: 33.5946138544, lng: 130.4063520063 });
   expect(JSON.stringify(claim.location)).not.toContain('33.5946138544');
 });
+
+it('requests a selected public transcript translation on demand', async () => {
+  vi.stubEnv('VITE_SUPABASE_URL', 'https://fixture.invalid');
+  vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'public-fixture');
+  const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ translation: 'A Fukuoka memory', targetLanguage: 'en', cached: false })));
+  vi.stubGlobal('fetch', fetcher);
+  const { createSupabaseVisitorRepository } = await import('./supabaseVisitorRepository');
+  const repo = createSupabaseVisitorRepository();
+
+  await expect(repo.translateTranscript('opaque-fixture', 'en')).resolves.toBe('A Fukuoka memory');
+  expect(String(fetcher.mock.calls[0][0])).toBe('https://fixture.invalid/functions/v1/public-translate');
+  expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ token: 'opaque-fixture', targetLanguage: 'en' });
+});

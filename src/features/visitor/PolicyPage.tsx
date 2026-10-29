@@ -1,20 +1,23 @@
 import { LanguageSwitch } from '../../i18n/LanguageSwitch';
 import { useI18n } from '../../i18n/I18nProvider';
+import { soundMapMessages } from './sound-map/soundMapMessages';
 
-export function PolicyLinks() {
+export function PolicyLinks({ includeGroqPrivacy = false }: { includeGroqPrivacy?: boolean } = {}) {
   const { t } = useI18n();
   return <nav className="policy-links" aria-label={t('policy.nav')}>
     <a href="#/privacy" target="_blank" rel="noreferrer">{t('policy.privacy')}</a>
     <a href="#/terms" target="_blank" rel="noreferrer">{t('policy.terms')}</a>
+    {includeGroqPrivacy && <a href="https://groq.com/privacy-policy/" target="_blank" rel="noreferrer">{t('policy.groqPrivacy')}</a>}
   </nav>;
 }
 
 export function PolicyPage({ kind }: { kind: 'privacy' | 'terms' }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const privacy = kind === 'privacy';
   return <main className="visitor-shell">
     <div className="visitor-topline"><a href="#/">{t('app.title')}</a><span className="topline-rule" /><LanguageSwitch visitor /></div>
     <h1>{t(privacy ? 'policy.privacy' : 'policy.terms')}</h1>
+    <p>{soundMapMessages[locale].published}</p>
     {privacy ? <>
       <p>{t('policy.data')}</p><p>{t('policy.optional')}</p><p>{t('policy.services')}</p>
       <p>{t('policy.transcription')} <a href="https://groq.com/privacy-policy/" target="_blank" rel="noreferrer">{t('policy.groqPrivacy')}</a></p>

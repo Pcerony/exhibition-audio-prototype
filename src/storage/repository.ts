@@ -2,6 +2,7 @@ import { claimTag, createTag, resetTag, type RecordingInfo, type Tag } from '../
 import { indexedDbAudioStore, type AudioStore } from './indexedDb';
 import { parseMemoryLocation, type MapPoint, type MemoryLocation } from '../domain/location';
 import { MEMORY_CATEGORIES, formatMemorySerial, isMemoryCategoryCode, memoryBatchDate, type MemoryCategoryCode } from '../domain/classification';
+import type { TranslationLanguage } from '../domain/translation';
 
 type NewTag = { id: string; token: string; label: string; batch?: string };
 export type NewRecording = { id: string; blob: Blob; nickname: string; duration: number; location?: MemoryLocation | null; mapPoint?: MapPoint | null; categoryCode?: MemoryCategoryCode; transcriptionConsent?: boolean; transcriptionLanguage?: import('../domain/transcriptionLanguage').TranscriptionLanguage };
@@ -12,12 +13,13 @@ export interface TagRepository {
   getTag(token: string): Promise<Tag | null>;
   createTag(input: NewTag): Promise<Tag>;
   claim(token: string, recording: NewRecording): Promise<ClaimResult>;
+  translateTranscript(token: string, targetLanguage: TranslationLanguage): Promise<string>;
   getAudio(recordingId: string): Promise<Blob | null>;
   getVisitorPlaybackUrl(token: string): Promise<string | null>;
   resetTag(token: string): Promise<void>;
 }
 
-export type VisitorRepository = Pick<TagRepository, 'getTag' | 'claim' | 'getVisitorPlaybackUrl'>;
+export type VisitorRepository = Pick<TagRepository, 'getTag' | 'claim' | 'getVisitorPlaybackUrl' | 'translateTranscript'>;
 
 interface MetadataStore {
   read(): Tag[];
@@ -121,6 +123,9 @@ function buildRepository(metadata: MetadataStore, audio: AudioStore): TagReposit
       if (!tag?.recording) return null;
       const blob = await audio.get(tag.recording.id);
       return blob ? URL.createObjectURL(blob) : null;
+    },
+    async translateTranscript() {
+      throw new Error('TRANSLATION_UNAVAILABLE');
     },
     async resetTag(token) {
       const tags = metadata.read();

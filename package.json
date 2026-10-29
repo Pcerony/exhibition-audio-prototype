@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:sound-map": "node scripts/dev-sound-map.mjs",
+    "test:map-backend": "npx --yes deno@2.9.6 test --node-modules-dir=none --no-lock --allow-read supabase/functions/public-map/handler_test.ts supabase/functions/public-translate/handler_test.ts supabase/tests/translation_test.ts",
     "build": "tsc -b && vite build",
     "test": "vitest",
     "test:audio-backend": "npx --yes deno@2.9.6 test --node-modules-dir=none --no-lock --allow-read supabase/tests/audio_versions_test.ts supabase/functions/admin-audio/handler_test.ts supabase/functions/admin-audio/wav_test.ts supabase/functions/_shared/primaryAudio_test.ts",
@@ -14,10 +16,11 @@
     "@supabase/supabase-js": "^2.117.2",
     "@vitejs/plugin-react": "latest",
     "lucide-react": "latest",
-    "proj4": "2.22.0",
+    "proj4": "^2.22.0",
     "qrcode.react": "^4.2.0",
     "react": "latest",
     "react-dom": "latest",
+    "three": "^0.180.0",
     "typescript": "latest",
     "vite": "latest"
   },
@@ -28,6 +31,7 @@
     "@types/google.maps": "^3.66.6",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@types/three": "^0.180.0",
     "jsdom": "26.1.0",
     "vitest": "latest"
   }

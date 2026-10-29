@@ -3,6 +3,7 @@ import type { Tag } from '../domain/tags';
 import { parseMemoryLocation, type MemoryLocation } from '../domain/location';
 import type { ClaimResult, NewRecording, VisitorRepository } from './repository';
 import { isMemoryCategoryCode } from '../domain/classification';
+import type { TranslationLanguage } from '../domain/translation';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -87,6 +88,12 @@ export function createSupabaseVisitorRepository(): VisitorRepository {
     async getVisitorPlaybackUrl(token) {
       const result = await request<{ url: string }>('public-playback-url', { method: 'POST', body: { token } });
       return result.url;
+    },
+    async translateTranscript(token: string, targetLanguage: TranslationLanguage) {
+      const result = await request<{ translation: string }>('public-translate', {
+        method: 'POST', body: { token, targetLanguage },
+      });
+      return result.translation;
     },
     async claim(token, recording: NewRecording): Promise<ClaimResult> {
       if (!isMemoryCategoryCode(recording.categoryCode)) throw new Error('CATEGORY_REQUIRED');
