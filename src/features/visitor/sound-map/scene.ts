@@ -3,7 +3,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { SoundMapEntry } from '../../../storage/soundMapRepository';
 import { modelPoint, type MapPoint } from './geography';
-import type { SoundMapCopy } from './soundMapMessages';
+import { describeSoundMapEntry, type SoundMapCopy } from './soundMapMessages';
+import type { VisitorLocale } from '../../../i18n/visitorMessages';
+import { createMarkerGlyph } from './marker';
 
 type Polygon = number[][][];
 type Geometry = { type: 'Polygon'; coordinates: Polygon } | { type: 'MultiPolygon'; coordinates: Polygon[] };
@@ -17,7 +19,7 @@ export type SoundMapScene = {
 export const topicColors: Record<string, string> = { A: '#c86678', B: '#437fa1', C: '#548262', D: '#9180aa' };
 
 export async function mountSoundMap(options: {
-  surface: HTMLDivElement; markers: HTMLDivElement; labels: HTMLDivElement;
+  surface: HTMLDivElement; markers: HTMLDivElement; labels: HTMLDivElement; locale: VisitorLocale;
   reserved: () => DOMRect[]; copy: SoundMapCopy;
   onSelect: (entries: SoundMapEntry[]) => void; onUnavailable: () => void;
 }): Promise<SoundMapScene> {
@@ -127,7 +129,7 @@ export async function mountSoundMap(options: {
       count.hidden = pin.group.length === 1; count.textContent = String(pin.group.length);
       const isSelected = pin.group.some(p => p.id === selected);
       pin.el.setAttribute('aria-pressed', String(isSelected));
-      pin.el.setAttribute('aria-label', pin.group.length > 1 ? `${options.copy.group} ${pin.group.length}` : `${pin.voice.entry.label} · ${pin.voice.entry.durationSeconds} ${options.copy.seconds}`);
+      pin.el.setAttribute('aria-label', pin.group.length > 1 ? `${options.copy.group} ${pin.group.length}` : describeSoundMapEntry(pin.voice.entry, options.locale));
       markerRects.push(rect);
     }
     const occupied: Rect[] = [];
@@ -189,13 +191,13 @@ export async function mountSoundMap(options: {
   const observer = new ResizeObserver(resize); observer.observe(options.surface); resize(); reset();
   return {
     setVoices(voices) {
-      pins = voices.map(voice => {
+      pins = voices.map((voice, index) => {
         const el = document.createElement('button'); el.type = 'button'; el.className = 'sm-pin';
         el.style.setProperty('--topic', topicColors[voice.entry.categoryCode ?? ''] ?? '#69796f');
+        el.style.setProperty('--sway-delay', `${-(index % 11) * 0.31}s`);
         const flag = document.createElement('span'); flag.className = 'sm-flag';
-        const glyph = document.createElement('span'); glyph.className = 'sm-glyph';
-        const logo = document.createElement('img'); logo.src = `${import.meta.env.BASE_URL}sodeslab-logo.png`; logo.alt = '';
-        glyph.append(logo); const count = document.createElement('span'); count.className = 'sm-pin-count';
+        const glyph = createMarkerGlyph();
+        const count = document.createElement('span'); count.className = 'sm-pin-count';
         flag.append(glyph, count); el.append(flag);
         const pin = { voice, el, group: [voice.entry], position: position(voice.point.x, voice.point.y, 1) };
         el.onclick = () => options.onSelect(pin.group);
