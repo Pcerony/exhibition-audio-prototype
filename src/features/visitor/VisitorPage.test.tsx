@@ -87,6 +87,7 @@ describe('visitor page', () => {
     expect(await screen.findByRole('button', { name: '开始' })).toBeVisible();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Groq 隐私政策' })).toBeVisible();
+    expect(screen.getByText(visitorMessages['zh-CN']['transcription.notice'])).toBeVisible();
     expect(screen.queryByText('分享一段属于你与这座城市的记忆。')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '开始' })).toBeEnabled();
     expect(screen.getByTestId('visitor-tag-number')).toHaveTextContent('展签 01');
