@@ -20,3 +20,5 @@
 .sm-glyph{flex:none;overflow:hidden;contain:paint}.sm-flag{animation:sm-marker-sway 3.2s ease-in-out var(--sway-delay,0s) infinite;transform-origin:50% 100%}.sm-pin:hover .sm-flag,.sm-pin[aria-pressed=true] .sm-flag{animation-play-state:paused}
 @keyframes sm-marker-sway{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-3px) rotate(2deg)}}
 @media(prefers-reduced-motion:reduce){.sm-flag{animation:none}}
+.sm-world .sm-cables{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden}.sm-cables path{fill:none;stroke-width:1.5;stroke-linecap:round;vector-effect:non-scaling-stroke}.sm-tools .sm-icon[aria-pressed=true]{background:#e0eee5;border-color:#729c85;color:#264f43}
+@media(max-height:600px){.sm-tools{flex-direction:row}}
