@@ -41,6 +41,7 @@ import { cloudAdminMessages } from "./cloudAdminMessages";
 import { operatorMessages } from "./operatorMessages";
 import { OperatorDialog } from "./OperatorDialog";
 import { TranscriptionDialog } from './TranscriptionDialog';
+import { AudioReviewPanel } from './AudioReviewPanel';
 import { transcriptionMessages } from './transcriptionMessages';
 import "./admin.css";
 import "./cloud-admin.css";
@@ -117,6 +118,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
   const [revision, setRevision] = useState(0);
   const [audio, setAudio] = useState<{ id: string; url: string } | null>(null);
   const [transcription, setTranscription] = useState<{ recordingId: string; label: string } | null>(null);
+  const [audioReview, setAudioReview] = useState(false);
   const [jobs, setJobs] = useState<ProvisioningJob[] | null>(null);
   const [audit, setAudit] = useState<AuditEntry[] | null>(null);
   const [bulk, setBulk] = useState<BulkDialog | null>(null);
@@ -143,6 +145,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
     setAudit(null);
     setAudio(null);
     setTranscription(null);
+    setAudioReview(false);
     setPieceCode(undefined);
     setActiveMapRecordingId(null);
     setCorrection(null);
@@ -580,6 +583,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
               </div>
               {pieceCode && <p className="piece-map-filter-state" role="status">{m.pieceColumn}: {pieceCode}</p>}
             </section>
+            {session.role === 'admin' && repository.audio && <button className="toolbar-secondary" onClick={() => setAudioReview(true)}>录音审核与剪辑 / 音声レビュー</button>}
             <div className="table-controls">
               <label className="batch-date-filter">
                 {n.batchDate}
@@ -955,6 +959,7 @@ export function CloudAdminPage({ repository, baseUrl }: Props) {
           </div>
         </div>
       )}
+      {session?.role === 'admin' && repository.audio && audioReview && <AudioReviewPanel repository={repository.audio} onAuthError={failure} onClose={() => { setAudioReview(false); setRevision(value => value + 1); }} />}
       {session && transcription && <TranscriptionDialog
         key={transcription.recordingId}
         repository={repository}

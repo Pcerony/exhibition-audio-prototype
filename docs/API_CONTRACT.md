@@ -1,5 +1,11 @@
 # 跨端 API 契约
 
+## 管理员录音审核（2026-10-29）
+
+独立POST admin-audio 验证Auth getUser与operator_profiles.role=admin，operator及匿名不可调用。JSON动作list {offset,limit}返回{items,total}；detail {recordingId}返回原版及剪辑版本120秒签名URL、revision、activeVersionId；measure {recordingId,duration,meanDb}保存实测；restore {recordingId,revision}恢复原版。multipart save含recordingId/revision/requestKey(UUID)/start/end/audio，音频仅接受单声道16kHz/16bit规范PCM WAV，最多300秒/9600044字节。服务端检查头、字节数和时长，不接受客户端对象路径。
+
+保存/恢复以标签行锁、revision原子切换；冲突409 AUDIO_VERSION_CONFLICT；requestKey重放不创建重复版本或重新切换。原recordings、URL、编号不变，剪辑为独立私有对象。切换主版本撤回已发布转写、取消worker租约、递增转写版本并保留草稿；旧翻译随转写版本失效。原版可恢复，剪辑历史可试听。上传前进入24小时延迟回收队列，成功提交原子出队；删除录音时派生对象入队。访客仅能取当前有效标签的主音频短期URL。
+
 ## 二维码录音补实体卡（Android 3.4）
 
 仅认证 admin-api 的 operator/admin 可用，不扩展共享 staff 角色。所有操作不创建 tag/token/录音，不改变原 URL，不进入普通写卡池。

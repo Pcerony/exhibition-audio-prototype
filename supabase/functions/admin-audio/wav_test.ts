@@ -1,0 +1,4 @@
+import { validateWav } from './wav.ts';
+function wav(seconds=1){const b=new Uint8Array(44+seconds*32000),v=new DataView(b.buffer);const text=(offset:number,s:string)=>{for(let i=0;i<s.length;i++)b[offset+i]=s.charCodeAt(i);};text(0,'RIFF');v.setUint32(4,b.length-8,true);text(8,'WAVE');text(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,16000,true);v.setUint32(28,32000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);text(36,'data');v.setUint32(40,b.length-44,true);return b;}
+Deno.test('canonical PCM duration is measured from bytes, not client metadata',()=>{if(validateWav(wav(2))!==2)throw Error('duration');});
+Deno.test('rejects truncated, disguised and oversized WAV',()=>{for(const bytes of [new Uint8Array(44),wav().slice(0,100),wav(301)]){let rejected=false;try{validateWav(bytes);}catch{rejected=true;}if(!rejected)throw Error('accepted invalid audio');}});

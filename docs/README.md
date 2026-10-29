@@ -4,6 +4,8 @@
 
 ## 核心文档
 
+- [录音审核与剪辑发布](AUDIO_REVIEW_RELEASE.md)：异常候选、可视化剪辑、主版本、恢复与验证记录。
+
 - [二维码录音补实体卡](superpowers/specs/2026-10-18-qr-card-attachment.md)：安卓专用补卡入口、原网址与录音保留、同芯片重试和私有租约收据。
 
 - [工作人员网站接入](STAFF_PORTAL_SETUP.md)：一个共享账号、自选记忆身份、受限审核与发布步骤。

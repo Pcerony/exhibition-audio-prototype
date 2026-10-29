@@ -397,6 +397,9 @@ verify_jwt = false
 # Auth access tokens are verified with getUser inside the function.
 verify_jwt = false
 
+[functions.admin-audio]
+verify_jwt = false
+
 [functions.staff-api]
 # Dedicated restricted portal; JWT verified by Auth.getUser in the handler.
 verify_jwt = false

@@ -1,5 +1,6 @@
 import { adminClient } from '../_shared/client.ts';
 import { json, preflight, readJson } from '../_shared/http.ts';
+import { primaryAudio } from '../_shared/primaryAudio.ts';
 
 Deno.serve(async (request) => {
   const options = preflight(request);
@@ -11,14 +12,17 @@ Deno.serve(async (request) => {
 
   const client = adminClient();
   const { data: tag, error } = await client.from('tags')
-    .select('status,recordings(object_path)').eq('public_token', token).is('deleted_at', null).maybeSingle();
+    .select('status,recordings(id,object_path)').eq('public_token', token).is('deleted_at', null).maybeSingle();
   if (error) return json({ code: 'SERVICE_UNAVAILABLE' }, 503);
   if (!tag) return json({ code: 'TAG_NOT_FOUND' }, 404);
   if (tag.status === 'disabled') return json({ code: 'TAG_UNAVAILABLE' }, 410);
   const recording = Array.isArray(tag.recordings) ? tag.recordings[0] : tag.recordings;
   if (!recording) return json({ code: 'RECORDING_NOT_FOUND' }, 404);
 
-  const { data, error: signedError } = await client.storage.from('recordings').createSignedUrl(recording.object_path, 120);
+  let audio;
+  try { audio = await primaryAudio(client, recording.id, recording.object_path); }
+  catch { return json({ code: 'PLAYBACK_UNAVAILABLE' }, 503); }
+  const { data, error: signedError } = await client.storage.from('recordings').createSignedUrl(audio.path, 120);
   if (signedError || !data?.signedUrl) return json({ code: 'PLAYBACK_UNAVAILABLE' }, 503);
   return json({ url: data.signedUrl, expiresInSeconds: 120 });
 });
