@@ -11,6 +11,7 @@ export function createPreviewRepository(): VisitorRepository {
     async getTag(token) { await ready; return repository.getTag(token); },
     async claim(token, recording) { await ready; return repository.claim(token, recording); },
     async getVisitorPlaybackUrl(token) { await ready; return repository.getVisitorPlaybackUrl(token); },
+    async translateTranscript() { throw new Error('TRANSLATION_UNAVAILABLE'); },
   };
 }
 

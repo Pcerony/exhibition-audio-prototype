@@ -384,6 +384,12 @@ deno_version = 2
 [functions.public-tag]
 verify_jwt = false
 
+[functions.public-map]
+verify_jwt = false
+
+[functions.public-translate]
+verify_jwt = false
+
 [functions.public-upload-init]
 verify_jwt = false
 

@@ -11,6 +11,14 @@ function renderPlayer(purpose: 'recording' | 'preview' = 'recording') {
 afterEach(() => vi.restoreAllMocks());
 
 describe('visitor audio player', () => {
+  it('pauses the captured audio element when the player is removed', () => {
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    const { container, unmount } = renderPlayer();
+    const audio = container.querySelector('audio')!;
+    unmount();
+    expect(pause).toHaveBeenCalledOnce();
+    expect(pause.mock.contexts[0]).toBe(audio);
+  });
   it('provides a prominent play action and a seekable timeline instead of native controls', () => {
     const { container } = renderPlayer();
     const audio = container.querySelector('audio');

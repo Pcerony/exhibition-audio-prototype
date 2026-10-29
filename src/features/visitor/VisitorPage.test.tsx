@@ -54,6 +54,11 @@ describe('visitor page', () => {
       getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
     } });
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+    expect(await screen.findByRole('link', { name: copy['policy.groqPrivacy'] })).toHaveAttribute('href', 'https://groq.com/privacy-policy/');
+    expect(screen.queryByText(copy['transcription.notice'])).not.toBeInTheDocument();
+    expect(screen.queryByText(copy['flow.introBody'])).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: copy['flow.begin'] })).toBeEnabled();
     fireEvent.click(await screen.findByRole('button', { name: copy['flow.begin'] }));
     expect(screen.getByRole('heading', { name: copy['flow.themeTitle'] })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: copy['flow.food'] }));
@@ -61,31 +66,53 @@ describe('visitor page', () => {
     fireEvent.click(screen.getByRole('button', { name: copy['visitor.start'] }));
     fireEvent.click(await screen.findByRole('button', { name: copy['visitor.stop'] }));
     expect(screen.getByRole('heading', { name: copy['flow.preview'] })).toBeVisible();
+    expect(screen.getByRole('heading', { name: copy['flow.reviewAgainTitle'], level: 2 })).toBeVisible();
     expect(screen.getByTestId('review-category')).toHaveTextContent(copy['flow.food']);
     const audio = document.querySelector('.visitor-audio-player audio')!;
-    expect(screen.getByRole('checkbox')).not.toBeChecked();
-    fireEvent.click(screen.getByRole('checkbox'));
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     const url = audio.getAttribute('src');
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'ja-JP' } });
     expect(document.querySelector('.visitor-audio-player audio')).toHaveAttribute('src', url);
+    expect(screen.getByRole('heading', { name: 'もう一度確認しますか？', level: 2 })).toBeVisible();
     expect(screen.getByRole('button', { name: '録音を試聴' })).toBeInTheDocument();
-    expect(screen.getByRole('checkbox')).toBeChecked();
-    expect(screen.getByRole('button', { name: 'この声を残す' })).toBeEnabled();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'この録音を送信' })).toBeEnabled();
     const claim = vi.spyOn(repository, 'claim');
-    fireEvent.click(screen.getByRole('button', { name: 'この声を残す' }));
-    expect(claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({ transcriptionConsent: true, transcriptionLanguage: 'ja' }));
-    await screen.findByRole('heading', { name: visitorMessages['ja-JP']['visitor.placementTitle'] });
-  });
+    fireEvent.click(screen.getByRole('button', { name: 'この録音を送信' }));
+    expect(claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({ transcriptionConsent: true }));
+    await screen.findByRole('heading', { name: 'あなたの声を、福岡に残しました。' });
+  }, 10_000);
   it('keeps maps out of the introduction and numbers the theme step', async () => {
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
     expect(await screen.findByRole('button', { name: '开始' })).toBeVisible();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Groq 隐私政策' })).toBeVisible();
+    expect(screen.queryByText('分享一段属于你与这座城市的记忆。')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '开始' })).toBeEnabled();
     expect(screen.getByTestId('visitor-tag-number')).toHaveTextContent('展签 01');
     expect(screen.queryByLabelText('福冈市地图')).not.toBeInTheDocument();
     expect(screen.getByAltText('SoDesLab')).toBeVisible();
+    expect(document.querySelector('.outdoor-header')!.compareDocumentPosition(document.querySelector('.intro-step')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '开始' }));
     expect(screen.getByRole('heading', { name: '你想分享哪种回忆？' })).toBeVisible();
     expect(screen.getByRole('heading', { name: '你想分享哪种回忆？' })).toHaveFocus();
     expect(screen.getByRole('button', { name: '其他回忆' })).toBeVisible();
+    expect(screen.queryByTestId('visitor-tag-number')).toHaveClass('visitor-tag-number-corner');
+    expect(screen.queryByTestId('visitor-tag-number')).toHaveTextContent('展签 01');
+    expect(screen.queryByRole('banner')).not.toBeInTheDocument();
+    expect(document.querySelector('.theme-options')!.compareDocumentPosition(document.querySelector('.outdoor-flow-footer')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const back = screen.getByRole('button', { name: '返回' });
+    expect(back.compareDocumentPosition(document.querySelector('.step-number')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(back).toHaveTextContent('返回');
+    expect(window.getComputedStyle(back).borderTopWidth).toBe('0px');
+    expect(window.getComputedStyle(back).flexDirection).toBe('column');
+    const progress = screen.getByRole('progressbar', { name: '流程进度' });
+    expect(progress).toHaveAttribute('aria-valuenow', '2');
+    expect(progress.querySelectorAll('.outdoor-progress-segment.is-complete')).toHaveLength(2);
+    const progressMeta = document.querySelector('.outdoor-progress-meta')!;
+    expect(window.getComputedStyle(progressMeta).alignItems).toBe('flex-end');
+    expect(window.getComputedStyle(progressMeta).textAlign).toBe('right');
+    expect(window.getComputedStyle(document.querySelector('.step-number')!).textAlign).toBe('right');
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
   it('lets a visitor return to the location step without losing the recording flow', async () => {
@@ -106,7 +133,7 @@ describe('visitor page', () => {
     fireEvent.click(screen.getByRole('button', { name: '跳过，直接录音' }));
     expect(await screen.findByRole('button', { name: /开始录音/ })).toBeInTheDocument();
     expect(screen.getByText(/扫描这枚展签的人都可以收听/)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '你和福冈市，有怎样的回忆？' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '开始留言吧' })).toBeInTheDocument();
     expect(screen.queryByText(/iPhone Chrome 没有出现授权弹窗/)).not.toBeInTheDocument();
   });
 
@@ -168,7 +195,7 @@ describe('visitor page', () => {
     fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
     await screen.findByRole('button', { name: /开始录音/ });
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'ja-JP' } });
-    expect(await screen.findByRole('heading', { name: '福岡市との思い出を聞かせてください。' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'メッセージを残しましょう' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '録音を開始' })).toBeInTheDocument();
   });
 
@@ -190,7 +217,6 @@ describe('visitor page', () => {
     fireEvent.click(await screen.findByRole('button', { name: /开始录音/ }));
     fireEvent.click(await screen.findByRole('button', { name: /完成录音/ }));
     expect(await screen.findByRole('button', { name: /重录/ })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('checkbox'));
     view.rerender(<I18nProvider><VisitorPage repository={repository} token="new-recording-token" /></I18nProvider>);
     await enterMap();
     fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
@@ -198,7 +224,7 @@ describe('visitor page', () => {
     expect(screen.queryByRole('button', { name: /重录/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /开始录音/ }));
     fireEvent.click(await screen.findByRole('button', { name: /完成录音/ }));
-    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
   it('shows separate confirmation without nickname and locks the take while uploading', async () => {
@@ -219,11 +245,10 @@ describe('visitor page', () => {
     fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
     fireEvent.click(await screen.findByRole('button', { name: /开始录音/ }));
     fireEvent.click(await screen.findByRole('button', { name: /完成录音/ }));
-    expect(screen.getByRole('heading', { name: '听听你的声音。' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: '请确认你的录音' })).toBeVisible();
     expect(screen.queryByRole('button', { name: '开始录音' })).not.toBeInTheDocument();
-    fireEvent.click(await screen.findByRole('button', { name: /把声音留在这里/ }));
-    expect(repository.claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({ categoryCode: 'A', nickname: '', transcriptionConsent: false, transcriptionLanguage:'zh' }));
-    expect(screen.getByRole('checkbox')).toBeDisabled();
+    fireEvent.click(await screen.findByRole('button', { name: /发送这段声音/ }));
+    expect(repository.claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({ categoryCode: 'A', nickname: '', transcriptionConsent: true }));
     expect(screen.getByRole('button', { name: /重录/ })).toBeDisabled();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'en' } });
@@ -253,6 +278,14 @@ describe('visitor page', () => {
     expect(screen.getByTestId('review-category')).toHaveTextContent('美食');
     expect(screen.getByTestId('review-location')).toBeVisible();
     expect(screen.getByRole('region', { name: '福冈市地图' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '发送这段声音' }).compareDocumentPosition(screen.getByTestId('review-category')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(window.getComputedStyle(document.querySelector('.review-public-notice')!).marginBottom).toBe('96px');
+    expect(screen.getByRole('heading', { name: '还想再确认一遍吗？', level: 2 })).toBeVisible();
+    expect(screen.getByRole('heading', { name: '还想再确认一遍吗？', level: 2 }).compareDocumentPosition(document.querySelector('.review-audio-actions')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const reviewAudio = document.querySelector('.review-audio-actions')!;
+    expect(reviewAudio).toContainElement(document.querySelector('.visitor-audio-player')!);
+    expect(reviewAudio).toContainElement(screen.getByRole('button', { name: '重录' }));
+    expect(screen.getByRole('heading', { name: '请确认你的录音' })).toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: '修改分类' }));
     expect(screen.getByRole('dialog', { name: '修改分类' })).toBeVisible();
@@ -265,12 +298,12 @@ describe('visitor page', () => {
     const mapOptions = mapsMock.mountLocationMap.mock.calls[0][0] as { onSelect: (value: { location: MemoryLocation; mapPoint: MapPoint }) => void };
     await act(async () => mapOptions.onSelect({ location: { source: 'pin', lat: 33.61, lng: 130.42 }, mapPoint: { lat: 33.61, lng: 130.42 } }));
     fireEvent.click(screen.getByRole('button', { name: '确认地点' }));
-    expect(screen.getByRole('heading', { name: '听听你的声音。' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: '请确认你的录音' })).toBeVisible();
     expect(mapsMock.mountMemoryLocationMap).toHaveBeenLastCalledWith(expect.objectContaining({
       location: { source: 'pin', lat: 33.61, lng: 130.42 },
     }));
-    fireEvent.click(screen.getByRole('button', { name: '把声音留在这里' }));
-    await screen.findByRole('heading', { name: '现在可以去实体地图上放置立牌了。' });
+    fireEvent.click(screen.getByRole('button', { name: '发送这段声音' }));
+    await screen.findByRole('heading', { name: '你的声音，已留在福冈。' });
     expect(claim).toHaveBeenCalledWith('visitor-token', expect.objectContaining({
       categoryCode: 'B', location: { source: 'pin', lat: 33.61, lng: 130.42 },
       mapPoint: { lat: 33.61, lng: 130.42 },
@@ -319,13 +352,13 @@ describe('visitor page', () => {
     fireEvent.click(await screen.findByRole('button', { name: '确认地点' }));
     fireEvent.click(await screen.findByRole('button', { name: '开始录音' }));
     fireEvent.click(await screen.findByRole('button', { name: '完成录音' }));
-    fireEvent.click(screen.getByRole('button', { name: '把声音留在这里' }));
+    fireEvent.click(screen.getByRole('button', { name: '发送这段声音' }));
 
-    expect(await screen.findByRole('heading', { name: '现在可以去实体地图上放置立牌了。' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: '你的声音，已留在福冈。' })).toBeVisible();
     const tag = await repository.getTag('visitor-token');
     expect(tag?.serialNumber).toBeTruthy();
     expect(screen.getByTestId('visitor-tag-number')).toHaveTextContent(tag!.serialNumber!);
-    expect(screen.getByText('你可以自己放置，也可以向工作人员寻求帮助。')).toBeVisible();
+    expect(screen.getByText('如果现场有实体地图，也可以把卡片放在地图上。')).toBeVisible();
     expect(screen.getByRole('region', { name: '福冈市地图' })).toBeVisible();
     expect(screen.getByRole('link', { name: '在地图中打开' })).toHaveAttribute('href', expect.stringContaining('google.com/maps'));
     expect(screen.queryByLabelText('试听录音')).not.toBeInTheDocument();
@@ -351,9 +384,9 @@ describe('visitor page', () => {
     fireEvent.click(await screen.findByRole('button', { name: '跳过，直接录音' }));
     fireEvent.click(await screen.findByRole('button', { name: '开始录音' }));
     fireEvent.click(await screen.findByRole('button', { name: '完成录音' }));
-    fireEvent.click(screen.getByRole('button', { name: '把声音留在这里' }));
+    fireEvent.click(screen.getByRole('button', { name: '发送这段声音' }));
 
-    expect(await screen.findByRole('heading', { name: '现在可以去实体地图上放置立牌了。' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: '你的声音，已留在福冈。' })).toBeVisible();
     expect(screen.queryByRole('region', { name: '福冈市地图' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '在地图中打开' })).not.toBeInTheDocument();
     expect(mapsMock.mountMemoryLocationMap).not.toHaveBeenCalled();
@@ -386,5 +419,45 @@ describe('visitor page', () => {
     expect(summary.closest('details')).not.toHaveAttribute('open');
     expect(screen.getByText('<img src=x onerror=alert(1)> 福冈回忆')).toBeInTheDocument();
     expect(document.querySelector('img[src="x"]')).toBeNull();
+  });
+
+  it('translates published text only after a visitor chooses a language and presses the button', async () => {
+    localStorage.setItem('exhibition-audio-language-v2', 'en');
+    const tag = await repository.getTag('visitor-token');
+    vi.spyOn(repository, 'getTag').mockResolvedValue({ ...tag!, status: 'bound', recording: {
+      id: 'text-fixture', nickname: '', duration: 2, mimeType: 'audio/webm', createdAt: new Date().toISOString(),
+      transcript: 'Original Japanese transcript',
+    } });
+    vi.spyOn(repository, 'getVisitorPlaybackUrl').mockResolvedValue('https://example.invalid/audio');
+    const translate = vi.spyOn(repository, 'translateTranscript').mockResolvedValue('福岡の思い出');
+    render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+
+    fireEvent.click(await screen.findByText('Read transcript'));
+    const language = screen.getByRole('combobox', { name: 'Translation language' });
+    expect(language).toHaveValue('en');
+    expect(screen.getByText('Original Japanese transcript')).toBeVisible();
+    expect(translate).not.toHaveBeenCalled();
+
+    fireEvent.change(language, { target: { value: 'ja' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Translate' }));
+    expect(translate).toHaveBeenCalledWith('visitor-token', 'ja');
+    expect(await screen.findByText('福岡の思い出')).toBeVisible();
+    expect(screen.getByText('Original Japanese transcript')).toBeVisible();
+  });
+
+  it('shows a recoverable message when on-demand translation fails', async () => {
+    const tag = await repository.getTag('visitor-token');
+    vi.spyOn(repository, 'getTag').mockResolvedValue({ ...tag!, status: 'bound', recording: {
+      id: 'text-fixture', nickname: '', duration: 2, mimeType: 'audio/webm', createdAt: new Date().toISOString(),
+      transcript: 'Original Japanese transcript',
+    } });
+    vi.spyOn(repository, 'getVisitorPlaybackUrl').mockResolvedValue('https://example.invalid/audio');
+    vi.spyOn(repository, 'translateTranscript').mockRejectedValue(new Error('TRANSLATION_UNAVAILABLE'));
+    render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
+
+    fireEvent.click(await screen.findByText('查看文字'));
+    fireEvent.click(screen.getByRole('button', { name: '翻译' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('翻译暂时不可用');
+    expect(screen.getByText('Original Japanese transcript')).toBeVisible();
   });
 });

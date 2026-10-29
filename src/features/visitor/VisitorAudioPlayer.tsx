@@ -23,7 +23,10 @@ export function VisitorAudioPlayer({ src, purpose, onPlaybackError }: Props) {
       ? t(preview ? 'visitor.replayPreview' : 'visitor.replay')
       : t(preview ? 'visitor.preview' : 'visitor.player');
 
-  useEffect(() => () => audioRef.current?.pause(), []);
+  useEffect(() => {
+    const audio = audioRef.current;
+    return () => { audio?.pause(); };
+  }, []);
 
   async function togglePlayback() {
     const audio = audioRef.current;

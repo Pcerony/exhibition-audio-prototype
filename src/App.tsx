@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { ArrowUpRight, Nfc } from 'lucide-react';
+import { ArrowUpRight, Nfc, MapPinned } from 'lucide-react';
 import { AdminPage } from './features/admin/AdminPage';
 import { CloudAdminPage } from './features/admin/CloudAdminPage';
 import { VisitorPage } from './features/visitor/VisitorPage';
@@ -14,10 +14,15 @@ import { VisitorPreviewPage } from './features/visitor/VisitorPreviewPage';
 const StaffEntry=lazy(()=>import('./features/staff/StaffEntry'));
 const StaffQrEntry = lazy(() => import('./features/staff/StaffQrEntry'));
 const QrFallbackPage = lazy(() => import('./features/admin/QrFallbackPage').then(({ QrFallbackPage: page }) => ({ default: page })));
+import { createLocalSoundMapRepository, createSupabaseSoundMapRepository } from './storage/soundMapRepository';
+import { soundMapMessages } from './features/visitor/sound-map/soundMapMessages';
+
+const SoundMapPage = lazy(() => import('./features/visitor/sound-map/SoundMapPage').then(({ SoundMapPage: page }) => ({ default: page })));
 
 const repository = createBrowserRepository();
 const cloudConfigured = hasSupabaseConfig();
 const visitorRepository = cloudConfigured ? createSupabaseVisitorRepository() : repository;
+const soundMapRepository = cloudConfigured ? createSupabaseSoundMapRepository(visitorRepository) : import.meta.env.PROD ? null : createLocalSoundMapRepository(repository);
 const adminRepository = cloudConfigured ? createConfiguredCloudAdminRepository() : null;
 const DEMO_TOKEN = 'demo-001';
 let seedPromise: Promise<void> | null = null;
@@ -66,11 +71,15 @@ export function App() {
     if(!cloudConfigured)return <main className="visitor-shell"><p>{t('app.cloudMissing')}</p></main>;
     return <Suspense fallback={<main className="outdoor-loading" role="status">{t('app.loading')}</main>}><StaffEntry/></Suspense>;
   }
+  if (resolvedRoute.type === 'map') {
+    if (!soundMapRepository) return <main className="visitor-shell"><p>{t('app.cloudMissing')}</p></main>;
+    return <Suspense fallback={<main className="outdoor-loading" role="status"><span className="loading-ring"/><p>{t('app.loading')}</p></main>}><SoundMapPage repository={soundMapRepository} onClose={() => { window.location.hash = '#/'; }} /></Suspense>;
+  }
   if (resolvedRoute.type === 'preview') return <VisitorPreviewPage />;
   if (resolvedRoute.type === 'privacy' || resolvedRoute.type === 'terms') return <PolicyPage kind={resolvedRoute.type} />;
   if (resolvedRoute.type === 'tag') {
     if (import.meta.env.PROD && !cloudConfigured) return <main className="visitor-shell"><p className="visitor-intro">{t('app.cloudMissing')}</p></main>;
-    return <VisitorPage key={resolvedRoute.token} repository={visitorRepository} token={decodeURIComponent(resolvedRoute.token)} />;
+    return <VisitorPage key={resolvedRoute.token} repository={visitorRepository} soundMapRepository={soundMapRepository ?? undefined} token={decodeURIComponent(resolvedRoute.token)} />;
   }
   const baseUrl = new URL(import.meta.env.BASE_URL, window.location.origin).href;
   if (resolvedRoute.type === 'admin' || resolvedRoute.type === 'qr') {
@@ -89,6 +98,7 @@ export function App() {
       <h1>{t('welcome.title')}</h1>
       <p className="visitor-intro">{t('welcome.body')}</p>
       <div className="nfc-instruction"><Nfc size={30} strokeWidth={1.6} /><p>{t('welcome.instruction')}</p></div>
+      {soundMapRepository && <a className="secondary-action sound-map-entry" href={`${baseUrl}#/map`}><MapPinned size={22}/>{soundMapMessages[locale].before}<ArrowUpRight size={18}/></a>}
       {!cloudConfigured && !import.meta.env.PROD && <a className="welcome-demo-link" href={`${baseUrl}#/t/${DEMO_TOKEN}`}>{t('welcome.demo')} <ArrowUpRight size={16} /></a>}
     </section>
     {!cloudConfigured && !import.meta.env.PROD && <footer className="visitor-footer"><a href={`${baseUrl}#/admin`}>{t('welcome.admin')}</a></footer>}
@@ -101,10 +111,11 @@ export function resolveTagToken(pathname: string, hash: string) {
   return activePath.match(/^\/t\/([^/]+)\/?$/)?.[1] ?? null;
 }
 
-export function resolveAppRoute(pathname: string, hash: string): { type: 'tag'; token: string } | { type: 'admin' | 'qr' | 'staff' | 'staffQr' | 'preview' } | { type: 'welcome' } | { type: 'privacy' | 'terms' } {
+export function resolveAppRoute(pathname: string, hash: string): { type: 'tag'; token: string } | { type: 'admin' | 'qr' | 'staff' | 'staffQr' | 'preview' | 'map' } | { type: 'welcome' } | { type: 'privacy' | 'terms' } {
   const activePath = hash.startsWith('#/') ? hash.slice(1) : pathname;
   if (activePath === '/staff/qr' || activePath === '/staff/qr/') return { type: 'staffQr' };
   if(activePath==='/staff'||activePath==='/staff/')return {type:'staff'};
+  if (activePath === '/map' || activePath === '/map/') return { type: 'map' };
   if (activePath === '/preview' || activePath === '/preview/') return { type: 'preview' };
   if (activePath === '/privacy') return { type: 'privacy' };
   if (activePath === '/terms') return { type: 'terms' };

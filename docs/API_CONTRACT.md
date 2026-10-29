@@ -1,5 +1,21 @@
 # 跨端 API 契约
 
+## 用户端增量发布（2026-10-29）
+
+当前新录音UI在开始页告知AI转写默认开启，提交传`transcriptionConsent:true`，保留界面语言对应的`transcriptionLanguage`及临时`mapPoint`。不改变旧客户端缺省false的语义，不批量追溯历史录音。
+
+`POST public-translate`接受`{token,targetLanguage}`，语言为`ja/en/zh-CN/zh-TW/ko/es/fr/de/pt/ru/ar/th/vi/id`；仅翻译有效绑定且同意转写、ready、published的文字，返回`{translation,targetLanguage,cached}`。客户端不传原文/录音ID。缓存按录音、转写版本、语言，使用服务端租约合并并发；源文修改或隐藏清缓存。翻译失败不影响音频，供应商密钥只在Edge Secrets。迁移`202610290003`，不复用已被主分支地图拼块迁移占用的`202610170004`。
+
+## 在线声音地图（2026-10-29，发布版）
+
+用户已明确确认历史录音可以在在线地图上公开浏览。新增匿名只读 `GET public-map?limit=100&cursor=<tag UUID>`，limit 为 1–100 的整数，默认100。返回 `{items,nextCursor}`；每项仅有 `{id:recording UUID,token,label,categoryCode:'A'|'B'|'C'|'D'|null,durationSeconds,createdAt,location}`。只列出未删除且 status=bound、有当前录音的标签。按不可变 tag ID 升序游标分页，nextCursor 为下一页请求游标或 null。不返回未绑定库存、运营数据、昵称、私有对象路径、签名URL、转写草稿或账号信息；表的匿名/RLS权限不改变。
+
+`location` 继续使用既有 pin/place/null 契约。pin 为用户指定地点，可投到独立沙盘；place 仅保留录音和 Google Maps 原地点链接，不调用 Places 把供应商坐标放到非 Google 地图。Google Places 官方政策要求地图上的结果显示在 Google 地图上：https://developers.google.com/maps/documentation/places/web-service/policies 。无地点、只有place ID、超出范围的录音均可从声音列表访问，不伪造地图点。历史 place 录音若需进入独立沙盘，须另外确认独立来源的点位，不自动转换或写回。播放继续调用 `public-playback-url`，由服务端重新验证当前有效绑定并签发120秒链接；列表快照不能授权已重置/停用的录音。请求无效400 REQUEST_INVALID、方法无效405 METHOD_NOT_ALLOWED、数据服务不可用503 SERVICE_UNAVAILABLE。
+
+本地 `npm run dev:sound-map` 在 loopback 上通过相同 handler 只读查询已配置云项目，以便未部署新函数也能查看真实数据。浏览器仅接收同一最小DTO；服务端凭据只在 Node 进程内存，不能写入 VITE 配置或打包结果。正式构建不使用此本地桥接；生产发布需要先部署 public-map，随后发布前端，用户已确认本轮发布。
+
+
+
 ## 管理员录音审核（2026-10-29）
 
 独立POST admin-audio 验证Auth getUser与operator_profiles.role=admin，operator及匿名不可调用。JSON动作list {offset,limit}返回{items,total}；detail {recordingId}返回原版及剪辑版本120秒签名URL、revision、activeVersionId；measure {recordingId,duration,meanDb}保存实测；restore {recordingId,revision}恢复原版。multipart save含recordingId/revision/requestKey(UUID)/start/end/audio，音频仅接受单声道16kHz/16bit规范PCM WAV，最多300秒/9600044字节。服务端检查头、字节数和时长，不接受客户端对象路径。
