@@ -55,7 +55,7 @@ describe('visitor page', () => {
     } });
     render(<I18nProvider><VisitorPage repository={repository} token="visitor-token" /></I18nProvider>);
     expect(await screen.findByRole('link', { name: copy['policy.groqPrivacy'] })).toHaveAttribute('href', 'https://groq.com/privacy-policy/');
-    expect(screen.queryByText(copy['transcription.notice'])).not.toBeInTheDocument();
+    expect(screen.getByText(copy['transcription.notice'])).toBeVisible();
     expect(screen.queryByText(copy['flow.introBody'])).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: copy['flow.begin'] })).toBeEnabled();
