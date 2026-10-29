@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, ExternalLink, List, Map as MapIcon, Minus, Play, Plus, RotateCw, Scan, X, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ExternalLink, List, Map as MapIcon, Minus, Play, Plus, RotateCw, Scan, X, RefreshCw, Workflow } from 'lucide-react';
 import { useI18n } from '../../../i18n/I18nProvider';
 import { LanguageSwitch } from '../../../i18n/LanguageSwitch';
 import type { SoundMapEntry, SoundMapRepository } from '../../../storage/soundMapRepository';
@@ -21,6 +21,7 @@ export function SoundMapPage({ repository, onClose, onContinue, focusRecordingId
   const [entries, setEntries] = useState<SoundMapEntry[] | null>(null), [loadFailed, setLoadFailed] = useState(false);
   const [revision, setRevision] = useState(0), [points, setPoints] = useState(new Map<string, MapPoint>());
   const [listOpen, setListOpen] = useState(false);
+  const [connections, setConnections] = useState(true);
   const [group, setGroup] = useState<SoundMapEntry[] | null>(null), [selected, setSelected] = useState<SoundMapEntry | null>(null);
   const [audioUrl, setAudioUrl] = useState(''), [audioFailed, setAudioFailed] = useState(false), [playbackRevision, setPlaybackRevision] = useState(0);
   const focused = useRef(false);
@@ -66,6 +67,7 @@ export function SoundMapPage({ repository, onClose, onContinue, focusRecordingId
     }
   }, [sceneReady, voices, focusRecordingId]);
   useEffect(() => { scene.current?.select(selected?.id ?? focusRecordingId ?? null); }, [selected, sceneReady, focusRecordingId]);
+  useEffect(() => { scene.current?.connections(connections); }, [connections, sceneReady]);
   useEffect(() => {
     let active = true, blobUrl = '';
     setAudioUrl(''); setAudioFailed(false);
@@ -98,6 +100,7 @@ export function SoundMapPage({ repository, onClose, onContinue, focusRecordingId
     <div ref={surface} className="sm-world" /><div ref={labels} className="sm-labels" aria-hidden="true" /><div ref={markers} className="sm-markers" />
     <header className="sm-header"><div className="sm-brand" data-map-reserved><img src={`${import.meta.env.BASE_URL}sodeslab-logo.png`} alt="SoDesLab" width="133" height="38" /><h1>{copy.title}</h1><p>{copy.subtitle}</p><small role="status">{entries ? `${entries.length} ${copy.count}` : loadFailed ? copy.failed : copy.loading}</small></div><div className="sm-header-actions" data-map-reserved><LanguageSwitch visitor /><button className="sm-icon" type="button" title={copy.back} aria-label={copy.back} onClick={onClose}><ArrowLeft size={20}/></button></div></header>
     <nav className="sm-tools" data-map-reserved aria-label={copy.map}>
+      <button className="sm-icon" disabled={!sceneReady || sceneFailed} aria-pressed={connections} title={copy.connections} aria-label={copy.connections} onClick={() => setConnections(value => !value)}><Workflow size={20}/></button>
       <button className="sm-icon" disabled={!sceneReady || sceneFailed} title={copy.zoomIn} aria-label={copy.zoomIn} onClick={() => scene.current?.zoom(1.25)}><Plus size={20}/></button>
       <button className="sm-icon" disabled={!sceneReady || sceneFailed} title={copy.zoomOut} aria-label={copy.zoomOut} onClick={() => scene.current?.zoom(0.8)}><Minus size={20}/></button>
       <button className="sm-icon" disabled={!sceneReady || sceneFailed} title={copy.rotate} aria-label={copy.rotate} onClick={() => scene.current?.rotate()}><RotateCw size={20}/></button>

@@ -6,6 +6,7 @@ import { modelPoint, type MapPoint } from './geography';
 import { describeSoundMapEntry, type SoundMapCopy } from './soundMapMessages';
 import type { VisitorLocale } from '../../../i18n/visitorMessages';
 import { createMarkerGlyph } from './marker';
+import { createCableLayer } from './cables';
 
 type Polygon = number[][][];
 type Geometry = { type: 'Polygon'; coordinates: Polygon } | { type: 'MultiPolygon'; coordinates: Polygon[] };
@@ -15,6 +16,7 @@ export type PositionedVoice = { entry: SoundMapEntry; point: MapPoint };
 export type SoundMapScene = {
   setVoices(voices: PositionedVoice[]): void; select(id: string | null): void; focus(id: string): void;
   zoom(factor: number): void; rotate(): void; reset(): void; dispose(): void;
+  connections(enabled: boolean): void;
 };
 export const topicColors: Record<string, string> = { A: '#c86678', B: '#437fa1', C: '#548262', D: '#9180aa' };
 
@@ -40,6 +42,8 @@ export async function mountSoundMap(options: {
   const camera = new THREE.OrthographicCamera(-15, 15, 10, -10, 0.1, 200);
   options.surface.append(renderer.domElement);
   options.markers.append(markerLayer); options.labels.append(labelLayer);
+  const cables = createCableLayer(options.surface, topicColors);
+  let connectionsEnabled = true;
   const lost = (event: Event) => { event.preventDefault(); options.onUnavailable(); };
   renderer.domElement.addEventListener('webglcontextlost', lost);
   scene.add(new THREE.HemisphereLight('#ffffff', '#889b90', 2.8));
@@ -119,12 +123,14 @@ export async function mountSoundMap(options: {
       if (group) group.items.push(pin); else groups.push({ x: p.x, y: p.y, items: [pin] });
     }
     const markerRects: Rect[] = [];
+    const anchors = new Map<string, { x: number; y: number }>();
     for (const group of groups) {
       const pin = group.items.find(p => p.voice.entry.id === selected) ?? group.items[0];
       const rect = { left: group.x - 13, right: group.x + 13, top: group.y - 44, bottom: group.y - 11 };
       if (rect.right < 0 || rect.left > width || rect.bottom < 0 || rect.top > height || reserved.some(r => intersects(rect, r))) continue;
       pin.el.hidden = false; pin.el.style.left = `${group.x}px`; pin.el.style.top = `${group.y}px`;
       pin.group = group.items.map(p => p.voice.entry);
+      for (const entry of pin.group) anchors.set(entry.id, { x: group.x, y: group.y - 20 });
       const count = pin.el.querySelector<HTMLElement>('.sm-pin-count')!;
       count.hidden = pin.group.length === 1; count.textContent = String(pin.group.length);
       const isSelected = pin.group.some(p => p.id === selected);
@@ -132,6 +138,7 @@ export async function mountSoundMap(options: {
       pin.el.setAttribute('aria-label', pin.group.length > 1 ? `${options.copy.group} ${pin.group.length}` : describeSoundMapEntry(pin.voice.entry, options.locale));
       markerRects.push(rect);
     }
+    cables.layout(anchors, width, height);
     const occupied: Rect[] = [];
     const scale = height * camera.zoom / (camera.top - camera.bottom);
     for (const item of labels) {
@@ -188,6 +195,11 @@ export async function mountSoundMap(options: {
     controls.target.x = THREE.MathUtils.clamp(controls.target.x, -19, 10);
     controls.target.z = THREE.MathUtils.clamp(controls.target.z, -9, 9); schedule();
   });
+  controls.addEventListener('end', () => cables.pulse());
+  function updateConnections() {
+    const category = pins.find(pin => pin.voice.entry.id === selected)?.voice.entry.categoryCode ?? null;
+    cables.show(connectionsEnabled, category);
+  }
   const observer = new ResizeObserver(resize); observer.observe(options.surface); resize(); reset();
   return {
     setVoices(voices) {
@@ -203,13 +215,16 @@ export async function mountSoundMap(options: {
         el.onclick = () => options.onSelect(pin.group);
         return pin;
       });
-      markerLayer.replaceChildren(...pins.map(p => p.el)); schedule();
+      markerLayer.replaceChildren(...pins.map(p => p.el));
+      cables.setNodes(voices.map(voice => ({ id: voice.entry.id, topic: voice.entry.categoryCode, x: voice.point.x, y: voice.point.y })));
+      updateConnections(); schedule();
     },
-    select(id) { selected = id; schedule(); },
+    select(id) { selected = id; updateConnections(); schedule(); },
+    connections(enabled) { connectionsEnabled = enabled; updateConnections(); },
     focus(id) {
       const pin = pins.find(p => p.voice.entry.id === id); if (!pin) return;
       const delta = pin.position.clone().sub(controls.target); delta.y = 0;
-      controls.target.add(delta); camera.position.add(delta); selected = id; controls.update(); schedule();
+      controls.target.add(delta); camera.position.add(delta); selected = id; updateConnections(); controls.update(); schedule();
     },
     zoom(factor) { camera.zoom = THREE.MathUtils.clamp(camera.zoom * factor, 0.7, 5); camera.updateProjectionMatrix(); schedule(); },
     rotate() { camera.position.sub(controls.target).applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 8).add(controls.target); controls.update(); schedule(); },
@@ -218,7 +233,7 @@ export async function mountSoundMap(options: {
       if (disposed) return; disposed = true; cancelAnimationFrame(frame); observer.disconnect(); controls.dispose();
       renderer.domElement.removeEventListener('webglcontextlost', lost);
       scene.traverse(object => { if (object instanceof THREE.Mesh) { object.geometry.dispose(); const materials = Array.isArray(object.material) ? object.material : [object.material]; materials.forEach(m => m.dispose()); } });
-      renderer.dispose(); renderer.domElement.remove(); markerLayer.remove(); labelLayer.remove();
+      cables.dispose(); renderer.dispose(); renderer.domElement.remove(); markerLayer.remove(); labelLayer.remove();
     },
   };
 }
