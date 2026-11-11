@@ -14,6 +14,7 @@ class Copy(requested: String = "ja") {
             "placementDetail" to listOf("設置位置を拡大", "查看板内位置", "View exact position"),
             "placementBoard" to listOf("ボードを選択", "选择地图板", "Select a board"),
             "placementPoint" to listOf("設置位置を選択", "选择贴放点", "Select the placement point"),
+            "placementCoordinates" to listOf("座標で入力", "输入坐标", "Enter coordinates"),
             "placementSave" to listOf("位置を保存", "保存位置", "Save position"),
             "placementConflict" to listOf("位置が変更されました。最新の位置を確認してください。", "位置已被修改，请核对最新位置。", "The position changed. Review the latest position."),
             "qrAttach" to listOf("QR補充", "二维码补卡", "QR to NFC"),

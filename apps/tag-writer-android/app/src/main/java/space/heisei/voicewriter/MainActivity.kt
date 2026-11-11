@@ -307,7 +307,9 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 AlertDialog.Builder(this@MainActivity).setTitle(title).setView(frame).setPositiveButton(t("confirm"), null).show()
             }
         } else text(content, t("placementMissing"), 18f, true)
-        action(content, t(if (current == null) "placementAdd" else "placementEdit"), current == null) { editTagPlacement(result) }
+        action(content, t(if (current == null) "placementAdd" else "placementEdit"), current == null) {
+            if (queryingEpoch != epoch) editTagPlacement(result)
+        }.isEnabled = queryingEpoch != epoch
     }
     private fun editTagPlacement(result: InspectedCard) {
         val card = result.card ?: return
@@ -325,6 +327,13 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         form.addView(selector)
         val frame = android.widget.FrameLayout(this)
         form.addView(frame, LinearLayout.LayoutParams(-1, dp(245)))
+        val coordinates = LinearLayout(this).apply { visibility = View.GONE }
+        val xInput = EditText(this).apply { hint = "X (mm)"; inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL }
+        val yInput = EditText(this).apply { hint = "Y (mm)"; inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL }
+        for (field in listOf(xInput, yInput)) coordinates.addView(field, LinearLayout.LayoutParams(0, -2, 1f))
+        val coordinateButton = action(form, t("placementCoordinates")) { coordinates.visibility = View.VISIBLE }
+        coordinateButton.isEnabled = false
+        form.addView(coordinates)
         var draft: TagPlacement? = null
         val scroll = ScrollView(this).apply { addView(form) }
         val dialog = AlertDialog.Builder(this).setTitle("${t("placement")} · ${card.displayLabel}").setView(scroll)
@@ -337,14 +346,36 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 val board = geometry.boards.getOrNull(position - 1)
                 draft = null; save.isEnabled = false
+                coordinateButton.isEnabled = board != null
+                coordinates.visibility = View.GONE
+                xInput.text.clear(); yInput.text.clear()
                 frame.removeAllViews()
                 val select: ((ModelPoint) -> Unit)? = board?.let { chosen ->
-                    { point -> draft = TagPlacement(chosen.code, point, current?.version ?: 0); save.isEnabled = true }
+                    { point ->
+                        coordinates.visibility = View.GONE
+                        xInput.text.clear(); yInput.text.clear()
+                        draft = TagPlacement(chosen.code, point, current?.version ?: 0); save.isEnabled = true
+                    }
                 }
                 frame.addView(PlacementMapView(this@MainActivity, geometry, board, board != null,
                     current?.takeIf { it.pieceCode == board?.code }?.point, t("placementPoint"), select))
             }
         }
+        val coordinateWatcher = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val board = geometry.boards.getOrNull(selector.selectedItemPosition - 1)
+                val x = xInput.text.toString().replace(',', '.').toDoubleOrNull()
+                val y = yInput.text.toString().replace(',', '.').toDoubleOrNull()
+                val p = if (x != null && y != null && x.isFinite() && y.isFinite()) ModelPoint(x, y) else null
+                draft = if (board != null && p != null && board.contains(p)) TagPlacement(board.code, p, current?.version ?: 0) else null
+                (frame.getChildAt(0) as? PlacementMapView)?.preview(draft?.point)
+                save.isEnabled = draft != null
+            }
+            override fun afterTextChanged(s: android.text.Editable?) = Unit
+        }
+        xInput.addTextChangedListener(coordinateWatcher)
+        yInput.addTextChangedListener(coordinateWatcher)
         save.setOnClickListener {
             val value = draft ?: return@setOnClickListener
             if (screen != Screen.READ || !inspectionCurrent(expected, owner) || busy.get()) return@setOnClickListener

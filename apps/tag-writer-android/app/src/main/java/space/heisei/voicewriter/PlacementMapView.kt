@@ -29,9 +29,9 @@ internal class PlacementMapView(
     init {
         contentDescription = label
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
-        isClickable = onPoint != null
         setBackgroundColor(Color.rgb(247,249,248))
     }
+    fun preview(point: ModelPoint?) { pin = point; invalidate() }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         scale = minOf((w - 24 * density) / spanX, (h - 24 * density) / spanY).coerceAtLeast(0.01)
@@ -72,9 +72,8 @@ internal class PlacementMapView(
             performClick()
             val point = ModelPoint((event.x-offsetX)/scale+left, top-(event.y-offsetY)/scale)
             if (selected?.contains(point) == true) {
-                pin = point
-                invalidate()
                 select(point)
+                preview(point)
             }
         }
         return true
