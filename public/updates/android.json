@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "packageName": "space.heisei.voicewriter",
-  "versionCode": 13,
-  "versionName": "3.5.0",
+  "versionCode": 14,
+  "versionName": "3.5.1",
   "minSdk": 26,
-  "url": "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.5.0/voice-writer-v3.5.0.apk",
-  "size": 2760443,
-  "sha256": "f1e61e8bd6ad9ef94962f20bb87cd4669051fe338db667eeadf693bb2a443650",
+  "url": "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.5.1/voice-writer-v3.5.1.apk",
+  "size": 2765305,
+  "sha256": "65439720a0c274720ecdad71cbc90c4d441328c0b70d269885f75cd41a171fb9",
   "notes": {
-    "ja": "NFC読取に実物タグの設置位置を追加しました。設置ボードと位置を登録し、移設後にタグを読み取って確認できます。",
-    "zh": "读取 NFC 后可查看实体展签的板号和贴放点，也可选板、点选位置并保存，搬运后碰卡即可确认原位。",
-    "en": "Read an NFC tag to see its physical board and placement. Register a point on a board and look it up again when reinstalling the exhibit."
+    "ja": "アプリ内更新は展示サイトからの直接ダウンロードを優先し、失敗時はGitHubに切り替えます。",
+    "zh": "应用内更新优先从展览站点直连下载，失败后尝试 GitHub，并区分下载失败和安装包校验失败。",
+    "en": "App updates prefer a direct download from the exhibition site, with GitHub fallback and separate download and verification errors."
   }
 }
