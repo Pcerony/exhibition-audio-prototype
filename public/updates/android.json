@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "packageName": "space.heisei.voicewriter",
-  "versionCode": 14,
-  "versionName": "3.5.1",
+  "versionCode": 15,
+  "versionName": "3.6.0",
   "minSdk": 26,
-  "url": "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.5.1/voice-writer-v3.5.1.apk",
-  "size": 2765305,
-  "sha256": "65439720a0c274720ecdad71cbc90c4d441328c0b70d269885f75cd41a171fb9",
+  "url": "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.6.0/voice-writer-v3.6.0.apk",
+  "size": 2784219,
+  "sha256": "944e81bf3416bb40c595cea5eaa56a70b0448885b04ff3e55f69886b14cc6803",
   "notes": {
-    "ja": "アプリ内更新は展示サイトからの直接ダウンロードを優先し、失敗時はGitHubに切り替えます。",
-    "zh": "应用内更新优先从展览站点直连下载，失败后尝试 GitHub，并区分下载失败和安装包校验失败。",
-    "en": "App updates prefer a direct download from the exhibition site, with GitHub fallback and separate download and verification errors."
+    "ja": "NFC読み取りにGoogleマップと展示ボードの推奨位置を追加。登録済みの設置位置は保持されます。",
+    "zh": "NFC 读卡显示 Google 地图和推荐展板位置，保留已有的实体卡位置。",
+    "en": "NFC lookup shows Google Maps and the suggested exhibition board while preserving registered physical positions."
   }
 }
