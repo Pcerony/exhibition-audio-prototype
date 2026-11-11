@@ -1,0 +1,5 @@
+{
+  "ja": "NFCの読取結果を表示している間もアプリ内で読取モードを維持し、タグをかざしたままブラウザが開く問題を修正しました。",
+  "zh": "修复 NFC 读卡结果显示后，芯片仍贴着手机时意外打开浏览器的问题。离开读卡界面后，手机恢复正常的 NFC 行为。",
+  "en": "Keeps NFC reader mode active while showing tag results so a tag held against the phone does not open the browser. Normal NFC behavior returns when leaving the reader screen."
+}

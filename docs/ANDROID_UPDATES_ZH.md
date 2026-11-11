@@ -14,6 +14,8 @@
 
 版本清单：`https://voice.heisei.space/updates/android.json`。APK 来自同一仓库 GitHub Release 的固定版本链接。不要覆盖已经发布的同版本 APK，修复应增加 versionCode。
 
+交付给工作人员的版本一律发布为正式更新，不使用预发布标签或仅提供本地测试包。上传 APK 后必须更新线上清单；验证清单和下载文件一致后再通知工作人员从应用内升级。
+
 1. 增加 `app/build.gradle.kts` 的 versionCode/versionName，执行单测、assembleDebug、lintDebug；构建时注入公开 Supabase 配置。
 2. 检查 APK 包名、签名及 public 配置。必须与安装版使用同一签名；不能让临时机器重新生成 debug 签名。生产签名迁移需要单独计划。
 3. 上传不可变 Release APK，确认 GitHub 返回的 digest 和 size 与本地一致。

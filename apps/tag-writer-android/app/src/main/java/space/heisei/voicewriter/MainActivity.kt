@@ -45,6 +45,14 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private lateinit var content: LinearLayout
     private lateinit var state: TextView
     private var adapter: NfcAdapter? = null
+    private val readerMode = ReaderMode(
+        enable = {
+            val flags = NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or
+                NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_NFC_V or NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS
+            adapter?.enableReaderMode(this, this, flags, null)
+        },
+        disable = { adapter?.disableReaderMode(this) },
+    )
     @Volatile private var resumed = false
     @Volatile private var epoch = 0
     @Volatile private var lease: Lease? = null
@@ -202,6 +210,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             render(); return
         }
         scanArmed = false; inspectedTag = null; inspectedCards = emptyList()
+        reader()
         work { releaseCurrent(); load(); ui { render() } }
     }
     private fun load() {
@@ -549,14 +558,10 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         if (queue.none { it.jobId == old.job.id }) runCatching { api.release(old) }
     }
     private fun reader() {
-        adapter?.disableReaderMode(this)
-        val scanning = screen in listOf(Screen.READ, Screen.SINGLE) && scanArmed
-        val clearing = screen == Screen.SINGLE && singleMutation?.operation == SingleOperation.CLEAR
+        // Keep dispatch in-app while the result is visible; scanArmed only gates reading another tag.
+        val inspecting = screen == Screen.READ || screen == Screen.SINGLE
         val writing = screen != Screen.READ && flow.stage in listOf(WriterFlow.Stage.READY, WriterFlow.Stage.REMOVAL)
-        if (resumed && api.token.isNotBlank() && (scanning || clearing || writing) && adapter?.isEnabled == true) {
-            val flags = NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_NFC_V
-            adapter?.enableReaderMode(this, this, flags or if (screen == Screen.READ) 0 else NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS, null)
-        }
+        readerMode.update(resumed, api.token.isNotBlank(), adapter?.isEnabled == true, inspecting, writing)
     }
     override fun onTagDiscovered(tag: Tag) {
         if (screen == Screen.READ || (screen == Screen.SINGLE && scanArmed)) { readTag(tag); return }
