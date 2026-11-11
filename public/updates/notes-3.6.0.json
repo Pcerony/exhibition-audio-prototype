@@ -1,0 +1,5 @@
+{
+  "ja": "NFC読み取りにGoogleマップと展示ボードの推奨位置を追加。登録済みの設置位置は保持されます。",
+  "zh": "NFC 读卡显示 Google 地图和推荐展板位置，保留已有的实体卡位置。",
+  "en": "NFC lookup shows Google Maps and the suggested exhibition board while preserving registered physical positions."
+}

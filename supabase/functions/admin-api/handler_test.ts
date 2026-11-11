@@ -9,9 +9,19 @@ Deno.test('physical tag lookup uses the verified operator and rejects malformed 
  const valid=fixture();
  const body={action:'locateTag',token:'a'.repeat(48)};
  equal((await valid.handler(request(body))).status,200);
- equal(valid.calls,[{name:'tag_placement_action',args:{p_operator:id,p_body:body}}]);
+ equal(valid.calls,[{name:'tag_memory_point_action',args:{p_operator:id,p_body:body}}]);
  equal((await fixture().handler(request({...body,token:'invalid'}))).status,400);
  equal((await fixture('staff').handler(request(body))).status,403);
+});
+Deno.test('operator confirmation accepts an independent pin and calculates the result server-side', async () => {
+ const body={action:'confirmTagMemoryPoint',tagId:id,recordingId:id,location:{source:'pin',lat:33.5946138544,lng:130.4063520063},pieceCode:'H1'};
+ const good=fixture();
+ equal((await good.handler(request(body))).status,200);
+ const rpc=good.calls[0] as {name:string;args:{p_body:unknown}};
+ equal(rpc.name,'tag_memory_point_action');
+ equal((rpc.args.p_body as {pieceCode:string}).pieceCode,'B4');
+ equal((await fixture('staff').handler(request(body))).status,403);
+ equal((await fixture().handler(request({...body,location:{source:'place',placeId:'synthetic'}}))).status,400);
 });
 Deno.test('placement accepts a point in the selected polygon, not a point on another board', async () => {
  const piece=mapPieces.find(p=>p.code==='A6')!;

@@ -4,12 +4,14 @@ import { runMaintenance } from '../_shared/maintenance.ts';
 import { primaryAudio } from '../_shared/primaryAudio.ts';
 import { parseMemoryLocation } from '../../../src/domain/location.ts';
 import { validPlacement } from './tagPlacement.ts';
+import { mapPinRecommendation } from '../../../src/domain/mapPinRecommendation.ts';
 
 const actions = new Set(['session', 'list', 'createBatch', 'createQrEntry', 'reset', 'setEnabled', 'playback', 'jobs', 'provision', 'audit', 'maintenance', 'categories', 'createCategory', 'renameCategory', 'createCards', 'bulkPreview', 'bulkApply', 'leaseJob', 'nextJob', 'releaseJob', 'getTranscription', 'retryTranscription', 'saveTranscription']);
 actions.add('prepareWrite');
 actions.add('setPieceAssignment');
 actions.add('locateTag');
 actions.add('saveTagPlacement');
+actions.add('confirmTagMemoryPoint');
 for (const action of ['qrCards','qrJobs','prepareQrAttachment','beginQrAttachment','provisionQrAttachment','releaseQrAttachment']) actions.add(action);
 const transcriptionStates = new Set(['not_consented', 'pending', 'processing', 'draft', 'published', 'failed']);
 const mapPieceCode = /^(?:[ABDEFGH][1-9]|C(?:[1-9]|10))$/;
@@ -45,6 +47,15 @@ export function createHandler(getClient: () => SupabaseClient, isTranscriptionCo
       if (!body || typeof body !== 'object' || Array.isArray(body) || !actions.has(body.action)) return json({ code: 'REQUEST_INVALID' }, 400);
       if (body.action === 'locateTag' && (typeof body.token !== 'string' || !/^[a-f0-9]{48}$/.test(body.token))) return json({ code: 'REQUEST_INVALID' }, 400);
       if (body.action === 'saveTagPlacement' && (typeof body.tagId !== 'string' || !uuid.test(body.tagId) || !validPlacement(body))) return json({ code: 'REQUEST_INVALID' }, 400);
+      let rpcBody = body;
+      if (body.action === 'confirmTagMemoryPoint') {
+        if (typeof body.tagId !== 'string' || typeof body.recordingId !== 'string') return json({ code: 'REQUEST_INVALID' }, 400);
+        try {
+          const location = parseMemoryLocation(body.location);
+          if (location?.source !== 'pin') return json({ code: 'REQUEST_INVALID' }, 400);
+          rpcBody = { action: body.action, tagId: body.tagId, recordingId: body.recordingId, location, ...mapPinRecommendation(location) };
+        } catch { return json({ code: 'REQUEST_INVALID' }, 400); }
+      }
       if (body.action === 'list' && body.transcriptionState !== undefined
         && (typeof body.transcriptionState !== 'string' || !transcriptionStates.has(body.transcriptionState))) return json({ code: 'REQUEST_INVALID' }, 400);
       if (body.action === 'list' && body.pieceCode !== undefined && body.pieceCode !== ''
@@ -89,8 +100,9 @@ export function createHandler(getClient: () => SupabaseClient, isTranscriptionCo
           p_state: body.state, p_piece_code: body.pieceCode, p_map_version: body.mapVersion,
         })
         : await client.rpc(body.action === 'list' ? 'admin_list' :
-          ['locateTag', 'saveTagPlacement'].includes(body.action) ? 'tag_placement_action' : 'admin_action',
-        { p_operator: identity.user.id, p_body: body });
+          ['locateTag', 'confirmTagMemoryPoint'].includes(body.action) ? 'tag_memory_point_action' :
+          body.action === 'saveTagPlacement' ? 'tag_placement_action' : 'admin_action',
+        { p_operator: identity.user.id, p_body: rpcBody });
       if (error) {
         const code = Object.keys(errors).find((value) => error.message.includes(value))
           ?? (['22P02', '22003', '22007', '22008', '22023', '23502'].includes(error.code) ? 'REQUEST_INVALID' : 'SERVICE_UNAVAILABLE');

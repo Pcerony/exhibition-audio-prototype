@@ -64,6 +64,8 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private var inspectedTag: InspectedTag? = null
     private var inspectedCards = emptyList<InspectedCard>()
     private var queryingEpoch: Int? = null
+    private val locationPreviews = mutableListOf<android.webkit.WebView>()
+    private var locationPicker: AlertDialog? = null
     @Volatile private var inspectedIdentity = ""
     @Volatile private var singleMutation: SingleMutation? = null
     @Volatile private var singleExpiresAt = 0L
@@ -140,6 +142,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         setOnClickListener { if (!busy.get()) callback() }
     }
     private fun header(title: String, navigation: Boolean) {
+        clearLocationPreviews()
         shell.removeAllViews()
         val top = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(20), dp(8), dp(12), dp(8)); setBackgroundColor(Color.WHITE); shell.addView(this) }
         TextView(this).apply { text = title; textSize = 21f; setTextColor(ink); setTypeface(typeface, Typeface.BOLD); top.addView(this, LinearLayout.LayoutParams(0, -2, 1f)) }
@@ -295,21 +298,80 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     }
     private fun renderTagPlacement(result: InspectedCard) {
         val current = result.placement
+        val recommendation = result.recommendation
+        result.memoryLocation?.let { original ->
+            text(content, t("memoryMap"), 18f, true)
+            val displayed = recommendation?.confirmedPoint?.let { MemoryMapLocation(pin = it) } ?: original
+            val preview = locationWebView(this, displayed, copy.language)
+            locationPreviews += preview
+            content.addView(preview, LinearLayout.LayoutParams(-1, dp(230)))
+            if (original.placeId != null && recommendation == null && queryingEpoch != epoch) {
+                action(content, t("placementPickMemory")) { confirmMemoryPoint(result, original) }
+            }
+        }
         val geometry = placementGeometry
-        val board = geometry.boards.find { it.code == current?.pieceCode }
-        if (current != null && board != null && board.contains(current.point)) {
-            val title = "${t("placement")} · ${board.code}"
+        val point = current?.point ?: recommendation?.point
+        val board = geometry.boards.find { it.code == (current?.pieceCode ?: recommendation?.pieceCode) }
+        if (point != null && board != null && board.contains(point)) {
+            val title = "${t(if (current != null) "placement" else "placementSuggested")} · ${board.code}"
             text(content, title, 22f, true)
-            content.addView(PlacementMapView(this, geometry, board, false, current.point, title), LinearLayout.LayoutParams(-1, dp(212)))
+            content.addView(PlacementMapView(this, geometry, board, false, point, title), LinearLayout.LayoutParams(-1, dp(212)))
             action(content, t("placementDetail")) {
-                val map = PlacementMapView(this, geometry, board, true, current.point, title)
+                val map = PlacementMapView(this, geometry, board, true, point, title)
                 val frame = android.widget.FrameLayout(this).apply { addView(map, android.widget.FrameLayout.LayoutParams(-1, dp(256))) }
                 AlertDialog.Builder(this@MainActivity).setTitle(title).setView(frame).setPositiveButton(t("confirm"), null).show()
             }
-        } else text(content, t("placementMissing"), 18f, true)
-        action(content, t(if (current == null) "placementAdd" else "placementEdit"), current == null) {
+        } else if (recommendation == null || current != null) text(content, t("placementMissing"), 18f, true)
+        if (current == null) when (recommendation?.state) {
+            "needs_review" -> text(content, t("placementReview"), 14f)
+            "outside_map" -> text(content, t("placementOutside"), 14f)
+        }
+        action(content, t(if (current == null) "placementAdd" else "placementEdit"), false) {
             if (queryingEpoch != epoch) editTagPlacement(result)
         }.isEnabled = queryingEpoch != epoch
+    }
+    private fun clearLocationPreviews() {
+        for (preview in locationPreviews) {
+            (preview.parent as? android.view.ViewGroup)?.removeView(preview)
+            preview.destroy()
+        }
+        locationPreviews.clear()
+    }
+    private fun confirmMemoryPoint(result: InspectedCard, location: MemoryMapLocation) {
+        val card = result.card ?: return
+        val recordingId = card.recordingId ?: return
+        val expected = epoch
+        val owner = api.userId
+        val dialog = AlertDialog.Builder(this).setTitle(t("placementPickMemory")).setNegativeButton(t("cancel"), null).create()
+        val frame = FrameLayout(this)
+        val map = locationWebView(this, location, copy.language) { point ->
+            if (dialog.isShowing && screen == Screen.READ && inspectionCurrent(expected, owner) && !busy.get()) {
+                dialog.dismiss()
+                work {
+                    try {
+                        val saved = api.confirmMemoryPoint(card.id, recordingId, point)
+                        ui { if (screen == Screen.READ && inspectionCurrent(expected, owner)) {
+                            inspectedCards = inspectedCards.map { if (it.url == result.url) it.copy(recommendation = saved) else it }
+                            statusMessage = ""; render()
+                        } }
+                    } catch (e: ApiException) {
+                        if (e.code != "VERSION_CONFLICT") throw e
+                        ui { if (screen == Screen.READ && inspectionCurrent(expected, owner)) {
+                            statusMessage = t("placementConflict"); lookupInspection()
+                        } }
+                    }
+                }
+            }
+        }
+        frame.addView(map, FrameLayout.LayoutParams(-1, dp(370)))
+        dialog.setView(frame)
+        dialog.setOnDismissListener {
+            locationPicker = null
+            frame.removeView(map)
+            handler.post { map.destroy() }
+        }
+        locationPicker = dialog
+        dialog.show()
     }
     private fun editTagPlacement(result: InspectedCard) {
         val card = result.card ?: return
@@ -992,5 +1054,5 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         if (::api.isInitialized && api.token.isNotBlank()) executor.execute { releaseCurrent() }
         super.onPause()
     }
-    override fun onDestroy() { updater.close(); handler.removeCallbacks(autoSync); handler.removeCallbacks(checkLease); executor.shutdown(); readExecutor.shutdown(); lookupExecutor.shutdown(); super.onDestroy() }
+    override fun onDestroy() { locationPicker?.dismiss(); clearLocationPreviews(); updater.close(); handler.removeCallbacks(autoSync); handler.removeCallbacks(checkLease); executor.shutdown(); readExecutor.shutdown(); lookupExecutor.shutdown(); super.onDestroy() }
 }

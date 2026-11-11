@@ -8,7 +8,6 @@ import {
 } from '../../domain/mapPieceAssignment';
 import { MapPieceMap } from '../admin/MapPieceMap';
 import { MemoryLocationMap } from '../visitor/MemoryLocationMap';
-import type { MapPointWgs84 } from '../visitor/googleMaps';
 import type { StaffMessages } from './staffMessages';
 
 export default function StaffLocationPanel({
@@ -19,10 +18,8 @@ export default function StaffLocationPanel({
   m: StaffMessages;
 }) {
   const location = card.recording?.location;
-  const [point, setPoint] = useState<MapPointWgs84 | null>(
-      location?.source === 'pin' ? location : null,
-    ),
-    [zoom, setZoom] = useState(1);
+  const point = location?.source === 'pin' ? location : null;
+  const [zoom, setZoom] = useState(1);
   const projected = useMemo(
     () => (point ? projectLocationToMapMm(point) : null),
     [point],
@@ -45,7 +42,7 @@ export default function StaffLocationPanel({
     <div className="staff-location-panel">
       {location ? (
         <>
-          <MemoryLocationMap location={location} onPoint={setPoint} />
+          <MemoryLocationMap location={location} />
           <a
             className="staff-map-link"
             href={memoryLocationUrl(location)!}
