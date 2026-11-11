@@ -17,6 +17,21 @@ Deno.test('QR attachment preserves identity, isolates stock, pins a single chip 
   const admin=async(body:Record<string,unknown>,user=op)=>(await db.query<{r:any}>('select public.admin_action($1::uuid,$2::jsonb) r',[user,JSON.stringify(body)])).rows[0].r;
   const rejects=async(body:Record<string,unknown>,code:string,user=op)=>{let message='';try{await admin(body,user);}catch(e){message=String(e);}assert(message.includes(code),`Expected ${code}, got ${message}`);};
   const qr=await admin({action:'createQrEntry',requestKey:crypto.randomUUID()});
+  const locate={action:'locateTag',token:qr.visitorUrl.split('/').at(-1)};
+  const placement=async(body:Record<string,unknown>,user=op)=>(await db.query<{r:any}>(
+   'select public.tag_placement_action($1::uuid,$2::jsonb) r',[user,JSON.stringify(body)])).rows[0].r;
+  const beforePlacement=await placement(locate);
+  assert(beforePlacement.placement===null && beforePlacement.tag.id===qr.id && !('token' in beforePlacement.tag),'unregistered lookup or token redaction failed');
+  const save={action:'saveTagPlacement',tagId:qr.id,mapVersion:'fukuoka-road-73-v13',pieceCode:'A6',x:850,y:1309,expectedVersion:0};
+  const attempts=await Promise.allSettled([placement(save),placement(save,other)]);
+  assert(attempts.filter(x=>x.status==='fulfilled').length===1 &&
+   attempts.some(x=>x.status==='rejected' && String(x.reason).includes('VERSION_CONFLICT')),'stale placement write was accepted');
+  const afterPlacement=await placement(locate);
+  assert(afterPlacement.placement.version===1 && afterPlacement.placement.x===850 && afterPlacement.tag.version===beforePlacement.tag.version,'placement must not mutate tag version');
+  const permissions=(await db.query<{allowed:boolean}>(`select
+   has_table_privilege('authenticated','public.tag_placements','select')
+   or has_function_privilege('anon','public.tag_placement_action(uuid,jsonb)','execute') allowed`)).rows[0];
+  assert(!permissions.allowed,'private placement exposed');
   const prepare={action:'prepareQrAttachment',tagId:qr.id,expectedVersion:1,deviceId:'device-a',protocolVersion:3};
   await rejects(prepare,'JOB_INELIGIBLE');
   const upload=crypto.randomUUID(),recording=crypto.randomUUID();

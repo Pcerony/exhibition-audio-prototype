@@ -113,6 +113,17 @@ class Api(private val store: SecureSession) {
     }
     fun createSingle(requestKey: String): Job = parseJob(admin(singleCreateRequest(requestKey)).getJSONArray("tags").getJSONObject(0).getJSONObject("provisioning"))
     fun release(lease: Lease) { admin(JSONObject().put("action", if(lease.job.jobKind == "qr") "releaseQrAttachment" else "releaseJob").put("jobId", lease.job.id).put("leaseToken", lease.token)) }
+    internal fun locateTag(url: String): InspectedCard {
+        val token = NfcInspection.token(url) ?: return InspectedCard(url, "readMissing")
+        return try {
+            val data = admin(JSONObject().put("action", "locateTag").put("token", token))
+            InspectedCard(url, "readExhibition", parseCard(data.getJSONObject("tag")), parseTagPlacement(data))
+        } catch (e: ApiException) {
+            if (e.status == 404) InspectedCard(url, "readMissing") else throw e
+        }
+    }
+    internal fun savePlacement(tagId: String, placement: TagPlacement): TagPlacement =
+        checkNotNull(parseTagPlacement(admin(placement.saveRequest(tagId))))
     fun inspect(url: String): Card? {
         val token = NfcInspection.token(url) ?: return null
         val job = jobs().find { it.visitorUrl == url }

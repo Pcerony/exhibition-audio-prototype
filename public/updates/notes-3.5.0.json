@@ -1,0 +1,5 @@
+{
+  "ja": "NFC読取に実物タグの設置位置を追加しました。設置ボードと位置を登録し、移設後にタグを読み取って確認できます。",
+  "zh": "读取 NFC 后可查看实体展签的板号和贴放点，也可选板、点选位置并保存，搬运后碰卡即可确认原位。",
+  "en": "Read an NFC tag to see its physical board and placement. Register a point on a board and look it up again when reinstalling the exhibit."
+}

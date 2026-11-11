@@ -1,9 +1,29 @@
 import { createHandler } from './handler.ts';
+import { mapPieceLabelPoint, mapPieces, MAP_PIECE_VERSION } from '../../../src/domain/mapPieces.ts';
 
 function equal(actual: unknown, expected: unknown) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${JSON.stringify(actual)} != ${JSON.stringify(expected)}`);
 }
 const id = '00000000-0000-4000-8000-000000000001';
+Deno.test('physical tag lookup uses the verified operator and rejects malformed tokens', async () => {
+ const valid=fixture();
+ const body={action:'locateTag',token:'a'.repeat(48)};
+ equal((await valid.handler(request(body))).status,200);
+ equal(valid.calls,[{name:'tag_placement_action',args:{p_operator:id,p_body:body}}]);
+ equal((await fixture().handler(request({...body,token:'invalid'}))).status,400);
+ equal((await fixture('staff').handler(request(body))).status,403);
+});
+Deno.test('placement accepts a point in the selected polygon, not a point on another board', async () => {
+ const piece=mapPieces.find(p=>p.code==='A6')!;
+ const [x,y]=mapPieceLabelPoint(piece);
+ const body={action:'saveTagPlacement',tagId:id,mapVersion:MAP_PIECE_VERSION,pieceCode:'A6',x,y,expectedVersion:0};
+ const good=fixture();
+ equal((await good.handler(request(body))).status,200);
+ equal(good.calls,[{name:'tag_placement_action',args:{p_operator:id,p_body:body}}]);
+ for (const patch of [{pieceCode:'H1'},{mapVersion:'wrong'},{expectedVersion:-1}]) {
+  const bad=fixture(); equal((await bad.handler(request({...body,...patch}))).status,400); equal(bad.calls,[]);
+ }
+});
 Deno.test('QR attachment validates required fields and normalizes lease expiry', async () => {
  const body={action:'prepareQrAttachment',tagId:id,expectedVersion:1,deviceId:'writer',protocolVersion:3};
  const data={job:{id},leaseToken:'synthetic',expiresAt:'2026-10-18T01:11:25.65647+00:00'};

@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "packageName": "space.heisei.voicewriter",
-  "versionCode": 12,
-  "versionName": "3.4.1",
+  "versionCode": 13,
+  "versionName": "3.5.0",
   "minSdk": 26,
-  "url": "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.4.1/voice-writer-v3.4.1.apk",
-  "size": 2437761,
-  "sha256": "d471dba7095e0538f42ff69e50c2cfa022dacca04816fcd97b4d1b676b5dc11e",
+  "url": "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.5.0/voice-writer-v3.5.0.apk",
+  "size": 2760443,
+  "sha256": "f1e61e8bd6ad9ef94962f20bb87cd4669051fe338db667eeadf693bb2a443650",
   "notes": {
-    "ja": "NFCの読取結果を表示している間もアプリ内で読取モードを維持し、タグをかざしたままブラウザが開く問題を修正しました。",
-    "zh": "修复 NFC 读卡结果显示后，芯片仍贴着手机时意外打开浏览器的问题。离开读卡界面后，手机恢复正常的 NFC 行为。",
-    "en": "Keeps NFC reader mode active while showing tag results so a tag held against the phone does not open the browser. Normal NFC behavior returns when leaving the reader screen."
+    "ja": "NFC読取に実物タグの設置位置を追加しました。設置ボードと位置を登録し、移設後にタグを読み取って確認できます。",
+    "zh": "读取 NFC 后可查看实体展签的板号和贴放点，也可选板、点选位置并保存，搬运后碰卡即可确认原位。",
+    "en": "Read an NFC tag to see its physical board and placement. Register a point on a board and look it up again when reinstalling the exhibit."
   }
 }
