@@ -29,6 +29,14 @@ class UpdatePolicyTest {
         assertFalse(UpdatePolicy.allowedDownload("https://evil.test/a"))
         assertFalse(UpdatePolicy.allowedDownload("http://release-assets.githubusercontent.com/a"))
     }
+    @Test fun prefersImmutableFirstPartyMirrorWithLegacyReleaseFallback() {
+        val update = UpdatePolicy.parse(manifest(), 9, 36)!!
+        val sources = UpdatePolicy.downloadSources(update)
+        assertEquals(listOf("https://voice.heisei.space/updates/apk/${update.hash}.apk", update.url), sources)
+        assertTrue(sources.all(UpdatePolicy::allowedDownload))
+        assertFalse(UpdatePolicy.allowedDownload("https://voice.heisei.space/updates/apk/current.apk"))
+        assertFalse(UpdatePolicy.allowedDownload(sources.first() + "?redirect=test"))
+    }
     @Test fun installerRejectsOtherPackagesSignersAndVersions() {
         assertTrue(UpdatePolicy.sameApplication(UpdatePolicy.PACKAGE, 10, 10, 9, setOf("a"), setOf("a")))
         assertFalse(UpdatePolicy.sameApplication("evil.app", 10, 10, 9, setOf("a"), setOf("a")))
@@ -44,9 +52,9 @@ class UpdatePolicyTest {
         try {
             UpdatePolicy.copyVerified(ByteArrayInputStream(bytes), file, 3, hash) { }
             assertArrayEquals(bytes, file.readBytes())
-            assertThrows(Exception::class.java) { UpdatePolicy.copyVerified(ByteArrayInputStream(bytes), file, 2, hash) { } }
+            assertThrows(UpdateIntegrityException::class.java) { UpdatePolicy.copyVerified(ByteArrayInputStream(bytes), file, 2, hash) { } }
             assertFalse(file.exists())
-            assertThrows(Exception::class.java) { UpdatePolicy.copyVerified(ByteArrayInputStream(bytes), file, 3, "0".repeat(64)) { } }
+            assertThrows(UpdateIntegrityException::class.java) { UpdatePolicy.copyVerified(ByteArrayInputStream(bytes), file, 3, "0".repeat(64)) { } }
             assertFalse(file.exists())
         } finally { file.delete() }
     }

@@ -50,6 +50,7 @@ class AppUpdater(private val activity: Activity, private val copy: () -> Copy, p
             connection = conn
             conn.instanceFollowRedirects = false; conn.connectTimeout = 15000; conn.readTimeout = 15000
             conn.setRequestProperty("Cache-Control", "no-cache")
+            conn.setRequestProperty("Accept-Encoding", "identity")
             if (conn.responseCode in listOf(301,302,303,307,308) && download) {
                 val location = conn.getHeaderField("Location") ?: error("redirect")
                 next = URL(URL(next), location).toString(); conn.disconnect()
@@ -71,9 +72,13 @@ class AppUpdater(private val activity: Activity, private val copy: () -> Copy, p
                     output.toString("UTF-8")
                 }
                 candidate = UpdatePolicy.parse(raw, BuildConfig.VERSION_CODE, Build.VERSION.SDK_INT)
-                ui { if (manual) dialog?.dismiss(); if (candidate == null) { if(manual && idle()) notice("updateCurrent") } else { offer(manual); if(!offered) handler.postDelayed(pendingOffer, 2000) } }
-            } catch (_: Exception) { if(manual) ui { dialog?.dismiss(); notice("updateFailed") } }
+            } catch (_: Exception) {
+                candidate = null
+                if(manual) ui { dialog?.dismiss(); notice("updateFailed") }
+                return@execute
+            }
             finally { connection?.disconnect(); running.set(false) }
+            ui { if (manual) dialog?.dismiss(); if (candidate == null) { if(manual && idle()) notice("updateCurrent") } else { offer(manual); if(!offered) handler.postDelayed(pendingOffer, 2000) } }
         }
     }
     fun offer(manual: Boolean = false) {
@@ -91,16 +96,43 @@ class AppUpdater(private val activity: Activity, private val copy: () -> Copy, p
         val progress = ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100 }
         dialog = AlertDialog.Builder(activity).setTitle(t("updateDownloading")).setView(progress).setCancelable(false).show()
         worker.execute {
+            var downloaded = false
+            var verified = false
+            var integrityRejected = false
             try {
-                file.parentFile!!.mkdirs(); file.delete()
-                val conn = connect(update.url, true)
-                val length = conn.contentLengthLong
-                require(length == -1L || length == update.size)
-                conn.inputStream.use { UpdatePolicy.copyVerified(it, file, update.size, update.hash) { value -> ui { progress.progress = value } } }
+                file.parentFile!!.mkdirs()
+                for (source in UpdatePolicy.downloadSources(update)) {
+                    file.delete()
+                    ui { progress.progress = 0 }
+                    try {
+                        val conn = connect(source, true)
+                        conn.inputStream.use { UpdatePolicy.copyVerified(it, file, update.size, update.hash) { value -> ui { progress.progress = value } } }
+                        downloaded = true
+                        break
+                    } catch (e: Exception) {
+                        if (e is UpdateIntegrityException) integrityRejected = true
+                        file.delete()
+                    } finally { connection?.disconnect() }
+                }
+                check(downloaded)
                 verifyPackage(update)
-                ui { dialog?.dismiss(); installPrompt(update) }
-            } catch (_: Exception) { file.delete(); ui { dialog?.dismiss(); notice("updateFailed") } }
-            finally { connection?.disconnect(); running.set(false) }
+                verified = true
+            } catch (_: Exception) { file.delete() }
+            finally { running.set(false) }
+            ui {
+                dialog?.dismiss()
+                if (verified) installPrompt(update)
+                else if (downloaded || integrityRejected) notice("updateVerifyFailed")
+                else {
+                    dialog = AlertDialog.Builder(activity).setMessage(t("updateDownloadFailed"))
+                        .setNegativeButton(t("updateLater"), null)
+                        .setPositiveButton(t("updateBrowser")) { _, _ ->
+                            val release = update.url.substringBeforeLast('/').replace("/releases/download/", "/releases/tag/")
+                            try { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release))) }
+                            catch (_: Exception) { notice("updateFailed") }
+                        }.show()
+                }
+            }
         }
     }
     @Suppress("DEPRECATION")

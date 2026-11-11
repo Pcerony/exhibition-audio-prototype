@@ -7,6 +7,9 @@ class Copy(requested: String = "ja") {
     fun category(category: Category) = if (category.code in listOf("A", "B", "C", "D")) "${category.code} · ${get("category${category.code}")}" else category.name
     companion object {
         private val entries = mapOf(
+            "updateDownloadFailed" to listOf("更新ファイルを取得できませんでした。", "未能下载完整的更新文件。", "Could not download the complete update."),
+            "updateVerifyFailed" to listOf("更新ファイルを端末で検証できませんでした。", "安装包已下载，但手机未能通过校验。", "Downloaded, but the phone could not verify the package."),
+            "updateBrowser" to listOf("リリースページ", "打开发布页", "Open Release Page"),
             "placement" to listOf("設置位置", "实体位置", "Physical position"),
             "placementMissing" to listOf("設置位置：未登録", "实体位置：未登记", "Physical position not registered"),
             "placementAdd" to listOf("設置位置を登録", "登记位置", "Register position"),

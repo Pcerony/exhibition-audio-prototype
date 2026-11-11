@@ -22,6 +22,8 @@
 4. 执行：`node scripts/publish-android-feed.mjs /absolute/path/voice-writer-v3.3.0-candidate.apk apps/tag-writer-android/app/build/outputs/apk/debug/output-metadata.json v3.3.0-rc1 public/updates/notes-3.3.0.json`。脚本只有核对远端摘要后才生成清单。
 5. 提交 `public/updates/android.json` 并部署 Pages；读取线上清单确认，再通知现场升级。若暂缓发布，保留现有清单，不让清单指向尚未上传的文件。
 
+从 3.5.1 起，客户端优先从展览域名下载经过部署校验的 SHA256 路径镜像，失败后才尝试 GitHub Release；清单的 GitHub URL 保留旧版兼容。下载与校验报错分别显示，并提供浏览器下载。旧版本若无法在应用内下载，需要使用同签名正式 APK 覆盖升级一次，不卸载旧版。
+
 客户端限制 HTTPS 来源、重定向域名、文件体积、时间；下载后和安装前核对 SHA256、包名、版本号和当前安装包的签名。只通过 FileProvider 分享 updates 缓存目录，不分享账号、音频或任意文件。
 
 ## 验收边界
