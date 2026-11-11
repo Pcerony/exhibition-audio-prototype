@@ -1,5 +1,11 @@
 # 跨端 API 契约
 
+## 实体展签定位
+
+仅 `admin-api` 的 operator/admin 可用。 `locateTag { token }` 用既有展签 token 精确查找，返回 `{tag, placement}`；不存在/已删除的标签返回 404。 `saveTagPlacement {tagId,mapVersion,pieceCode,x,y,expectedVersion}` 返回 `{placement}`。placement 为 `{mapVersion,pieceCode,x,y,version}` 或 null；坐标为 `fukuoka-road-73-v13` 模型毫米，y 向北，必须在所选板的轮廓内。首次 expectedVersion=0；并发修改返回 VERSION_CONFLICT，刷新后重试。
+
+实体位置按 tag ID 独立保存，不从录音地点推算，不改变原 URL、录音、板块推算或写卡租约。访客和共享审核角色无权读取或写入。保存产生独立审计。
+
 ## 用户端增量发布（2026-10-29）
 
 当前新录音UI在开始页告知AI转写默认开启，提交传`transcriptionConsent:true`，保留界面语言对应的`transcriptionLanguage`及临时`mapPoint`。不改变旧客户端缺省false的语义，不批量追溯历史录音。

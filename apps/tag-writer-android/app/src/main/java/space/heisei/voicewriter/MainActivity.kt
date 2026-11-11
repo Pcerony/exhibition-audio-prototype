@@ -45,6 +45,9 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private lateinit var content: LinearLayout
     private lateinit var state: TextView
     private var adapter: NfcAdapter? = null
+    private val placementGeometry by lazy {
+        PlacementGeometry(JSONObject(assets.open("map-piece-geometry-v13.json").bufferedReader().use { it.readText() }))
+    }
     private val readerMode = ReaderMode(
         enable = {
             val flags = NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or
@@ -251,20 +254,15 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         val snapshot = inspectedTag
         if (snapshot == null) text(content, t("readReady"), 18f, true)
         else {
-            text(content, t("readContents"), 18f, true)
-            text(content, t(when(snapshot.kind) { "empty" -> "readEmpty"; "unformatted" -> "readUnformatted"; "unsupported" -> "unsupported"; "failed" -> "readFailed"; else -> "readContents" }), 16f)
-            snapshot.writable?.let { text(content, t(if (it) "readWritable" else "readReadOnly"), 13f) }
-            snapshot.records.forEachIndexed { index, record ->
-                text(content, "${index + 1} · ${t(when(record.kind) { "uri" -> "readUri"; "text" -> "readText"; "empty" -> "readEmptyRecord"; else -> "readOther" })} · ${record.bytes} B", 13f, true)
-                if (record.value.isNotEmpty()) text(content, NfcInspection.display(record.value), 14f).setTextIsSelectable(true)
-            }
-            if (snapshot.truncated || snapshot.records.any { it.value.endsWith("\u2026") }) text(content, t("readTruncated"), 13f)
+            val showPlacementFirst = screen == Screen.READ && inspectedCards.any { it.card != null }
+            if (!showPlacementFirst) renderNfcContents(snapshot)
             if (snapshot.kind == "data" && inspectedCards.isEmpty()) text(content, t("readExternal"), 16f)
             inspectedCards.forEach { result ->
                 val card = result.card
                 text(content, t(result.state), 17f, true)
                 if (card != null) {
                     text(content, card.displayLabel, 28f, true)
+                    if (screen == Screen.READ) renderTagPlacement(result)
                     text(content, cardMetadata(card), 15f)
                     text(content, t(if (card.status == "disabled") "disabled" else if (card.recordingId == null) "empty" else "recorded"), 16f, true)
                     card.job?.let { job -> text(content, t(job.status), 14f); job.writtenAt?.let { text(content, "${t("writtenAt")} · ${date(it)}", 13f) } }
@@ -275,10 +273,96 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 text(content, result.url, 12f).setTextIsSelectable(true)
             }
             if (inspectedCards.isNotEmpty() && queryingEpoch != epoch) action(content, t("readRetry")) { lookupInspection() }
+            if (showPlacementFirst) renderNfcContents(snapshot)
         }
         if (screen == Screen.SINGLE) renderSingle()
         action(content, t("readAgain"), true) {
             pauseWriting(); executor.execute { releaseCurrent() }; stopPlayback(); inspectedTag = null; inspectedCards = emptyList(); scanArmed = true; statusMessage = ""; render()
+        }
+    }
+    private fun renderNfcContents(snapshot: InspectedTag) {
+        text(content, t("readContents"), 18f, true)
+        if (snapshot.kind != "data") text(content, t(when(snapshot.kind) {
+            "empty" -> "readEmpty"; "unformatted" -> "readUnformatted"; "unsupported" -> "unsupported"
+            "lost" -> "lost"; else -> "readFailed"
+        }), 16f)
+        snapshot.writable?.let { text(content, t(if (it) "readWritable" else "readReadOnly"), 13f) }
+        snapshot.records.forEachIndexed { index, record ->
+            text(content, "${index + 1} · ${t(when(record.kind) { "uri" -> "readUri"; "text" -> "readText"; "empty" -> "readEmptyRecord"; else -> "readOther" })} · ${record.bytes} B", 13f, true)
+            if (record.value.isNotEmpty()) text(content, NfcInspection.display(record.value), 14f).setTextIsSelectable(true)
+        }
+        if (snapshot.truncated || snapshot.records.any { it.value.endsWith("\u2026") }) text(content, t("readTruncated"), 13f)
+    }
+    private fun renderTagPlacement(result: InspectedCard) {
+        val current = result.placement
+        val geometry = placementGeometry
+        val board = geometry.boards.find { it.code == current?.pieceCode }
+        if (current != null && board != null && board.contains(current.point)) {
+            val title = "${t("placement")} · ${board.code}"
+            text(content, title, 22f, true)
+            content.addView(PlacementMapView(this, geometry, board, false, current.point, title), LinearLayout.LayoutParams(-1, dp(212)))
+            action(content, t("placementDetail")) {
+                val map = PlacementMapView(this, geometry, board, true, current.point, title)
+                val frame = android.widget.FrameLayout(this).apply { addView(map, android.widget.FrameLayout.LayoutParams(-1, dp(256))) }
+                AlertDialog.Builder(this@MainActivity).setTitle(title).setView(frame).setPositiveButton(t("confirm"), null).show()
+            }
+        } else text(content, t("placementMissing"), 18f, true)
+        action(content, t(if (current == null) "placementAdd" else "placementEdit"), current == null) { editTagPlacement(result) }
+    }
+    private fun editTagPlacement(result: InspectedCard) {
+        val card = result.card ?: return
+        val geometry = placementGeometry
+        val expected = epoch
+        val owner = api.userId
+        val current = result.placement
+        val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), 0, dp(16), 0) }
+        val codes = listOf(t("placementBoard")) + geometry.boards.map { it.code }
+        val selector = Spinner(this).apply {
+            contentDescription = t("placementBoard")
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, codes)
+            setSelection(codes.indexOf(current?.pieceCode).coerceAtLeast(0))
+        }
+        form.addView(selector)
+        val frame = android.widget.FrameLayout(this)
+        form.addView(frame, LinearLayout.LayoutParams(-1, dp(245)))
+        var draft: TagPlacement? = null
+        val scroll = ScrollView(this).apply { addView(form) }
+        val dialog = AlertDialog.Builder(this).setTitle("${t("placement")} · ${card.displayLabel}").setView(scroll)
+            .setNegativeButton(t("cancel"), null).setPositiveButton(t("placementSave"), null).create()
+        dialog.show()
+        val save = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+        save.isEnabled = false
+        selector.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val board = geometry.boards.getOrNull(position - 1)
+                draft = null; save.isEnabled = false
+                frame.removeAllViews()
+                val select: ((ModelPoint) -> Unit)? = board?.let { chosen ->
+                    { point -> draft = TagPlacement(chosen.code, point, current?.version ?: 0); save.isEnabled = true }
+                }
+                frame.addView(PlacementMapView(this@MainActivity, geometry, board, board != null,
+                    current?.takeIf { it.pieceCode == board?.code }?.point, t("placementPoint"), select))
+            }
+        }
+        save.setOnClickListener {
+            val value = draft ?: return@setOnClickListener
+            if (screen != Screen.READ || !inspectionCurrent(expected, owner) || busy.get()) return@setOnClickListener
+            dialog.dismiss()
+            work {
+                try {
+                    val saved = api.savePlacement(card.id, value)
+                    ui { if (screen == Screen.READ && inspectionCurrent(expected, owner)) {
+                        inspectedCards = inspectedCards.map { if (it.url == result.url) it.copy(placement = saved) else it }
+                        statusMessage = ""; render()
+                    } }
+                } catch (e: ApiException) {
+                    if (e.code != "VERSION_CONFLICT") throw e
+                    ui { if (screen == Screen.READ && inspectionCurrent(expected, owner)) {
+                        statusMessage = t("placementConflict"); lookupInspection()
+                    } }
+                }
+            }
         }
     }
     private fun inspectionCurrent(expectedEpoch: Int, owner: String) =
@@ -324,8 +408,10 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         for (url in urls) {
             if (!inspectionCurrent(readEpoch, owner)) return
             val result = try {
-                val card = api.inspect(url)
-                InspectedCard(url, if (card == null) "readMissing" else "readExhibition", card)
+                if (screen == Screen.READ) api.locateTag(url) else {
+                    val card = api.inspect(url)
+                    InspectedCard(url, if (card == null) "readMissing" else "readExhibition", card)
+                }
             } catch (_: Exception) { InspectedCard(url, "readUnknown") }
             results.add(result)
             val visible = results.toList() + urls.drop(results.size).map { InspectedCard(it, "readCloud") }

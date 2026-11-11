@@ -2,7 +2,7 @@ package space.heisei.voicewriter
 
 data class InspectedRecord(val kind: String, val value: String, val bytes: Int)
 data class InspectedTag(val kind: String, val records: List<InspectedRecord> = emptyList(), val writable: Boolean? = null, val truncated: Boolean = false, val fingerprint: String = "", val capacity: Int? = null)
-data class InspectedCard(val url: String, val state: String, val card: Card? = null)
+data class InspectedCard(val url: String, val state: String, val card: Card? = null, val placement: TagPlacement? = null)
 
 object NfcInspection {
     fun current(resumed: Boolean, readPage: Boolean, expectedEpoch: Int, epoch: Int, owner: String, currentOwner: String) =
