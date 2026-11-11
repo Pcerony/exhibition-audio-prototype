@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "packageName": "space.heisei.voicewriter",
-  "versionCode": 11,
-  "versionName": "3.4.0",
+  "versionCode": 12,
+  "versionName": "3.4.1",
   "minSdk": 26,
-  "url": "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.4.0-rc1/voice-writer-v3.4.0-candidate.apk",
-  "size": 2567693,
-  "sha256": "c75e5404f2a4af1bd048e603713960fc92e9a3c6afe95164e859ee353dc03e7a",
+  "url": "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.4.1/voice-writer-v3.4.1.apk",
+  "size": 2437761,
+  "sha256": "d471dba7095e0538f42ff69e50c2cfa022dacca04816fcd97b4d1b676b5dc11e",
   "notes": {
-    "ja": "QRで参加した録音にNFCタグを後から発行できます。「QR補充」で番号・録音日から検索し、試聴後に空タグへ元のURLを書き込みます。同じ録音の二重発行、別タグでの誤再試行、既存内容の上書きを防止します。アプリ内更新も継続対応。",
-    "zh": "新增二维码补卡：按编号和录音日查找、试听后，将原网址写入空白NFC芯片，保留原录音和编号。防止重复补卡、换芯片误重试和覆盖已有内容；支持断网迟到结果同步。继续支持应用内更新。",
-    "en": "Added QR to NFC: find a QR recording by number/date, listen to confirm, then write its original URL to one blank tag. Keeps the recording and number, rejects duplicate cards and different-tag retries, protects existing contents, and supports late offline reports. In-app updates remain available."
+    "ja": "NFCの読取結果を表示している間もアプリ内で読取モードを維持し、タグをかざしたままブラウザが開く問題を修正しました。",
+    "zh": "修复 NFC 读卡结果显示后，芯片仍贴着手机时意外打开浏览器的问题。离开读卡界面后，手机恢复正常的 NFC 行为。",
+    "en": "Keeps NFC reader mode active while showing tag results so a tag held against the phone does not open the browser. Normal NFC behavior returns when leaving the reader screen."
   }
 }
