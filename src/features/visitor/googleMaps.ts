@@ -132,6 +132,8 @@ export async function mountLocationMap(options: {
 export async function mountMemoryLocationMap(options: {
   mapElement: HTMLElement; location: MemoryLocation; language: string; onReady: () => void; onError: () => void;
   onPoint?: (point:MapPointWgs84)=>void;
+  onPick?: (point:MapPointWgs84)=>void;
+  onOpen?: () => void;
 }): Promise<() => void> {
   await loadMaps(options.language);
   let disposed = false;
@@ -140,22 +142,35 @@ export async function mountMemoryLocationMap(options: {
     : { lat: 33.5902, lng: 130.4017 };
   const map = new google.maps.Map(options.mapElement, {
     center: point, zoom: options.location.source === 'pin' ? 16 : 13,
-    disableDefaultUI: true, clickableIcons: false, gestureHandling: 'none',
+    disableDefaultUI: true, clickableIcons: false, gestureHandling: options.onPick ? 'greedy' : 'none',
   });
+  let independentlyPicked = false;
+  const marker = options.onPick ? new google.maps.Marker({ clickable: false }) : undefined;
+  const click = options.onPick || options.onOpen ? map.addListener('click', (event: google.maps.MapMouseEvent) => {
+    if (!options.onPick) { options.onOpen?.(); return; }
+    if (!event.latLng) return;
+    independentlyPicked = true;
+    const selected = coordinatesOf(event.latLng);
+    map.setCenter(event.latLng);
+    marker?.setPosition(event.latLng);
+    marker?.setMap(map);
+    options.onPick(selected);
+  }) : undefined;
 
   if (options.location.source === 'pin') {options.onReady();options.onPoint?.(point);}
   else {
+    if (options.onPick) options.onReady();
     const place = new google.maps.places.Place({ id: options.location.placeId });
     void place.fetchFields({ fields: ['location'] }).then(() => {
-      if (disposed) return;
+      if (disposed || independentlyPicked) return;
       if (place.location) {
         map.setCenter(place.location);
         map.setZoom(16);
         options.onPoint?.({lat:place.location.lat(),lng:place.location.lng()});
-        options.onReady();
-      } else options.onError();
-    }).catch(() => { if (!disposed) options.onError(); });
+        if (!options.onPick) options.onReady();
+      } else if (!options.onPick) options.onError();
+    }).catch(() => { if (!disposed && !options.onPick) options.onError(); });
   }
 
-  return () => { disposed = true; };
+  return () => { disposed = true; click?.remove(); marker?.setMap(null); };
 }

@@ -2,13 +2,17 @@
 
 ## 实体展签定位
 
-仅 `admin-api` 的 operator/admin 可用。 `locateTag { token }` 用既有展签 token 精确查找，返回 `{tag, placement}`；不存在/已删除的标签返回 404。 `saveTagPlacement {tagId,mapVersion,pieceCode,x,y,expectedVersion}` 返回 `{placement}`。placement 为 `{mapVersion,pieceCode,x,y,version}` 或 null；坐标为 `fukuoka-road-73-v13` 模型毫米，y 向北，必须在所选板的轮廓内。首次 expectedVersion=0；并发修改返回 VERSION_CONFLICT，刷新后重试。
+仅 `admin-api` 的 operator/admin 可用。 `locateTag { token }` 用既有展签 token 精确查找，返回 `{tag, placement, memoryLocation, recommendation}`；不存在/已删除的标签返回 404。 `saveTagPlacement {tagId,mapVersion,pieceCode,x,y,expectedVersion}` 返回 `{placement}`。placement 为 `{mapVersion,pieceCode,x,y,version}` 或 null；坐标为 `fukuoka-road-73-v13` 模型毫米，y 向北，必须在所选板的轮廓内。首次 expectedVersion=0；并发修改返回 VERSION_CONFLICT，刷新后重试。
 
 实体位置按 tag ID 独立保存，不从录音地点推算，不改变原 URL、录音、板块推算或写卡租约。访客和共享审核角色无权读取或写入。保存产生独立审计。
 
+`memoryLocation` 是访客原始地点；`recommendation` 可空，为 `{mapVersion,state,pieceCode,x,y,confirmedLocation}`。只有有效板内点才返回模型坐标；`needs_review` 可无板号。
+
+`confirmTagMemoryPoint` 接收 `tagId`、`recordingId`、`location:{source:'pin',lat,lng}`，只可为仅有 Place ID 且尚无补点的当前录音保存一次。服务端计算并返回 `recommendation`。录音已换或并发补点返回 409。不得根据 Places 返回的坐标自动计算。
+
 ## 用户端增量发布（2026-10-29）
 
-当前新录音UI在开始页告知AI转写默认开启，提交传`transcriptionConsent:true`，保留界面语言对应的`transcriptionLanguage`及临时`mapPoint`。不改变旧客户端缺省false的语义，不批量追溯历史录音。
+当前新录音UI在开始页告知AI转写默认开启，提交传`transcriptionConsent:true`，保留界面语言对应的`transcriptionLanguage`。板块仅使用提交的独立落点 `location.source='pin'`；旧客户端的临时 `mapPoint` 已忽略。不改变旧客户端缺省false的语义，不批量追溯历史录音的转写。
 
 `POST public-translate`接受`{token,targetLanguage}`，语言为`ja/en/zh-CN/zh-TW/ko/es/fr/de/pt/ru/ar/th/vi/id`；仅翻译有效绑定且同意转写、ready、published的文字，返回`{translation,targetLanguage,cached}`。客户端不传原文/录音ID。缓存按录音、转写版本、语言，使用服务端租约合并并发；源文修改或隐藏清缓存。翻译失败不影响音频，供应商密钥只在Edge Secrets。迁移`202610290003`，不复用已被主分支地图拼块迁移占用的`202610170004`。
 

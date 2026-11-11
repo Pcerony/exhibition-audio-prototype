@@ -40,7 +40,7 @@ it('sends a selected Place coordinate only as a transient map point, not as pers
   });
   const claim = JSON.parse(fetcher.mock.calls[1][1].body);
   expect(claim.location).toEqual({ source: 'place', placeId: 'selected-place' });
-  expect(claim.mapPoint).toEqual({ lat: 33.5946138544, lng: 130.4063520063 });
+  expect(claim).not.toHaveProperty('mapPoint');
   expect(JSON.stringify(claim.location)).not.toContain('33.5946138544');
 });
 

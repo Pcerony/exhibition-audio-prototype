@@ -117,13 +117,17 @@ class Api(private val store: SecureSession) {
         val token = NfcInspection.token(url) ?: return InspectedCard(url, "readMissing")
         return try {
             val data = admin(JSONObject().put("action", "locateTag").put("token", token))
-            InspectedCard(url, "readExhibition", parseCard(data.getJSONObject("tag")), parseTagPlacement(data))
+            InspectedCard(url, "readExhibition", parseCard(data.getJSONObject("tag")), parseTagPlacement(data),
+                parseMemoryMapLocation(data.optJSONObject("memoryLocation")), parseBoardRecommendation(data))
         } catch (e: ApiException) {
             if (e.status == 404) InspectedCard(url, "readMissing") else throw e
         }
     }
     internal fun savePlacement(tagId: String, placement: TagPlacement): TagPlacement =
         checkNotNull(parseTagPlacement(admin(placement.saveRequest(tagId))))
+    internal fun confirmMemoryPoint(tagId: String, recordingId: String, point: MemoryPoint): BoardRecommendation =
+        checkNotNull(parseBoardRecommendation(admin(JSONObject().put("action", "confirmTagMemoryPoint")
+            .put("tagId", tagId).put("recordingId", recordingId).put("location", point.json()))))
     fun inspect(url: String): Card? {
         val token = NfcInspection.token(url) ?: return null
         val job = jobs().find { it.visitorUrl == url }
