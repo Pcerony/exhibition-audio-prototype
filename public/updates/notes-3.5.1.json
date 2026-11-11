@@ -1,0 +1,5 @@
+{
+  "ja": "アプリ内更新は展示サイトからの直接ダウンロードを優先し、失敗時はGitHubに切り替えます。",
+  "zh": "应用内更新优先从展览站点直连下载，失败后尝试 GitHub，并区分下载失败和安装包校验失败。",
+  "en": "App updates prefer a direct download from the exhibition site, with GitHub fallback and separate download and verification errors."
+}
