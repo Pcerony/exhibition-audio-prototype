@@ -19,7 +19,7 @@
 1. 增加 `app/build.gradle.kts` 的 versionCode/versionName，执行单测、assembleDebug、lintDebug；构建时注入公开 Supabase 配置。
 2. 检查 APK 包名、签名及 public 配置。必须与安装版使用同一签名；不能让临时机器重新生成 debug 签名。生产签名迁移需要单独计划。
 3. 上传不可变 Release APK，确认 GitHub 返回的 digest 和 size 与本地一致。
-4. 执行：`node scripts/publish-android-feed.mjs /absolute/path/voice-writer-v3.6.1.apk apps/tag-writer-android/app/build/outputs/apk/debug/output-metadata.json v3.6.1 public/updates/notes-3.6.1.json`。脚本只有核对远端摘要后才生成清单。
+4. 配置 Android SDK Build Tools 36.0.0 和 Java，执行：`node scripts/publish-android-feed.mjs /absolute/path/voice-writer-v3.6.1.apk apps/tag-writer-android/app/build/outputs/apk/debug/output-metadata.json v3.6.1 public/updates/notes-3.6.1.json`。脚本核对实际 APK 的包名、版本、签名和远端摘要后才生成清单。
 5. 提交 `public/updates/android.json` 并部署 Pages；读取线上清单确认，再通知现场升级。若暂缓发布，保留现有清单，不让清单指向尚未上传的文件。
 
 Pages 部署核对 APK 的大小及 SHA-256 后，提供带版本文件名的 `/updates/download/` 浏览器下载，以及兼容旧客户端的 SHA-256 路径镜像。清单仍保留原 GitHub URL。新版客户端只检查清单，不再自行读取或安装 APK，也不再申请安装权限；Android 系统负责安装时的验证。
