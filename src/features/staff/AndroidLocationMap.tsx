@@ -28,6 +28,7 @@ export default function AndroidLocationMap({ hash }: { hash: string }) {
     let cleanup: (() => void) | undefined;
     mountMemoryLocationMap({
       mapElement: map.current, location, language: language === 'zh' ? 'zh-CN' : language,
+      waitForTiles: true,
       onReady: () => { if (active) setStatus('ready'); },
       onError: () => { if (active) setStatus('failed'); },
       onPick: pick ? setSelected : undefined,
@@ -37,7 +38,7 @@ export default function AndroidLocationMap({ hash }: { hash: string }) {
     return () => { active = false; cleanup?.(); };
   }, [location, language, pick, googleUrl]);
   const confirm = selected && new URLSearchParams({ confirmLat: String(selected.lat), confirmLng: String(selected.lng) });
-  return <main className="android-location-map">
+  return <main className="android-location-map" lang={language}>
     <div ref={map} className="android-location-canvas" role="region" aria-label="Google Maps" />
     {status === 'ready' && !pick && <MapPin className="location-pin" size={32} fill="white" aria-hidden="true" />}
     {(!location || status !== 'ready') && <p role="status">{!location || status === 'failed' ? strings[3] : strings[4]}</p>}
