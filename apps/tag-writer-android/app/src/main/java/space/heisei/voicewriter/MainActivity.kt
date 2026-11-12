@@ -32,7 +32,6 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private val readExecutor = Executors.newSingleThreadExecutor()
     private val lookupExecutor = Executors.newSingleThreadExecutor()
     private val busy = AtomicBoolean(false)
-    private val reading = AtomicBoolean(false)
     private val continuousRead = ContinuousReadGate()
     private val handler = Handler(Looper.getMainLooper())
     private val flow = WriterFlow()
@@ -59,6 +58,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     )
     @Volatile private var resumed = false
     @Volatile private var epoch = 0
+    @Volatile private var readerSession = 0
     @Volatile private var lease: Lease? = null
     @Volatile private var screen = Screen.CARDS
     @Volatile private var scanArmed = false
@@ -67,6 +67,8 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private var queryingEpoch: Int? = null
     private val locationPreviews = mutableListOf<android.webkit.WebView>()
     private var locationPicker: AlertDialog? = null
+    private var placementDialog: AlertDialog? = null
+    private var qrCardId: String? = null
     @Volatile private var inspectedIdentity = ""
     @Volatile private var singleMutation: SingleMutation? = null
     @Volatile private var singleExpiresAt = 0L
@@ -213,6 +215,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         }.show()
     }
     private fun navigate(destination: Screen) {
+        readerSession++
         continuousRead.reset()
         pauseWriting(); stopPlayback(); checked.clear(); writeSession.retryJobId = null; offset = 0; screen = destination
         flow.choose(destination == Screen.AUTO)
@@ -228,7 +231,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private fun load() {
         api.verify(); sync()
         if (screen in listOf(Screen.CARDS, Screen.EDIT, Screen.QR)) {
-            val page = if(screen == Screen.QR) api.qrCards(search,sort,offset,statusFilter,batchDate) else api.cards("", search, sort, offset, statusFilter, batchDate)
+            val page = if(screen == Screen.QR) api.qrCards(qrCardId.orEmpty(),sort,0,"","") else api.cards("", search, sort, offset, statusFilter, batchDate)
             cards = page.first; total = page.second
         }
         jobs = api.jobs()
@@ -326,7 +329,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             action(content, t("placementDetail")) {
                 val map = PlacementMapView(this, geometry, board, true, point, title)
                 val frame = android.widget.FrameLayout(this).apply { addView(map, android.widget.FrameLayout.LayoutParams(-1, dp(256))) }
-                AlertDialog.Builder(this@MainActivity).setTitle(title).setView(frame).setPositiveButton(t("confirm"), null).show()
+                placementDialog = AlertDialog.Builder(this@MainActivity).setTitle(title).setView(frame).setPositiveButton(t("confirm"), null).show()
             }
         } else if (recommendation == null || current != null) text(content, t("placementMissing"), 18f, true)
         if (current == null) when (recommendation?.state) {
@@ -407,6 +410,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         val scroll = ScrollView(this).apply { addView(form) }
         val dialog = AlertDialog.Builder(this).setTitle("${t("placement")} · ${card.displayLabel}").setView(scroll)
             .setNegativeButton(t("cancel"), null).setPositiveButton(t("placementSave"), null).create()
+        placementDialog = dialog
         dialog.show()
         val save = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
         save.isEnabled = false
@@ -470,23 +474,30 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
 
     private fun readTag(tag: Tag) {
         val automatic = screen == Screen.READ
-        val active = if (automatic) reading else busy
-        if (!resumed || (!automatic && !scanArmed) || !active.compareAndSet(false, true)) return
-        if (automatic && !continuousRead.accept(tag.id, android.os.SystemClock.elapsedRealtime())) {
-            active.set(false)
-            return
+        if (!resumed) return
+        val session = readerSession
+        if (automatic) {
+            if (!continuousRead.accept(tag.id, android.os.SystemClock.elapsedRealtime())) return
+        } else {
+            if (!scanArmed || !busy.compareAndSet(false, true)) return
+            scanArmed = false
         }
-        if (!automatic) scanArmed = false
         val readEpoch = epoch
         val owner = api.userId
+        fun current() = if (automatic) {
+            NfcInspection.current(resumed, screen == Screen.READ, session, readerSession, owner, api.userId) && api.token.isNotBlank()
+        } else inspectionCurrent(readEpoch, owner)
         readExecutor.execute {
+            if (automatic && !current()) return@execute
             val snapshot = try { NfcReader.read(tag) } catch (_: TagLostException) { InspectedTag("lost") } catch (_: Exception) { InspectedTag("failed") }
             runOnUiThread {
-                active.set(false)
-                if (!isFinishing && !isDestroyed && inspectionCurrent(readEpoch, owner)) {
+                if (!automatic) busy.set(false)
+                if (!isFinishing && !isDestroyed && current()) {
                     if (automatic) {
                         epoch++
                         locationPicker?.dismiss()
+                        placementDialog?.dismiss()
+                        placementDialog = null
                         stopPlayback()
                     }
                     inspectedTag = snapshot
@@ -546,6 +557,11 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 return
             }
         }
+        if (screen != Screen.QR) renderCardFilters()
+        text(content, "${offset + if (cards.isEmpty()) 0 else 1}–${offset + cards.size} / $total", 13f)
+        renderCardRows()
+    }
+    private fun renderCardFilters() {
         val dateQuery = EditText(this).apply { hint = t("batchDate"); setSingleLine(); setText(batchDate); inputType = InputType.TYPE_CLASS_DATETIME or InputType.TYPE_DATETIME_VARIATION_DATE; content.addView(this) }
         action(content, t("filterDate")) {
             val value = dateQuery.text.toString().trim()
@@ -582,7 +598,8 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             OperatorPolicy.bulkOperations.forEach { operation -> action(content, t(operation)) { bulkPreview(operation) } }
             pendingBulk?.takeIf { OperatorPolicy.canSubmit(it.optString("operation")) }?.let { action(content, t("retryOperation")) { applyPending() } }
         }
-        text(content, "${offset + if (cards.isEmpty()) 0 else 1}–${offset + cards.size} / $total", 13f)
+    }
+    private fun renderCardRows() {
         if (cards.isEmpty()) text(content, t("noCards"))
         cards.forEach { card ->
             val panel = column(content, 12)
@@ -603,7 +620,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             job?.writtenAt?.let { text(panel, "${t("writtenAt")} · ${date(it)}", 13f) }
             if (card.recordingId != null) action(panel, t("play")) { play(card.recordingId) }
             if(screen == Screen.QR && QrAttachmentPolicy.canPrepare(card)) action(panel,t("qrWrite"),true) { confirmQr(card) }
-            if(screen == Screen.CARDS && QrAttachmentPolicy.canPrepare(card)) action(panel,t("qrAttach")) { search=card.displayLabel;offset=0;statusFilter="";batchDate="";navigate(Screen.QR) }
+            if(screen == Screen.CARDS && QrAttachmentPolicy.canPrepare(card)) action(panel,t("qrAttach")) { qrCardId = card.id; navigate(Screen.QR) }
         }
         if (offset > 0) action(content, t("previous")) { offset = (offset - 50).coerceAtLeast(0); checked.clear(); reload() }
         if (offset + cards.size < total) action(content, t("next")) { offset += 50; checked.clear(); reload() }
@@ -1085,7 +1102,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         }
     }
     override fun onPause() {
-        resumed = false; continuousRead.reset(); pauseWriting(); stopPlayback()
+        resumed = false; readerSession++; continuousRead.reset(); pauseWriting(); stopPlayback()
         inspectedCards = inspectedCards.map { if (it.state == "readCloud") it.copy(state = "readUnknown") else it }
         if (::api.isInitialized && api.token.isNotBlank()) executor.execute { releaseCurrent() }
         super.onPause()
