@@ -38,4 +38,6 @@ if (!apk || apk.length !== size || createHash('sha256').update(apk).digest('hex'
 }
 await mkdir('dist/updates/apk', { recursive: true });
 await writeFile(`dist/updates/apk/${sha256}.apk`, apk);
+await mkdir('dist/updates/download', { recursive: true });
+await writeFile(`dist/updates/download/${new URL(url).pathname.split('/').at(-1)}`, apk);
 console.log('Verified Android release mirrored into Pages artifact.');

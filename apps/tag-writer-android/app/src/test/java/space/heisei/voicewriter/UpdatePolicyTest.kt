@@ -2,9 +2,6 @@ package space.heisei.voicewriter
 
 import org.junit.Assert.*
 import org.junit.Test
-import java.io.ByteArrayInputStream
-import java.io.File
-import java.security.MessageDigest
 
 class UpdatePolicyTest {
     private fun manifest(code: Int = 10, url: String = "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.3.0-rc1/voice-writer-v3.3.0-candidate.apk") = """{"schemaVersion":1,"versionCode":$code,"versionName":"3.3.0","packageName":"space.heisei.voicewriter","minSdk":26,"url":"$url","size":3,"sha256":"${"a".repeat(64)}","notes":{"ja":"改善","zh":"改进","en":"Improved"}}"""
@@ -23,39 +20,10 @@ class UpdatePolicyTest {
             assertThrows(Exception::class.java) { UpdatePolicy.parse(value, 9, 36) }
         }
     }
-    @Test fun redirectAllowlist() {
-        assertTrue(UpdatePolicy.allowedDownload("https://release-assets.githubusercontent.com/a?sig=test"))
-        assertFalse(UpdatePolicy.allowedDownload("https://user@github.com/a"))
-        assertFalse(UpdatePolicy.allowedDownload("https://evil.test/a"))
-        assertFalse(UpdatePolicy.allowedDownload("http://release-assets.githubusercontent.com/a"))
-    }
-    @Test fun prefersImmutableFirstPartyMirrorWithLegacyReleaseFallback() {
+    @Test fun browserDownloadUsesVersionedFirstPartyFilename() {
         val update = UpdatePolicy.parse(manifest(), 9, 36)!!
-        val sources = UpdatePolicy.downloadSources(update)
-        assertEquals(listOf("https://voice.heisei.space/updates/apk/${update.hash}.apk", update.url), sources)
-        assertTrue(sources.all(UpdatePolicy::allowedDownload))
-        assertFalse(UpdatePolicy.allowedDownload("https://voice.heisei.space/updates/apk/current.apk"))
-        assertFalse(UpdatePolicy.allowedDownload(sources.first() + "?redirect=test"))
-    }
-    @Test fun installerRejectsOtherPackagesSignersAndVersions() {
-        assertTrue(UpdatePolicy.sameApplication(UpdatePolicy.PACKAGE, 10, 10, 9, setOf("a"), setOf("a")))
-        assertFalse(UpdatePolicy.sameApplication("evil.app", 10, 10, 9, setOf("a"), setOf("a")))
-        assertFalse(UpdatePolicy.sameApplication(UpdatePolicy.PACKAGE, 9, 10, 9, setOf("a"), setOf("a")))
-        assertFalse(UpdatePolicy.sameApplication(UpdatePolicy.PACKAGE, 10, 10, 10, setOf("a"), setOf("a")))
-        assertFalse(UpdatePolicy.sameApplication(UpdatePolicy.PACKAGE, 10, 10, 9, setOf("a"), setOf("b")))
-        assertFalse(UpdatePolicy.sameApplication(UpdatePolicy.PACKAGE, 10, 10, 9, emptySet(), emptySet()))
-    }
-    @Test fun sizeAndDigestMustMatchAndPartialIsRemoved() {
-        val file = File.createTempFile("update-test", ".apk")
-        val bytes = byteArrayOf(1,2,3)
-        val hash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        try {
-            UpdatePolicy.copyVerified(ByteArrayInputStream(bytes), file, 3, hash) { }
-            assertArrayEquals(bytes, file.readBytes())
-            assertThrows(UpdateIntegrityException::class.java) { UpdatePolicy.copyVerified(ByteArrayInputStream(bytes), file, 2, hash) { } }
-            assertFalse(file.exists())
-            assertThrows(UpdateIntegrityException::class.java) { UpdatePolicy.copyVerified(ByteArrayInputStream(bytes), file, 3, "0".repeat(64)) { } }
-            assertFalse(file.exists())
-        } finally { file.delete() }
+        assertEquals("https://voice.heisei.space/updates/download/voice-writer-v3.3.0-candidate.apk", UpdatePolicy.browserDownload(update))
+        assertThrows(IllegalArgumentException::class.java) { UpdatePolicy.browserDownload(update.copy(url = "https://evil.test/a.apk")) }
+        assertThrows(IllegalArgumentException::class.java) { UpdatePolicy.browserDownload(update.copy(url = update.url + "?x=1")) }
     }
 }

@@ -1,7 +1,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { basename } from 'node:path';
+import { basename, join } from 'node:path';
+import { homedir } from 'node:os';
 
 // Publish only AFTER uploading the immutable release asset. Never print credentials.
 const [apkPath, metadataPath, tag, notesPath] = process.argv.slice(2);
@@ -9,6 +10,18 @@ if (!apkPath || !metadataPath || !tag || !notesPath) throw new Error('Usage: nod
 const metadata = JSON.parse(readFileSync(metadataPath, 'utf8'));
 const entry = metadata.elements[0];
 if (metadata.applicationId !== 'space.heisei.voicewriter' || !Number.isSafeInteger(entry.versionCode)) throw new Error('Invalid APK metadata');
+const sdk = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT || join(homedir(), 'Library', 'Android', 'sdk');
+const buildTools = process.env.ANDROID_BUILD_TOOLS || join(sdk, 'build-tools', '36.0.0');
+const inspect = (tool, args) => execFileSync(join(buildTools, tool), args, { encoding: 'utf8' });
+const badging = inspect('aapt', ['dump', 'badging', apkPath]);
+const [, pkg, code, version] = badging.match(/^package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'/m) ?? [];
+if (pkg !== metadata.applicationId || code !== String(entry.versionCode) || version !== entry.versionName
+  || !/^sdkVersion:'26'$/m.test(badging) || tag !== `v${version}`) throw new Error('APK identity, SDK, version or release tag mismatch');
+const signatures = [...inspect('apksigner', ['verify', '--print-certs', apkPath])
+  .matchAll(/^Signer #\d+ certificate SHA-256 digest: ([a-f0-9]+)$/gm)].map(match => match[1]);
+if (signatures.length !== 1 || signatures[0] !== '48a52ba6a1cdc413f5ee828b11cd922a4604951299547b7cea37c2e901d04b3d') {
+  throw new Error('APK does not match the installed release signer');
+}
 const apk = readFileSync(apkPath);
 const digest = createHash('sha256').update(apk).digest('hex');
 const release = JSON.parse(execFileSync('gh', ['api', `repos/Pcerony/exhibition-audio-prototype/releases/tags/${tag}`], { encoding: 'utf8' }));
