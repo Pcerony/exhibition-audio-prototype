@@ -77,6 +77,7 @@ class Copy(requested: String = "ja") {
             "legacyPendingSummary" to listOf("旧V2結果は自動送信しません。実物タグの確認が必要です。", "旧 V2 结果不会自动同步，需核对实体芯片。", "Legacy V2 Results Will Not Auto-sync. Review Physical Tags."),
             "readNfc" to listOf("NFC読取", "读取 NFC", "Read NFC"),
             "readReady" to listOf("タグをかざしてください", "请靠近芯片", "Hold a Tag Near the Phone"),
+            "readNextReady" to listOf("次のタグをかざしてください", "可直接感应下一张卡", "Ready for the Next Tag"),
             "readAgain" to listOf("別のタグを読む", "重新读取", "Read Another Tag"),
             "readContents" to listOf("タグの内容", "芯片内容", "Tag Contents"),
             "readEmpty" to listOf("データはありません", "芯片未写入内容", "No Data on This Tag"),

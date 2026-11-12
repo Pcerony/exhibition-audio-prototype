@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "packageName": "space.heisei.voicewriter",
-  "versionCode": 16,
-  "versionName": "3.6.1",
+  "versionCode": 17,
+  "versionName": "3.7.0",
   "minSdk": 26,
-  "url": "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.6.1/voice-writer-v3.6.1.apk",
-  "size": 2615179,
-  "sha256": "92e736c0623d86a36313cafecd63710049b28d7ee37b07a45d1508119a27f5e6",
+  "url": "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.7.0/voice-writer-v3.7.0.apk",
+  "size": 2766826,
+  "sha256": "983db6d1d39599d00ec7f3c373b909e4d939546cdb69c1a7cd0a33c22b2005b9",
   "notes": {
-    "ja": "更新はブラウザでダウンロードし、Androidのダウンロード一覧から上書きインストールできます。",
-    "zh": "更新改为浏览器下载。下载完成后，在手机的下载列表打开 APK 覆盖安装，不要卸载旧版。",
-    "en": "Updates now download in your browser. Open the APK from Downloads to update without uninstalling."
+    "ja": "NFCを連続読み取り。下部タブはカード管理・NFC読取・連続書き込みの3つ。設定とQR補充はカード管理から。",
+    "zh": "NFC 连续读取。底栏保留卡片管理、读取 NFC 和自动写卡。设置和二维码补卡入口在卡片管理内。",
+    "en": "Read NFC tags continuously. Bottom tabs: Cards, Read NFC, and Automatic Write. Settings and QR attachment are under Cards."
   }
 }

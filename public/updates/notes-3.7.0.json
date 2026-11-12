@@ -1,0 +1,5 @@
+{
+  "ja": "NFCを連続読み取り。下部タブはカード管理・NFC読取・連続書き込みの3つ。設定とQR補充はカード管理から。",
+  "zh": "NFC 连续读取。底栏保留卡片管理、读取 NFC 和自动写卡。设置和二维码补卡入口在卡片管理内。",
+  "en": "Read NFC tags continuously. Bottom tabs: Cards, Read NFC, and Automatic Write. Settings and QR attachment are under Cards."
+}
