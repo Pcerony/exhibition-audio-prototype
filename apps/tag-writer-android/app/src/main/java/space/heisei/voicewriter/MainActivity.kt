@@ -15,7 +15,6 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.text.InputType
-import android.view.Gravity
 import android.view.View
 import android.widget.*
 import org.json.JSONArray
@@ -33,6 +32,8 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private val readExecutor = Executors.newSingleThreadExecutor()
     private val lookupExecutor = Executors.newSingleThreadExecutor()
     private val busy = AtomicBoolean(false)
+    private val reading = AtomicBoolean(false)
+    private val continuousRead = ContinuousReadGate()
     private val handler = Handler(Looper.getMainLooper())
     private val flow = WriterFlow()
     private val overwritePermission = OverwritePermission()
@@ -84,6 +85,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     private val queue = mutableListOf<Report>()
     private var pendingBulk: JSONObject? = null
     private var player: MediaPlayer? = null
+    private var playbackDialog: AlertDialog? = null
     private val ink = Color.rgb(25, 40, 35)
     private val green = Color.rgb(21, 110, 78)
     private fun t(key: String) = copy[key]
@@ -141,38 +143,35 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         parent.addView(this, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(5) })
         setOnClickListener { if (!busy.get()) callback() }
     }
-    private fun header(title: String, navigation: Boolean) {
+    private fun page(navigation: Boolean) {
         clearLocationPreviews()
         shell.removeAllViews()
-        val top = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(20), dp(8), dp(12), dp(8)); setBackgroundColor(Color.WHITE); shell.addView(this) }
-        TextView(this).apply { text = title; textSize = 21f; setTextColor(ink); setTypeface(typeface, Typeface.BOLD); top.addView(this, LinearLayout.LayoutParams(0, -2, 1f)) }
-        top.addView(ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_menu_preferences); contentDescription = t("menu"); background = null
-            setOnClickListener { settings() }
-        }, LinearLayout.LayoutParams(dp(48), dp(48)))
-        if (navigation) {
-            listOf(listOf(Screen.CARDS, Screen.READ, Screen.QR), listOf(Screen.SINGLE, Screen.AUTO, Screen.EDIT)).forEach { destinations ->
-                val nav = LinearLayout(this).apply { shell.addView(this) }
-                destinations.forEach { destination ->
-                    nav.addView(Button(this).apply {
-                        val key = when(destination) { Screen.CARDS -> "cards"; Screen.READ -> "readNfc"; Screen.SINGLE -> "single"; Screen.AUTO -> "auto"; Screen.EDIT -> "edit"; Screen.QR -> "qrAttach" }
-                        text = t(key); textSize = 12f; isAllCaps = false; minHeight = dp(56); maxLines = 2
-                        setTextColor(if (screen == destination) Color.WHITE else green)
-                        backgroundTintList = android.content.res.ColorStateList.valueOf(if (screen == destination) green else Color.WHITE)
-                        setOnClickListener { if (!busy.get()) navigate(destination) }
-                    }, LinearLayout.LayoutParams(0, dp(56), 1f))
-                }
-            }
-        }
         val scroll = ScrollView(this)
         shell.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(12), dp(20), dp(24)); scroll.addView(this) }
         state = text(content, statusMessage, 14f)
+        state.visibility = if (statusMessage.isBlank()) View.GONE else View.VISIBLE
         state.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        if (navigation) {
+            val nav = LinearLayout(this).apply {
+                setBackgroundColor(Color.WHITE)
+                shell.addView(this, LinearLayout.LayoutParams(-1, -2))
+            }
+            for ((destination, key) in listOf(Screen.CARDS to "cards", Screen.READ to "readNfc", Screen.AUTO to "auto")) {
+                val selected = screen == destination || (screen == Screen.QR && destination == Screen.CARDS)
+                nav.addView(Button(this).apply {
+                    text = t(key); textSize = 13f; isAllCaps = false; maxLines = 2; isSelected = selected
+                    setTextColor(if (selected) green else ink)
+                    if (selected) setTypeface(typeface, Typeface.BOLD)
+                    backgroundTintList = android.content.res.ColorStateList.valueOf(if (selected) Color.rgb(223, 240, 230) else Color.WHITE)
+                    setOnClickListener { if (!busy.get() && screen != destination) navigate(destination) }
+                }, LinearLayout.LayoutParams(0, dp(58), 1f))
+            }
+        }
     }
     private fun loginScreen() {
         if (!::shell.isInitialized) return
-        header(t("app"), false)
+        page(false)
         text(content, t("login"), 26f, true)
         val email = EditText(this).apply { hint = t("email"); inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS; content.addView(this) }
         val password = EditText(this).apply { hint = t("password"); inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD; content.addView(this) }
@@ -180,6 +179,15 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             val address = email.text.toString().trim(); val secret = password.text.toString(); password.text.clear()
             work { api.login(address, secret); restoreQueue(); load(); ui { render() } }
         }
+        action(content, t("language")) { chooseLanguage() }
+    }
+    private fun chooseLanguage() {
+        val languages = listOf("ja", "zh", "en")
+        AlertDialog.Builder(this).setTitle(t("language"))
+            .setSingleChoiceItems(arrayOf("日本語", "中文", "English"), languages.indexOf(copy.language)) { dialog, value ->
+                copy = Copy(languages[value]); prefs().edit().putString("language", copy.language).apply(); dialog.dismiss()
+                render()
+            }.show()
     }
     private fun settings() {
         val items = (if (api.token.isBlank()) arrayOf(t("language"), t("nfc"), t("sound")) else arrayOf(api.email, t("language"), t("nfc"), t("logout"), t("sound"))) + "${t("updateCheck")} · ${BuildConfig.VERSION_NAME}"
@@ -191,10 +199,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 return@setItems
             }
             when(real) {
-                1 -> AlertDialog.Builder(this).setTitle(t("language")).setSingleChoiceItems(arrayOf("日本語", "中文", "English"), listOf("ja", "zh", "en").indexOf(copy.language)) { dialog, value ->
-                    copy = Copy(listOf("ja", "zh", "en")[value]); prefs().edit().putString("language", copy.language).apply(); dialog.dismiss()
-                    if (api.token.isBlank()) loginScreen() else render()
-                }.show()
+                1 -> chooseLanguage()
                 2 -> startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
                 3 -> {
                     pauseWriting()
@@ -208,6 +213,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         }.show()
     }
     private fun navigate(destination: Screen) {
+        continuousRead.reset()
         pauseWriting(); stopPlayback(); checked.clear(); writeSession.retryJobId = null; offset = 0; screen = destination
         flow.choose(destination == Screen.AUTO)
         if (destination in listOf(Screen.READ, Screen.SINGLE)) {
@@ -229,7 +235,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     }
     private fun render() {
         if (api.token.isBlank()) { loginScreen(); return }
-        header(t("app"), true)
+        page(true)
         if (screen in listOf(Screen.READ, Screen.SINGLE)) { renderReader(); reader(); return }
         pendingBulk?.takeIf { OperatorPolicy.requiresReview(it.optString("operation")) }?.let {
             text(content, t("historicalBulkSummary"), 14f, true)
@@ -257,6 +263,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         val snapshot = inspectedTag
         if (snapshot == null) text(content, t("readReady"), 18f, true)
         else {
+            if (screen == Screen.READ) text(content, t("readNextReady"), 14f)
             val showPlacementFirst = screen == Screen.READ && inspectedCards.any { it.card != null }
             if (!showPlacementFirst) renderNfcContents(snapshot)
             if (snapshot.kind == "data" && inspectedCards.isEmpty()) text(content, t("readExternal"), 16f)
@@ -279,7 +286,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             if (showPlacementFirst) renderNfcContents(snapshot)
         }
         if (screen == Screen.SINGLE) renderSingle()
-        action(content, t("readAgain"), true) {
+        if (screen == Screen.SINGLE) action(content, t("readAgain"), true) {
             pauseWriting(); executor.execute { releaseCurrent() }; stopPlayback(); inspectedTag = null; inspectedCards = emptyList(); scanArmed = true; statusMessage = ""; render()
         }
     }
@@ -462,24 +469,33 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         NfcInspection.current(resumed, screen in listOf(Screen.READ, Screen.SINGLE), expectedEpoch, epoch, owner, api.userId) && api.token.isNotBlank()
 
     private fun readTag(tag: Tag) {
-        if (!resumed || !scanArmed || !busy.compareAndSet(false, true)) return
-        scanArmed = false
+        val automatic = screen == Screen.READ
+        val active = if (automatic) reading else busy
+        if (!resumed || (!automatic && !scanArmed) || !active.compareAndSet(false, true)) return
+        if (automatic && !continuousRead.accept(tag.id, android.os.SystemClock.elapsedRealtime())) {
+            active.set(false)
+            return
+        }
+        if (!automatic) scanArmed = false
         val readEpoch = epoch
         val owner = api.userId
         readExecutor.execute {
-            try {
-                val snapshot = try { NfcReader.read(tag) } catch (_: TagLostException) { InspectedTag("lost") } catch (_: Exception) { InspectedTag("failed") }
-                ui {
-                    if (inspectionCurrent(readEpoch, owner)) {
-                        inspectedTag = snapshot
-                        inspectedIdentity = tag.id.joinToString("") { "%02x".format(it) }
-                        inspectedCards = emptyList()
-                        statusMessage = if (snapshot.kind == "lost") t("lost") else ""
-                        lookupInspection()
-                        render()
+            val snapshot = try { NfcReader.read(tag) } catch (_: TagLostException) { InspectedTag("lost") } catch (_: Exception) { InspectedTag("failed") }
+            runOnUiThread {
+                active.set(false)
+                if (!isFinishing && !isDestroyed && inspectionCurrent(readEpoch, owner)) {
+                    if (automatic) {
+                        epoch++
+                        locationPicker?.dismiss()
+                        stopPlayback()
                     }
+                    inspectedTag = snapshot
+                    inspectedIdentity = tag.id.joinToString("") { "%02x".format(it) }
+                    inspectedCards = emptyList()
+                    statusMessage = if (snapshot.kind == "lost") t("lost") else ""
+                    if (NfcInspection.urls(snapshot.records).isEmpty()) render() else lookupInspection()
                 }
-            } finally { busy.set(false) }
+            }
         }
     }
     private fun lookupInspection() {
@@ -489,17 +505,21 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         queryingEpoch = readEpoch
         inspectedCards = urls.map { InspectedCard(it, "readCloud") }; render()
         lookupExecutor.execute {
-            try { lookupInspectionResults(urls, readEpoch, owner) }
+            var results: List<InspectedCard>? = null
+            try { results = lookupInspectionResults(urls, readEpoch, owner) }
             finally { ui {
                 if (queryingEpoch == readEpoch) queryingEpoch = null
-                if (inspectionCurrent(readEpoch, owner)) render()
+                if (inspectionCurrent(readEpoch, owner)) {
+                    results?.let { inspectedCards = it }
+                    render()
+                }
             } }
         }
     }
-    private fun lookupInspectionResults(urls: List<String>, readEpoch: Int, owner: String) {
+    private fun lookupInspectionResults(urls: List<String>, readEpoch: Int, owner: String): List<InspectedCard>? {
         val results = mutableListOf<InspectedCard>()
         for (url in urls) {
-            if (!inspectionCurrent(readEpoch, owner)) return
+            if (!inspectionCurrent(readEpoch, owner)) return null
             val result = try {
                 if (screen == Screen.READ) api.locateTag(url) else {
                     val card = api.inspect(url)
@@ -507,11 +527,14 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                 }
             } catch (_: Exception) { InspectedCard(url, "readUnknown") }
             results.add(result)
-            val visible = results.toList() + urls.drop(results.size).map { InspectedCard(it, "readCloud") }
-            ui { if (inspectionCurrent(readEpoch, owner)) { inspectedCards = visible; render() } }
         }
+        return results
     }
     private fun renderCards() {
+        if (screen == Screen.CARDS) {
+            text(content, t("cards"), 25f, true)
+            action(content, t("menu")) { settings() }
+        }
         if(screen == Screen.QR) {
             text(content,t("qrAttach"),22f,true)
             val current = lease
@@ -580,7 +603,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
             job?.writtenAt?.let { text(panel, "${t("writtenAt")} · ${date(it)}", 13f) }
             if (card.recordingId != null) action(panel, t("play")) { play(card.recordingId) }
             if(screen == Screen.QR && QrAttachmentPolicy.canPrepare(card)) action(panel,t("qrWrite"),true) { confirmQr(card) }
-            if(screen == Screen.CARDS && card.entryChannel == "qr") action(panel,t("qrAttach")) { search=card.displayLabel;offset=0;statusFilter="";batchDate="";navigate(Screen.QR) }
+            if(screen == Screen.CARDS && QrAttachmentPolicy.canPrepare(card)) action(panel,t("qrAttach")) { search=card.displayLabel;offset=0;statusFilter="";batchDate="";navigate(Screen.QR) }
         }
         if (offset > 0) action(content, t("previous")) { offset = (offset - 50).coerceAtLeast(0); checked.clear(); reload() }
         if (offset + cards.size < total) action(content, t("next")) { offset += 50; checked.clear(); reload() }
@@ -992,9 +1015,11 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
     }
     private fun play(recordingId: String) {
         stopPlayback()
+        val expected = epoch
         work {
             val url = api.admin(JSONObject().put("action", "playback").put("recordingId", recordingId)).getString("url")
             ui {
+                if (!resumed || epoch != expected) return@ui
                 val audio = MediaPlayer(); player = audio
                 try {
                     audio.setDataSource(url)
@@ -1002,12 +1027,17 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
                     audio.setOnErrorListener { _, _, _ -> stopPlayback(); message(t("error")); true }
                     audio.setOnCompletionListener { stopPlayback() }
                     audio.prepareAsync()
-                    AlertDialog.Builder(this).setTitle(t("play")).setPositiveButton(t("stop")) { _, _ -> stopPlayback() }.setOnCancelListener { stopPlayback() }.show()
+                    playbackDialog = AlertDialog.Builder(this).setTitle(t("play")).setPositiveButton(t("stop")) { _, _ -> stopPlayback() }.setOnCancelListener { stopPlayback() }.show()
                 } catch (_: Exception) { stopPlayback(); message(t("error")) }
             }
         }
     }
-    private fun stopPlayback() { player?.release(); player = null }
+    private fun stopPlayback() {
+        playbackDialog?.dismiss()
+        playbackDialog = null
+        player?.release()
+        player = null
+    }
     private fun reload() { work { load(); ui { render() } } }
     private fun deviceId(): String {
         prefs().getString("device", null)?.let { return it }
@@ -1017,7 +1047,13 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(Instant.parse(value))
     }.getOrDefault(value)
     private fun cardMetadata(card: Card): String = listOfNotNull(card.categoryCode?.let { copy.category(Category(card.categoryId.orEmpty(), "", it)) }, card.batchDate).joinToString(" · ").ifBlank { card.categoryName }
-    private fun message(value: String) { statusMessage = value; if (::state.isInitialized) state.text = value }
+    private fun message(value: String) {
+        statusMessage = value
+        if (::state.isInitialized) {
+            state.text = value
+            state.visibility = if (value.isBlank()) View.GONE else View.VISIBLE
+        }
+    }
     private fun ui(action: () -> Unit) { runOnUiThread { if (!isFinishing && !isDestroyed) action() } }
     private fun work(action: () -> Unit) {
         if (!busy.compareAndSet(false, true)) return
@@ -1049,7 +1085,7 @@ class MainActivity : Activity(), NfcAdapter.ReaderCallback {
         }
     }
     override fun onPause() {
-        resumed = false; pauseWriting(); stopPlayback()
+        resumed = false; continuousRead.reset(); pauseWriting(); stopPlayback()
         inspectedCards = inspectedCards.map { if (it.state == "readCloud") it.copy(state = "readUnknown") else it }
         if (::api.isInitialized && api.token.isNotBlank()) executor.execute { releaseCurrent() }
         super.onPause()
