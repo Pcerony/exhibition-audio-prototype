@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "packageName": "space.heisei.voicewriter",
-  "versionCode": 15,
-  "versionName": "3.6.0",
+  "versionCode": 16,
+  "versionName": "3.6.1",
   "minSdk": 26,
-  "url": "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.6.0/voice-writer-v3.6.0.apk",
-  "size": 2784219,
-  "sha256": "944e81bf3416bb40c595cea5eaa56a70b0448885b04ff3e55f69886b14cc6803",
+  "url": "https://github.com/Pcerony/exhibition-audio-prototype/releases/download/v3.6.1/voice-writer-v3.6.1.apk",
+  "size": 2615179,
+  "sha256": "92e736c0623d86a36313cafecd63710049b28d7ee37b07a45d1508119a27f5e6",
   "notes": {
-    "ja": "NFC読み取りにGoogleマップと展示ボードの推奨位置を追加。登録済みの設置位置は保持されます。",
-    "zh": "NFC 读卡显示 Google 地图和推荐展板位置，保留已有的实体卡位置。",
-    "en": "NFC lookup shows Google Maps and the suggested exhibition board while preserving registered physical positions."
+    "ja": "更新はブラウザでダウンロードし、Androidのダウンロード一覧から上書きインストールできます。",
+    "zh": "更新改为浏览器下载。下载完成后，在手机的下载列表打开 APK 覆盖安装，不要卸载旧版。",
+    "en": "Updates now download in your browser. Open the APK from Downloads to update without uninstalling."
   }
 }
