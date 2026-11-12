@@ -134,6 +134,7 @@ export async function mountMemoryLocationMap(options: {
   onPoint?: (point:MapPointWgs84)=>void;
   onPick?: (point:MapPointWgs84)=>void;
   onOpen?: () => void;
+  waitForTiles?: boolean;
 }): Promise<() => void> {
   await loadMaps(options.language);
   let disposed = false;
@@ -144,6 +145,19 @@ export async function mountMemoryLocationMap(options: {
     center: point, zoom: options.location.source === 'pin' ? 16 : 13,
     disableDefaultUI: true, clickableIcons: false, gestureHandling: options.onPick ? 'greedy' : 'none',
   });
+  let locationReady = false;
+  let tilesReady = !options.waitForTiles;
+  let previewFinished = false;
+  const finish = (success: boolean) => {
+    if (disposed || previewFinished) return;
+    previewFinished = true;
+    clearTimeout(tileTimeout);
+    if (success) options.onReady(); else options.onError();
+  };
+  const ready = () => { if (locationReady && tilesReady) finish(true); };
+  const tileTimeout = options.waitForTiles ? window.setTimeout(() => finish(false), 12000) : undefined;
+  const tiles = options.waitForTiles ? map.addListener('tilesloaded', () => { tilesReady = true; ready(); }) : undefined;
+  const markLocationReady = () => { locationReady = true; ready(); };
   let independentlyPicked = false;
   const marker = options.onPick ? new google.maps.Marker({ clickable: false }) : undefined;
   const click = options.onPick || options.onOpen ? map.addListener('click', (event: google.maps.MapMouseEvent) => {
@@ -157,20 +171,21 @@ export async function mountMemoryLocationMap(options: {
     options.onPick(selected);
   }) : undefined;
 
-  if (options.location.source === 'pin') {options.onReady();options.onPoint?.(point);}
+  if (options.location.source === 'pin') {markLocationReady();options.onPoint?.(point);}
   else {
-    if (options.onPick) options.onReady();
+    if (options.onPick) markLocationReady();
     const place = new google.maps.places.Place({ id: options.location.placeId });
     void place.fetchFields({ fields: ['location'] }).then(() => {
       if (disposed || independentlyPicked) return;
       if (place.location) {
+        if (options.waitForTiles && !options.onPick) tilesReady = false;
         map.setCenter(place.location);
         map.setZoom(16);
         options.onPoint?.({lat:place.location.lat(),lng:place.location.lng()});
-        if (!options.onPick) options.onReady();
-      } else if (!options.onPick) options.onError();
-    }).catch(() => { if (!disposed && !options.onPick) options.onError(); });
+        if (!options.onPick) markLocationReady();
+      } else if (!options.onPick) finish(false);
+    }).catch(() => { if (!options.onPick) finish(false); });
   }
 
-  return () => { disposed = true; click?.remove(); marker?.setMap(null); };
+  return () => { disposed = true; clearTimeout(tileTimeout); tiles?.remove(); click?.remove(); marker?.setMap(null); };
 }

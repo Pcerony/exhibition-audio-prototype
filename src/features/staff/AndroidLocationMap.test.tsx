@@ -25,3 +25,15 @@ it('requires an explicit pick before offering confirmation for a Place ID', () =
   act(() => vi.mocked(mountMemoryLocationMap).mock.lastCall![0].onPick!({ lat: 33.59, lng: 130.4 }));
   expect(screen.getByRole('link', { name: 'Confirm point' })).toHaveAttribute('href', './?confirmLat=33.59&confirmLng=130.4');
 });
+
+it('keeps the Google Maps link when the embedded map cannot load', async () => {
+  vi.mocked(mountMemoryLocationMap).mockImplementationOnce(async ({ onError }) => {
+    onError();
+    return () => {};
+  });
+  const location = { source: 'pin', lat: 33.59, lng: 130.4 };
+  render(<AndroidLocationMap hash={`#/android-location?lang=en&location=${encodeURIComponent(JSON.stringify(location))}`} />);
+  expect(await screen.findByText('Map unavailable')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Open in Google Maps' })).toBeVisible();
+  expect(vi.mocked(mountMemoryLocationMap).mock.lastCall![0]).toMatchObject({ waitForTiles: true });
+});

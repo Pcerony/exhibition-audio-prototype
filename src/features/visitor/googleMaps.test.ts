@@ -4,6 +4,7 @@ let center = { lat: 33.5902, lng: 130.4017 };
 let listeners: Record<string, (...args: unknown[]) => void>;
 let mapOptions: google.maps.MapOptions;
 let placeFields: string[];
+let placeDelay: Promise<void> | undefined;
 let autocompleteOptions: google.maps.places.PlaceAutocompleteElementOptions;
 let polygonOptions: google.maps.PolygonOptions;
 let polygonDetached: boolean;
@@ -14,6 +15,7 @@ beforeEach(() => {
   center = { lat: 33.5902, lng: 130.4017 };
   mapOptions = {};
   placeFields = [];
+  placeDelay = undefined;
   autocompleteOptions = {};
   polygonOptions = {};
   polygonDetached = false;
@@ -43,7 +45,7 @@ beforeEach(() => {
       Place: class {
         location = { lat: () => 33.61, lng: () => 130.43 };
         constructor(_options: { id: string }) {}
-        async fetchFields(options: { fields: string[] }) { placeFields = options.fields; }
+        async fetchFields(options: { fields: string[] }) { placeFields = options.fields; await placeDelay; }
       },
     },
   } });
@@ -168,6 +170,26 @@ it('centers a read-only memory map on a manually selected point', async () => {
   dispose();
 });
 
+it.each([true, false])('waits for visible tiles in the Android preview (tiles arrive: %s)', async (arrive) => {
+  const { mountMemoryLocationMap } = await import('./googleMaps');
+  const onReady = vi.fn(), onError = vi.fn();
+  vi.useFakeTimers();
+  try {
+    const result = mountMemoryLocationMap({
+      mapElement: document.createElement('div'), language: 'ja',
+      location: { source: 'pin', lat: 33.6, lng: 130.42 }, onReady, onError, waitForTiles: true,
+    });
+    (window as unknown as Record<string, () => void>).__voiceMapsReady();
+    const dispose = await result;
+    expect(onReady).not.toHaveBeenCalled();
+    if (arrive) listeners.tilesloaded?.();
+    vi.advanceTimersByTime(12000);
+    expect(onReady).toHaveBeenCalledTimes(arrive ? 1 : 0);
+    expect(onError).toHaveBeenCalledTimes(arrive ? 0 : 1);
+    dispose();
+  } finally { vi.useRealTimers(); }
+});
+
 it('resolves a selected place ID to a map center without requesting or storing its name', async () => {
   const { mountMemoryLocationMap } = await import('./googleMaps');
   const onPoint=vi.fn(),before=JSON.stringify(localStorage);
@@ -182,5 +204,25 @@ it('resolves a selected place ID to a map center without requesting or storing i
   expect(placeFields).toEqual(['location']);
   expect(onPoint).toHaveBeenCalledWith({lat:33.61,lng:130.43});
   expect(JSON.stringify(localStorage)).toBe(before);
+  dispose();
+});
+
+it('waits for the resolved Place viewport rather than the initial fallback tiles', async () => {
+  const { mountMemoryLocationMap } = await import('./googleMaps');
+  const onReady = vi.fn();
+  let resolvePlace!: () => void;
+  placeDelay = new Promise<void>((resolve) => { resolvePlace = resolve; });
+  const result = mountMemoryLocationMap({
+    mapElement: document.createElement('div'), language: 'ja',
+    location: { source: 'place', placeId: 'selected-place' }, onReady, onError: vi.fn(), waitForTiles: true,
+  });
+  (window as unknown as Record<string, () => void>).__voiceMapsReady();
+  const dispose = await result;
+  listeners.tilesloaded?.();
+  resolvePlace();
+  await vi.waitFor(() => expect(center).toEqual({ lat: 33.61, lng: 130.43 }));
+  expect(onReady).not.toHaveBeenCalled();
+  listeners.tilesloaded?.();
+  expect(onReady).toHaveBeenCalledOnce();
   dispose();
 });
